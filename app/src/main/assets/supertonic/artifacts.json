@@ -1,0 +1,70 @@
+{
+  "model": "Supertonic 3 INT8",
+  "repository": "csukuangfj2/sherpa-onnx-supertonic-3-tts-int8-2026-05-11",
+  "revision": "cca5a0e6c96e1d2c720986bf7e75fcc81dee3ae4",
+  "upstream_repository": "supertone-oss-archive/supertonic-3",
+  "upstream_revision": "aafc6e32416a594460b32413efc49d7fe4ce6d46",
+  "license": "OpenRAIL-M (model); MIT (conversion packaging)",
+  "files": [
+    {
+      "name": "duration_predictor.int8.onnx",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-supertonic-3-tts-int8-2026-05-11/resolve/cca5a0e6c96e1d2c720986bf7e75fcc81dee3ae4/duration_predictor.int8.onnx",
+      "bytes": 3700147,
+      "sha256": "c3eb91414d5ff8a7a239b7fe9e34e7e2bf8a8140d8375ffb14718b1c639325db"
+    },
+    {
+      "name": "text_encoder.int8.onnx",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-supertonic-3-tts-int8-2026-05-11/resolve/cca5a0e6c96e1d2c720986bf7e75fcc81dee3ae4/text_encoder.int8.onnx",
+      "bytes": 36416150,
+      "sha256": "c7befd5ea8c3119769e8a6c1486c4edc6a3bc8365c67621c881bbb774b9902ff"
+    },
+    {
+      "name": "vector_estimator.int8.onnx",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-supertonic-3-tts-int8-2026-05-11/resolve/cca5a0e6c96e1d2c720986bf7e75fcc81dee3ae4/vector_estimator.int8.onnx",
+      "bytes": 78400833,
+      "sha256": "20cd86fa5c6effedfda0e7cffe5b0569ca401c440a0c3a1d72bf39286c0db3fd"
+    },
+    {
+      "name": "vocoder.int8.onnx",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-supertonic-3-tts-int8-2026-05-11/resolve/cca5a0e6c96e1d2c720986bf7e75fcc81dee3ae4/vocoder.int8.onnx",
+      "bytes": 25991073,
+      "sha256": "e923d60f53f95eb1ce235f1dc33ec56d9c057823c96fa6f8acf98f32b0da6152"
+    },
+    {
+      "name": "tts.json",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-supertonic-3-tts-int8-2026-05-11/resolve/cca5a0e6c96e1d2c720986bf7e75fcc81dee3ae4/tts.json",
+      "bytes": 8253,
+      "sha256": "42078d3aef1cd43ab43021f3c54f47d2d75ceb4e75f627f118890128b06a0d09"
+    },
+    {
+      "name": "unicode_indexer.bin",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-supertonic-3-tts-int8-2026-05-11/resolve/cca5a0e6c96e1d2c720986bf7e75fcc81dee3ae4/unicode_indexer.bin",
+      "bytes": 262144,
+      "sha256": "8402ca48e5189a8950138580b0fff64db6f072f24ac07cd54ba8b2fbb9883b30"
+    },
+    {
+      "name": "voice.bin",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-supertonic-3-tts-int8-2026-05-11/resolve/cca5a0e6c96e1d2c720986bf7e75fcc81dee3ae4/voice.bin",
+      "bytes": 517168,
+      "sha256": "67d5209b0ee8ce6c74105ffbe12fe6a7628aea3b4ba2fcb308a4a67938a93ce8"
+    },
+    {
+      "name": "README.md",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-supertonic-3-tts-int8-2026-05-11/resolve/cca5a0e6c96e1d2c720986bf7e75fcc81dee3ae4/README.md",
+      "bytes": 19518,
+      "sha256": "a96c347945f7c8bc1673bea3525b1ac8d36fdde556e1e0a6a186052429caf863"
+    },
+    {
+      "name": "CONVERSION-LICENSE",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-supertonic-3-tts-int8-2026-05-11/resolve/cca5a0e6c96e1d2c720986bf7e75fcc81dee3ae4/LICENSE",
+      "bytes": 1070,
+      "sha256": "0dfe0d0ba84416fe3879d9a34f4909d8d0137c78d1e95834177b0414ac096fa2"
+    },
+    {
+      "name": "LICENSE",
+      "url": "https://huggingface.co/supertone-oss-archive/supertonic-3/resolve/aafc6e32416a594460b32413efc49d7fe4ce6d46/LICENSE",
+      "bytes": 15007,
+      "sha256": "0d944a9110fed9a9602d60e0423a272903e7bd21ab060490774efc77c2275e9f"
+    }
+  ]
+}

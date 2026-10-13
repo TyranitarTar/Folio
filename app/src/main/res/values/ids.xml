@@ -1,0 +1,2 @@
+<resources><item name="reader_container" type="id"/><item name="measure_container" type="id"/>    <item name="offline_webview_constructed" type="id"/>
+</resources>

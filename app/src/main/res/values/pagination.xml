@@ -1,0 +1,5 @@
+<resources>
+    <!-- Folio reserves chrome/insets outside the book viewport. Readium's delayed per-page
+         vertical inset would otherwise depend on page-fragment lifecycle timing. -->
+    <dimen name="readium_navigator_epub_vertical_padding">0dp</dimen>
+</resources>

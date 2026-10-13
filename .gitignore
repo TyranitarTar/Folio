@@ -1,0 +1,8 @@
+/toolchain/
+/reference/
+/.gradle/
+/**/build/
+/local.properties
+/signing/
+/screenshots/
+*.log

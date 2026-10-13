@@ -1,2 +1,102 @@
 # Folio
-Folio is a vibe-coded Android reader with Danish and English TTS
+Folio is a vibe-coded Android reader with Danish and English TTS.
+
+An original Android app for reading local EPUB books. Kotlin and Jetpack Compose provide the library and controls; Readium Kotlin Toolkit 3.1.2 renders EPUB content. The Windows Icecream executable and its code or artwork were not used.
+
+Version 0.7.1 adds sentence/paragraph guided skips, direct Stop buttons, cache-first pagination, version history and explicit GitHub update checks. Version 0.7.0 added a compact on-page narration player, visible preparation/cancellation, always-on spoken highlighting/following, speed-aware Supertonic playback, text navigation, sleep timers and voice previews. Guided reading adds moving windows, word groups, rendered lines and optional practice sessions. The transactional library, backup/recovery and incremental page counts from v0.6 are retained. See [Mihon adaptation](Mihon-adaptation.md) and the [Danish speech study](Danish-TTS-feasibility.md) for background.
+
+## Install and use
+
+Copy `Folio-0.7.1.apk` to your Android phone, open it, and allow installation from that source if Android asks. Install over the signed 0.1.0, 0.2.0, 0.3.0, 0.4.0, 0.5.0, 0.6.0 or 0.7.0 release to retain your library, annotations and saved positions. Minimum supported version: Android 8.0 (API 26). This build was tested on an Android 15 emulator; physical-device testing remains to be done.
+
+Choose **Read aloud → Supertonic 3 → English / Dansk**, then choose one of ten voices. **Kokoro · English** retains British Emma and American Heart for comparison; **Android speech** uses installed offline English voices. Choose **Resume listening** for the saved listening position or **Read from here** for the first visible word on the current page. Neither bundled model needs an account or a network download for reading.
+
+Both model packs are included. Supertonic adds 145.3 MB of uncompressed assets; installed size also includes a private first-use model copy. Allow roughly 2 GB free for downloading, installation and preparing both models. Both installed model packs are verified before native initialization and damaged copies are repaired from APK assets. Only the selected neural engine is loaded; switching releases the previous model before loading the replacement. Physical ARM phone latency, memory and battery use remain to be measured.
+
+Continuous neural playback prepares up to thirty-two passages ahead within a 32 MiB / 180-second PCM budget and buffers at least twelve playable seconds, or the remaining book if shorter, before starting. This adds an initial preparation wait instead of generating each line after the preceding line ends. Kokoro uses up to four CPU threads, based on available processors; Supertonic uses two. Sustained speech still depends on the device generating audio faster than playback, especially at higher speech speeds. Natural passages append to one PCM AudioTrack FIFO; generation and output are separate. Presentation timestamps withhold future committed frames, and unsupported routes use a guarded render estimate. Pause/resume preserves a sample checkpoint. A growing MP3 is unnecessary: it would add re-encoding and make seeking/checkpoints harder. **Read from here** captures a fresh visible word and its surrounding text, replaces the listening position deliberately, enables following, and closes the controls.
+
+The home interface follows Mihon's library patterns for EPUB books. **Library** offers comfortable/compact cover grids or a list, cover badges, quick resume buttons, search, reading-status filters, annotations filter, sorting and persistent display options. Create or rename shelves through the library menu; long-press a cover to select books and assign multiple shelves or remove a confirmed selection. **History** shows books by last read date, **Browse** imports local EPUBs or opens the included sample, and **More** exposes reader settings, library display, app theme, speech controls and licenses.
+
+Tap a cover to open **Book details**, with the real EPUB chapter list, saved annotations and Resume reading/Read aloud actions. A cover's play button resumes reading directly. Import through Browse, the + button or a file-manager open/share action. Original EPUB files remain outside Folio's private copy.
+
+Tap the page edges or swipe to turn pages. Tap the centre to hide or show controls. Use **Aa** for appearance, the list button for contents/bookmarks/notes, and the bookmark button to save your place. Long-press text to highlight it, add a note or start narration from the selection. Search results, contents entries, and saved marks jump to their passage. Notes can be exported to a text file.
+
+## Storage, recovery and backup
+
+Open **More → Storage and backup** to export a ZIP backup with EPUB files or metadata only, restore/merge a backup, scan stored EPUBs after library damage, repair prepared voice files, clear generated audio/page caches, or reset one book's guided/listening position. Restore preserves newer local reading progress and merges annotations. Each backed-up reading mode carries its own saved timestamp; restoring an older or partial backup preserves newer positions and modes it does not contain. A metadata-only backup requires its EPUBs to be imported first. Backup export and restore share limits of 5,000 books, 20 MB of metadata and 2 GB total, and exclude downloadable/regenerable models and PCM. Parsing depth/value limits reject pathological JSON before recursive parsing.
+
+The first upgrade migrates the old library to a transactional SQLite database, with separate metadata, annotation and progress records. The exact original JSON remains preserved. A damaged record is isolated; recovery notices link to the storage screen. Recovering stored EPUBs can restore book access but cannot recreate annotations whose only copy was damaged—use a saved backup for those.
+
+Note drafts survive rotation, home/details scroll context is retained, active filters are visible, and shelf deletion/reset require explicit user confirmation. Removing a book stops its narration and clears its imported copy, annotations, navigation and all saved reading/listening modes.
+
+## Included
+
+- Mihon-style Library/History/Browse/More navigation, compact/comfortable cover grid or list, search/filter/sort/display sheets, persistent shelves and selection actions.
+- EPUB book details with real chapter navigation, annotations and resume/read-aloud actions.
+- EPUB chapters, embedded illustrations, publisher formatting, page turns or continuous scrolling.
+- Saved reading positions, chapter navigation, a progress slider, and bookmarks.
+- Full-book text search, highlights, notes, and text export of annotations.
+- Paper, Sepia, and Night themes; text size, typeface, line spacing, and margins.
+- Optional volume-key page turns and keeping the screen awake.
+- Six configurable tap layouts, zone inversion, reading direction, animations and per-book navigation overrides.
+- Rendered **Page X of Y** counts that adapt to typography and viewport size. Continuous mode labels equivalent viewport pages as **Screen X of Y**. A hidden renderer is created only for missing counts. Counts are saved per chapter, retained if interrupted, and reused across colour changes. Cache reads are immediate; measurement settles fonts/images and full geometry without fixed waits on every chapter. The corrected consistent vertical padding triggers a one-time recount when upgrading from older layout keys. Current-chapter pages appear while remaining chapters are counted; whole-book totals appear when complete. Measurement pauses during narration/backgrounding.
+- **Guided reading**: a four-word moving window (customizable 1–8), nonoverlapping groups or rendered lines advance at WPM or CPS, with WPM presets 150/200/225/250/275/350/400/450/500, CPS presets, custom speed, pause/resume and an independent saved word. Page changes keep the current word visible. Manual navigation and backgrounding pause the guide; illustration-only resources pause for viewing.
+- **Read aloud**: bundled Supertonic 3 English/Danish (ten voices), Kokoro English (British Emma and American Heart) or installed offline English Android voices. Remembered backend/voice/rate, independent listening cursor, following/highlighting, and foreground media controls for background/screen-off listening.
+- AI playback saves the presentation-clock audio sample, caches the current passage and prepares bounded upcoming passages. Pausing and reopening resume the cached audio rather than estimating a word from elapsed time. Cache eviction regenerates audio; a differing waveform repeats the current passage rather than applying an unverified sample offset. Changing language or voice repeats the current passage safely. Supertonic generates at 1× and applies pitch-preserving playback speed; rate changes reuse its waveform and source-sample position.
+- Duplicate detection, invalid-file checks, removal confirmation, and transactional library storage, bounded import validation and quarantined recovery copies.
+- An original sample EPUB with English and Danish passages.
+
+## Scope and privacy
+
+Version 0.7.1 supports unprotected EPUB and local English and Danish neural speech. PDF, MOBI/AZW, DRM, cloud sync, accounts, and an ebook store are not implemented.
+
+Choose **Guided reading** to set WPM (equal time per word) or CPS (time based on each word's characters and following whitespace). **Resume guided reading** uses its saved word; **Start from here** begins at the current visible passage. Previous/Next skips a sentence by default, with a separate paragraph option. Focus mode still controls automatic pacing. A direct Stop button clears active playback. A compact player remains below the text even with ordinary reader controls hidden. It exposes previous/next focus, pause/resume, pace and reading actions. Optional punctuation/paragraph pauses, long-word weighting, a countdown and 1/3/5-minute practice sessions show words, time and actual WPM. Gradual practice increases add 25 target WPM each minute. Self-assessed understanding is a reflection, not an objective comprehension score. RSVP remains a later feature.
+
+Choose **Read aloud → Resume listening** for the separate listening position, or **Read from here** to move it deliberately. Closing the controls does not stop narration. Browsing a different page pauses listening and preserves its bookmark. Highlighting/following is always enabled; old disabled preferences and backups migrate on. Resume returns to the listening bookmark. Accepted Resume/Read from here requests close the panel immediately, with Loading model / Preparing speech / Buffering audio and Cancel on the reading page. Voice changes retain the spoken passage. Supertonic rate changes retain the audio position. The compact player offers line/sentence/paragraph navigation, replay sentence, page start, chapter navigation, Stop and settings. Voice settings include preview, direct speed presets, sentence/paragraph pauses and a 5/15/30/60-minute or chapter-end sleep timer. Android engines with range callbacks save word progress; engines without them safely repeat the current sentence on recovery. Use **Android Speech settings** to enable a speech engine and install English offline voice data first. Quality and available voices depend on that engine; Folio only selects voices advertised as installed and offline.
+
+AI following highlights a passage, since the bundled engines supply no trustworthy word timestamps. Guided WPM/CPS reading retains its separate word highlight. AI checkpoints use AudioTrack presentation timestamps when supported; fallback routes use a delayed render estimate and can repeat a short tail. Checkpoints are written about once per second and immediately on pause/stop; an abrupt process kill can repeat the last second. Ready lookahead PCM enters the same AudioTrack FIFO before the preceding passage completes. Its cursor/callbacks activate only after preceding presentation completion. Pause or seek discards future queued audio. Audio synthesis and prefetch never advance the listening position. Inference uses up to four CPU threads for Kokoro and two for Supertonic, with bounded passages and audio caching. A slow device may still need buffering; neural model resources are released after 60 seconds paused. PCM is health-checked and checksummed, and checkpoint writes are coalesced and ordered across service restarts. Audio focus loss and headphone disconnection pause narration.
+
+Books and reading data are stored in the app's private storage. The app uses Internet access only for update checks/downloads that you request. Its EPUB WebViews block network loads from construction; local book content remains offline. It includes no ads or analytics. Removing a book deletes Folio's copy and annotations; the original selected file is retained. Uninstalling or clearing app storage removes the local library. Use the full backup export before uninstalling/clearing storage or moving devices; text-only notes export cannot restore anchors or listening positions. Opening an external link launches your chosen browser.
+
+The user-provided novels are not bundled in the app or source archive. They were used only as local test fixtures. Third-party credits and license texts are bundled and can be read under **Library menu → About Folio → Licenses**.
+
+## Version history and updates
+
+Open **More → Version history** for offline notes on every version. **More → App updates** checks the public `TyranitarTar/Folio` GitHub releases only when requested. Downloads show progress and may continue in the background. Folio verifies the release checksum, APK application ID/version and installed signing key, stores a verified private copy, then opens Android's installation confirmation. Android may ask you to allow installation for Folio. The first v0.7.1 install is manual; future signed versions can be downloaded from inside the app. No GitHub token is stored on the device. A repository with no published release reports that state rather than claiming the app is up to date. See GITHUB-RELEASES.md for publishing instructions.
+
+Native binaries and model packs are unchanged from v0.7.0. The matching native source archive is byte-identical and retains the v0.7.0 native build notes; v0.7.1 integration changes are in the application source archive.
+
+## Build from source
+
+Open this directory in Android Studio. Use JDK 17 or 21, install SDK platform 35, and let Android Studio create `local.properties` pointing to your SDK. The Gradle wrapper is included and pins Gradle 8.11.1.
+
+Run `python bootstrap_ai.py` and `python bootstrap_supertonic.py` first (Python 3.10+). It downloads SHA-256-pinned sherpa-onnx 1.13.8 Android libraries, the Kokoro v1.0 FP32 model and the exact Kotlin JNI API. The second script restores the pinned Supertonic INT8 model pack with SHA-256 checks. Large model/native binaries are deliberately excluded from the application source ZIP and restored by this script. License texts are already included. `collect_ai_sources.py` collects exact native sources and their licenses; `Folio-native-source-0.7.1.zip` accompanies this release with native build scripts and source dependencies. Application code is distributed under GPL-3.0-or-later because the bundled phonemizer includes eSpeak NG; individual components retain their own licenses. Kokoro weights use Apache-2.0; Supertonic 3 weights by Supertone use OpenRAIL-M (including its use restrictions), with separate MIT conversion licensing. Full texts and attribution are bundled under Licenses and in the source archive.
+
+```powershell
+.\gradlew.bat assembleDebug
+.\gradlew.bat testDebugUnitTest lintDebug
+```
+
+Debug output: `app/build/outputs/apk/debug/app-debug.apk`.
+
+To sign a release, run `python prepare_signing.py` once with a JDK's `keytool` in PATH, then `./gradlew.bat assembleRelease`. The private key and passwords are stored in the ignored `signing/` directory. Preserve this directory privately to sign compatible updates. It is deliberately excluded from the source archive. The APK delivered with this project was signed with the key retained in the original workspace.
+
+Release output: `app/build/outputs/apk/release/app-release.apk`. Debug builds use the separate package `app.folio.reader.debug` and can coexist with the release; their libraries are separate. Signed releases use `app.folio.reader` and the retained release key for compatible upgrades.
+
+`build.ps1` is a convenience for the downloaded toolchain in the original workspace. Source recipients can use Android Studio or the wrapper instead.
+
+## Validation
+
+Release verification is in `Folio-0.7.1-validation.json` and `Folio-0.7.1-review.md`. The release validation JSON records the current JVM/Android checks and lint results. The local Android 15/API35 x86_64 emulator verifies frame ordering, sample checkpoints, UI, reflow and signed upgrade preservation. No physical Galaxy S10 or Bluetooth device is connected; emulator callbacks do not prove audible endings, speaker quality, battery life or thermal behavior.
+
+New regression tests cover legacy-library salvage, typed portable backup round trips, repeated passages/character offsets, stale reader/service writes, deletion/reimport cleanup, malformed shares, corrupt/legacy PCM, model integrity and memory budgets. Android tests add actual AtomicFile repair, backup restore, draft rotation, all requested WPM presets and guided storage-failure recovery.
+
+JVM tests cover real EPUB import/search, metadata/cover handling, persistence, extracted word and sentence coverage, independent durable cursors, corrupt-state handling, tap-zone geometry, word timing, rejected stale speech callbacks, presentation timing, persistent FIFO handoff, pause/resume, future timestamps, invalid PCM and cache eviction. Android instrumentation checks illustrated resources, bookmarks/themes/reopening, rendered page counts and taps, viewport changes, guided-word recovery, the installed speech engine, real Kokoro and Supertonic JNI synthesis in English/Danish, ten Supertonic voice styles, fixed-seed regeneration, cold continuous-playback handoffs with one live AudioTrack, pause during replacement preparation, Mihon home tabs/shelves/display preference recovery, a visible-word Read from here check, saved sample recovery after service restart, background playback and paused voice/backend changes.
+
+```powershell
+.\gradlew.bat connectedDebugAndroidTest
+```
+
+The illustrated-book test is optional without an external fixture. To run it too, place an EPUB in the debug app's private files directory and supply `-Pandroid.testInstrumentationRunnerArguments.externalEpub=/data/user/0/app.folio.reader.debug/files/test-input.epub`. User-provided books are not included in the source or APK. The speech test exercises real callbacks when an installed offline English voice is available, otherwise it verifies the missing-voice path.
+
+The original sample asset is already included. Regenerating it requires Python, Pillow, and the Windows Georgia/Segoe UI fonts (`make_sample.py`). `runtime-dependencies.txt` records resolved runtime versions; `collect_notices.py` is a helper for the original dependency cache. Normal builds use the already collected notices.

@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.Folio" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">#F8F6F1</item>
+        <item name="colorAccent">#2C6155</item>
+    </style>
+</resources>

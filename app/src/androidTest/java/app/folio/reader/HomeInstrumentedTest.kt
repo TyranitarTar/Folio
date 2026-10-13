@@ -1,0 +1,85 @@
+package app.folio.reader
+
+import android.content.Intent
+import androidx.test.core.app.ActivityScenario
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.*
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.delay
+import org.junit.Assert.*
+import org.junit.After
+import org.junit.Test
+import org.junit.runner.RunWith
+import java.io.File
+
+@RunWith(AndroidJUnit4::class)
+class HomeInstrumentedTest {
+    private val instrumentation = InstrumentationRegistry.getInstrumentation()
+    private val app = instrumentation.targetContext.applicationContext as FolioApp
+    private val device = UiDevice.getInstance(instrumentation)
+    private fun click(text: String) {
+        repeat(3) { attempt ->
+            device.waitForIdle()
+            val item = device.wait(Until.findObject(By.text(text)), 15000)
+            assertNotNull("Missing $text", item)
+            try { item.click(); device.waitForIdle(); return }
+            catch (stale: StaleObjectException) { if (attempt == 2) throw stale }
+        }
+    }
+    private fun description(text: String) { val item = device.wait(Until.findObject(By.desc(text)), 15000); assertNotNull("Missing $text", item); item.click(); device.waitForIdle() }
+    @After fun cleanup() { HomePreferences().save(app) }
+    @Test fun libraryDetailsHistoryBrowseAndDisplayPreferencesSurviveRecreation() {
+        HomePreferences().save(app)
+        val book = runBlocking { app.library.importSample() }
+        runBlocking { app.library.update(book.id) { it.copy(lastRead = 1000, progress = .8) } }
+        ActivityScenario.launch<MainActivity>(Intent(app, MainActivity::class.java)).use { scenario ->
+            assertTrue(device.wait(Until.hasObject(By.text("All books")), 15000))
+            description("Library settings"); click("Display"); click("List")
+            assertEquals("List", HomePreferences.load(app).layout)
+            device.pressBack(); scenario.recreate()
+            assertTrue(device.wait(Until.hasObject(By.text("80% read")), 15000))
+            click("The Quiet Hour")
+            assertTrue(device.wait(Until.hasObject(By.text("Book details")), 15000))
+            assertTrue(device.wait(Until.hasObject(By.text("Welcome")), 15000))
+            assertTrue(device.wait(Until.hasObject(By.text("Resume reading")), 15000))
+            device.takeScreenshot(File(app.filesDir, "home-v5-details.png"))
+            description("Back to library"); click("History")
+            assertTrue(device.wait(Until.hasObject(By.text("The Quiet Hour")), 15000))
+            click("Browse"); assertTrue(device.wait(Until.hasObject(By.text("Local EPUB files")), 15000))
+            click("More"); assertTrue(device.wait(Until.hasObject(By.text("Reader settings")), 15000))
+            click("Dark"); assertEquals("Dark", HomePreferences.load(app).theme)
+            scenario.recreate(); assertTrue(device.wait(Until.hasObject(By.text("Reader settings")), 15000))
+            click("Library")
+            device.takeScreenshot(File(app.filesDir, "home-v5-library.png"))
+        }
+    }
+    @Test fun newShelfAssignmentPersistsAndSearchCannotResetItsBooks() {
+        HomePreferences().save(app)
+        val book = runBlocking { app.library.importSample() }
+        runBlocking { app.library.assignShelves(setOf(book.id), emptyList()); app.library.deleteShelf("Favourites") }
+        ActivityScenario.launch<MainActivity>(Intent(app, MainActivity::class.java)).use { scenario ->
+            description("Library menu"); click("Manage shelves"); click("New shelf")
+            val input = device.wait(Until.findObject(By.clazz("android.widget.EditText")), 10000)!!
+            input.text = "Favourites"; click("Create")
+            assertTrue(HomePreferences.load(app).shelves.contains("Favourites"))
+            click("Close")
+            val cover = device.wait(Until.findObject(By.desc("Cover of The Quiet Hour")), 15000)!!
+            val point = cover.visibleCenter
+            device.swipe(point.x, point.y, point.x, point.y, 150)
+            description("Assign shelf"); click("Favourites"); click("Apply")
+            runBlocking { withTimeout(5000) { while (app.library.books.value.first { it.id == book.id }.shelves != listOf("Favourites")) delay(50) } }
+            assertEquals(listOf("Favourites"), app.library.books.value.first { it.id == book.id }.shelves)
+            click("Favourites"); scenario.recreate()
+            assertTrue(device.wait(Until.hasObject(By.desc("Cover of The Quiet Hour")), 15000))
+            description("Search library")
+            device.wait(Until.findObject(By.clazz("android.widget.EditText")), 10000)!!.text = "no-such-book"
+            assertTrue(device.wait(Until.hasObject(By.text("No books match")), 15000))
+            description("Clear search")
+            assertTrue(device.wait(Until.hasObject(By.desc("Cover of The Quiet Hour")), 15000))
+            assertEquals(listOf("Favourites"), app.library.books.value.first { it.id == book.id }.shelves)
+            device.takeScreenshot(File(app.filesDir, "home-v5-shelf.png"))
+        }
+    }
+}
