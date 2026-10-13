@@ -191,12 +191,7 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
                             }
                         }
                     }
-                    tab == "Browse" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Text("Local sources", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                        HomeAction("Local EPUB files", "Import one or more books from your device", Icons.Outlined.FolderOpen, { importBooks() })
-                        HomeAction("The Quiet Hour", "Open the included English and Danish sample", Icons.Outlined.AutoStories, { model.sample(open) })
-                        Text("Imported books are copied into your private library. Your original files stay where they are.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                    tab == "Browse" -> SourceBrowser(open, { importBooks() }, { model.sample(open) })
                     else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
                         HomeAction("Reader settings", "Typography, page turns and tap zones", Icons.Outlined.MenuBook, { readerSettings = true })
                         HomeAction("Speech settings", "Offline voices and playback speed", Icons.Outlined.RecordVoiceOver, { speechSettings = true })

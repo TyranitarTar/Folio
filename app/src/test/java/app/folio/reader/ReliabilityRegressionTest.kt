@@ -143,6 +143,9 @@ class ReliabilityRegressionTest {
         val ai = AiListeningPoint(0, 5, "b".repeat(64), 123)
         AiListeningStore(context).write(book.id, ai)
         SpeechSettings(backend = "supertonic", aiVoice = 3, supertonicVoice = 7, supertonicLanguage = "da").save(context)
+        Appearance().withAwake(ReaderAwakePolicy("timed", 15)).save(context)
+        val origin = SourceOrigin("WIKISOURCE", "Prøve", "da", SourceUrls.wikiPage("da", "Prøve"), "a".repeat(64))
+        store.update(book.id) { it.copy(origin = origin) }
         val output = ByteArrayOutputStream(); LibraryBackup(context, store).exportTo(output, true)
         val other = isolated(); val destination = LibraryStore(other, BookEngine(other))
         val result = LibraryBackup(other, destination).restoreFrom(ByteArrayInputStream(output.toByteArray()))
@@ -156,6 +159,8 @@ class ReliabilityRegressionTest {
         assertEquals(ai, AiListeningStore(other).read(book.id))
         assertEquals(7, SpeechSettings.load(other).supertonicVoice)
         assertEquals("da", SpeechSettings.load(other).supertonicLanguage)
+        assertEquals(ReaderAwakePolicy("timed", 15), Appearance.load(other).awakePolicy)
+        assertEquals(origin, restored.origin)
     }
     @Test fun badBackupPathCannotWriteOutsideStagingOrChangeLibrary() = runBlocking {
         val book = store.importSample()

@@ -190,8 +190,8 @@ class GuidedReading(private val context: Context, private val id: String, privat
             delay(120)
         }
         val applied = android.os.SystemClock.elapsedRealtime()
-        navigator.commitDecorations(listOf(Decoration("current-word", position.locator,
-            Decoration.Style.Highlight(tint = android.graphics.Color.rgb(119, 193, 170)))), "guided")
+        val tint=GuidedBand.tint(context)
+        navigator.commitDecorations(listOf(Decoration("current-word", position.locator,GuidedBandStyle(tint))), "guided")
         // Readium's quote anchoring locates the actual word, including repeated words and inline markup.
         delay(25)
         val visible = navigator.evaluateJavascript("""(function(){let d=window.readium.getDecorations('guided').items[0];if(!d)return false;let r=d.range.getBoundingClientRect();return r.width>0&&r.left>=-2&&r.right<=innerWidth+2&&r.top>=-2&&r.bottom<=innerHeight+2;})()""")
@@ -209,12 +209,8 @@ class GuidedReading(private val context: Context, private val id: String, privat
                 ?.let { book.locate(it) }?.takeIf { it.sectionIndex == position.sectionIndex && it.wordIndex >= position.wordIndex }
                 ?.wordIndex?.plus(1)?.coerceAtMost(paragraphEnd) ?: (position.wordIndex + 1)
                 else (position.wordIndex + options.words).coerceAtMost(paragraphEnd)
-            val decorations = (position.wordIndex until end).map { word ->
-                Decoration(if (word == position.wordIndex) "current-word" else "focus-$word",
-                    book.cursor(position.sectionIndex, word)!!.locator,
-                    Decoration.Style.Highlight(tint = if (word == position.wordIndex) 0xFF77C1AA.toInt() else 0xFFCCE7DE.toInt()))
-            }
-            navigator.commitDecorations(decorations, "guided")
+            val last=book.cursor(position.sectionIndex,end-1) ?: position
+            GuidedBand.apply(navigator,position.locator,last.locator,tint)
         }
         // Include ordinary decoration work in the scheduled interval; page transitions get full visible dwell.
         return if (movedPage) android.os.SystemClock.elapsedRealtime() else applied

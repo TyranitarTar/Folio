@@ -48,12 +48,12 @@ data class Book(
     val id: String, val title: String, val author: String, val added: Long,
     val lastRead: Long = 0, val locator: String? = null, val progress: Double = 0.0,
     val bookmarks: List<Mark> = emptyList(), val highlights: List<Mark> = emptyList(),
-    val shelves: List<String> = emptyList()
+    val shelves: List<String> = emptyList(), val origin: SourceOrigin? = null
 ) {
     fun json() = JSONObject().put("id", id).put("title", title).put("author", author)
         .put("added", added).put("lastRead", lastRead).put("locator", locator?.let(::JSONObject))
         .put("progress", progress).put("bookmarks", JSONArray(bookmarks.map { it.json() }))
-        .put("highlights", JSONArray(highlights.map { it.json() })).put("shelves", JSONArray(shelves))
+        .put("highlights", JSONArray(highlights.map { it.json() })).put("shelves", JSONArray(shelves)).put("origin", origin?.json())
     fun position(): Locator? = locator?.let { runCatching { Locator.fromJSON(JSONObject(it)) }.getOrNull() }
     companion object {
         fun from(j: JSONObject): Book {
@@ -62,7 +62,8 @@ data class Book(
             return Book(id, j.getString("title"), j.optString("author"), j.getLong("added"),
                 j.optLong("lastRead"), j.optJSONObject("locator")?.toString(), j.optDouble("progress", 0.0).takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0,
                 j.optJSONArray("bookmarks").marks(), j.optJSONArray("highlights").marks(),
-                j.optJSONArray("shelves")?.let { a -> (0 until a.length()).map { a.getString(it) }.distinct() }.orEmpty())
+                j.optJSONArray("shelves")?.let { a -> (0 until a.length()).map { a.getString(it) }.distinct() }.orEmpty(),
+                j.optJSONObject("origin")?.let(SourceOrigin::from))
         }
     }
 }
@@ -196,7 +197,8 @@ class LibraryStore(private val context: Context, val engine: BookEngine) {
                 val latest = if (incoming.lastRead > old.lastRead) incoming else old
                 old.copy(locator = latest.locator, progress = latest.progress, lastRead = latest.lastRead,
                     bookmarks = (old.bookmarks + incoming.bookmarks).distinctBy { it.id },
-                    highlights = (old.highlights + incoming.highlights).distinctBy { it.id }, shelves = (old.shelves + incoming.shelves).distinct())
+                    highlights = (old.highlights + incoming.highlights).distinctBy { it.id }, shelves = (old.shelves + incoming.shelves).distinct(),
+                    origin = old.origin ?: incoming.origin)
             } ?: old } + items.filter { it.id !in _books.value.map { b -> b.id } && file(it.id).exists() })
         }
     }
@@ -238,8 +240,9 @@ class LibraryStore(private val context: Context, val engine: BookEngine) {
 
     suspend fun importSample(): Book = importStream { context.assets.open("sample.epub") }
 
-    suspend fun importStream(input: () -> InputStream): Book = withContext(Dispatchers.IO) {
+    suspend fun importStream(origin: SourceOrigin? = null, input: () -> InputStream): Book = withContext(Dispatchers.IO) {
         load()
+        origin?.let { source -> mutex.withLock { _books.value.firstOrNull { it.origin?.key == source.key && file(it.id).exists() } }?.let { return@withContext it } }
         val temporary = File.createTempFile("import-", ".epub", directory)
         try {
             val digest = MessageDigest.getInstance("SHA-256")
@@ -259,13 +262,13 @@ class LibraryStore(private val context: Context, val engine: BookEngine) {
                 }
             }
             val id = digest.digest().joinToString("") { "%02x".format(it) }
-            mutex.withLock { _books.value.find { it.id == id } }?.let { return@withContext it }
+            mutex.withLock { _books.value.find { it.id == id }?.let { attachOrigin(it, origin) } }?.let { return@withContext it }
             EpubValidator.validate(temporary)
             val publication = engine.open(temporary)
             val book = try {
                 val title = publication.metadata.title?.takeIf { it.isNotBlank() } ?: "Untitled book"
                 val author = publication.metadata.authors.joinToString(", ") { it.name }
-                val book = Book(id, title, author, System.currentTimeMillis())
+                val book = Book(id, title, author, System.currentTimeMillis(), origin = origin)
                 runCatching {
                     publication.coverFitting(Size(400, 600))?.let { bitmap ->
                         cover(id).outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 88, it) }
@@ -274,7 +277,9 @@ class LibraryStore(private val context: Context, val engine: BookEngine) {
                 book
             } finally { publication.close() }
             mutex.withLock {
-                _books.value.find { it.id == id }?.let { return@withContext it }
+                currentCoroutineContext().ensureActive()
+                origin?.let { source -> _books.value.firstOrNull { it.origin?.key == source.key && file(it.id).exists() }?.let { return@withContext it } }
+                _books.value.find { it.id == id }?.let { return@withContext attachOrigin(it, origin) }
                 // Readium closes ZIP handles asynchronously. Allow that close to finish on
                 // filesystems which prevent renaming an open file (including Windows tests).
                 var stored = temporary.renameTo(file(id))
@@ -286,6 +291,13 @@ class LibraryStore(private val context: Context, val engine: BookEngine) {
             }
             book
         } finally { temporary.delete() }
+    }
+
+    private fun attachOrigin(book: Book, origin: SourceOrigin?): Book {
+        if (origin == null || book.origin != null) return book
+        val updated = book.copy(origin = origin)
+        save(_books.value.map { if (it.id == book.id) updated else it })
+        return updated
     }
 
     suspend fun update(id: String, transform: (Book) -> Book) = withContext(Dispatchers.IO) {

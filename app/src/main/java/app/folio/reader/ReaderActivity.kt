@@ -2,12 +2,14 @@
 package app.folio.reader
 
 import android.app.Application
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
 import android.view.ActionMode
 import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
+import android.view.MotionEvent
 import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
@@ -28,6 +30,9 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.text.font.FontFamily as ComposeFont
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -88,6 +93,7 @@ class ReaderModel(app: Application) : AndroidViewModel(app) {
         private set
     var notePosition by mutableStateOf<Locator?>(null)
     var noteDraft by mutableStateOf("")
+    var lastReaderInteraction: Long? = null
     var positions: List<Locator> = emptyList()
     var bookId: String = ""
         private set
@@ -183,6 +189,37 @@ class ReaderActivity : FragmentActivity() {
     private var viewport = ""
     private var preferencesJob: Job? = null
     private var speechFollowJob: Job? = null
+    private lateinit var awake: ReaderAwakeController
+    private fun readerInteraction() {
+        if(!::awake.isInitialized) return
+        awake.interact();model.lastReaderInteraction=awake.session.lastInput
+    }
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if(event.actionMasked in listOf(MotionEvent.ACTION_DOWN,MotionEvent.ACTION_MOVE,MotionEvent.ACTION_UP)) readerInteraction()
+        return super.dispatchTouchEvent(event)
+    }
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        if(event.actionMasked in listOf(MotionEvent.ACTION_SCROLL,MotionEvent.ACTION_BUTTON_PRESS)) readerInteraction()
+        return super.dispatchGenericMotionEvent(event)
+    }
+    // Android's public Activity callback is inherited through AndroidX Core, whose override
+    // carries LIBRARY_GROUP_PREFIX. Observe real keys here and preserve its key dispatch.
+    @SuppressLint("RestrictedApi")
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if(event.action==KeyEvent.ACTION_DOWN && event.keyCode !in listOf(KeyEvent.KEYCODE_POWER,KeyEvent.KEYCODE_SLEEP,KeyEvent.KEYCODE_WAKEUP)) readerInteraction()
+        return super.dispatchKeyEvent(event)
+    }
+    // Material sheets/dialogs own another Window, so their input bypasses Activity dispatch.
+    private fun dialogInteraction() = Modifier.pointerInput(Unit) {
+        awaitPointerEventScope {
+            while(true) {
+                val event=awaitPointerEvent(PointerEventPass.Initial)
+                if(event.changes.any { it.pressed || it.previousPressed }) readerInteraction()
+            }
+        }
+    }.onPreviewKeyEvent { readerInteraction();false }
+    override fun onResume() { super.onResume();if(::awake.isInitialized) awake.foreground(true) }
+    override fun onPause() { if(::awake.isInitialized) awake.foreground(false);super.onPause() }
 
     internal fun isRtlNavigation() = model.navigation.direction == "RTL" || (model.navigation.direction == "Book" &&
         model.publication.value?.metadata?.readingProgression == org.readium.r2.shared.publication.ReadingProgression.RTL)
@@ -192,7 +229,9 @@ class ReaderActivity : FragmentActivity() {
         if (forward) navigator?.goForward(model.navigation.animate) else navigator?.goBackward(model.navigation.animate)
     }
     private fun openSheet(name: String) {
-        guided?.pause()
+        // Awake/key-only settings can be changed during guided reading; actual typography edits
+        // still pause through the separate preferences effect.
+        if(name!="settings") guided?.pause()
         sheet = name
         if (name == "guided") guided?.prepare()
         if (name == "speech" || name == "guided") lifecycleScope.launch {
@@ -256,7 +295,7 @@ class ReaderActivity : FragmentActivity() {
     override fun onStart() { super.onStart(); counter?.setForeground(true) }
     override fun onStop() { counter?.setForeground(false); guided?.pause(); model.saveOnLeave(); super.onStop() }
     override fun onDestroy() {
-        guided?.pause(); counter?.close(); preferencesJob?.cancel(); speechFollowJob?.cancel(); readerSeekJob?.cancel()
+        guided?.pause(); if(::awake.isInitialized) awake.close(); counter?.close(); preferencesJob?.cancel(); speechFollowJob?.cancel(); readerSeekJob?.cancel()
         // Detach both renderers before the Activity clears its publication-owning ViewModel.
         // Readium destroys child WebViews on detach, including prefetched resource views.
         if (!supportFragmentManager.isDestroyed) supportFragmentManager.beginTransaction().apply {
@@ -275,6 +314,7 @@ class ReaderActivity : FragmentActivity() {
         outState.putBoolean("folio.guidedActive", guided?.active?.value == true)
         outState.putInt("folio.guidedWords", guided?.session?.value?.words ?: 0)
         outState.putLong("folio.guidedMillis", guided?.session?.value?.elapsedMillis ?: 0)
+        if(::awake.isInitialized) outState.putLong("folio.lastReaderInteraction",awake.session.lastInput)
     }
     // Construct pinned Readium XML views with network blocked before its fragment calls loadUrl.
     // INTERNET is available to the explicit updater; EPUB resources remain served locally.
@@ -303,6 +343,14 @@ class ReaderActivity : FragmentActivity() {
         }
         // Recreate the navigator from persisted locators instead of restoring an uninitialised Fragment.
         super.onCreate(null)
+        val now=android.os.SystemClock.elapsedRealtime()
+        val restored=savedInstanceState?.takeIf { it.containsKey("folio.lastReaderInteraction") }?.getLong("folio.lastReaderInteraction")
+        val last=model.lastReaderInteraction ?: restored ?: now
+        awake=ReaderAwakeController(lifecycleScope,last) { enabled ->
+            if(enabled) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        model.lastReaderInteraction=awake.session.lastInput
         model.load(intent.getStringExtra("book") ?: "")
         setContentView(ComposeView(this).apply {
             setContent { FolioTheme(model.appearance.theme == "Night") { ReaderScreen() } }
@@ -341,7 +389,7 @@ class ReaderActivity : FragmentActivity() {
                 override fun onPageChanged(pageIndex: Int, totalPages: Int, locator: Locator) { counter?.pageChanged(pageIndex, locator, totalPages) }
                 override fun onPageLoaded() { counter?.pageLoaded() }
             },
-            configuration = EpubNavigatorFragment.Configuration(selectionActionModeCallback = selectionMenu, shouldApplyInsetsPadding = false),
+            configuration = EpubNavigatorFragment.Configuration(selectionActionModeCallback = selectionMenu, shouldApplyInsetsPadding = false, decorationTemplates=GuidedBand.templates()),
             listener = object : EpubNavigatorFragment.Listener {
                 override fun onExternalLinkActivated(url: org.readium.r2.shared.util.AbsoluteUrl) {
                     if (url.toString().startsWith("https://") || url.toString().startsWith("http://")) {
@@ -361,7 +409,7 @@ class ReaderActivity : FragmentActivity() {
             measuring ?: run {
                 val hiddenFactory = EpubNavigatorFactory(publication).createFragmentFactory(
                     initialLocator = null, initialPreferences = model.appearance.preferences(model.navigation.direction),
-                    configuration = EpubNavigatorFragment.Configuration(shouldApplyInsetsPadding = false))
+                    configuration = EpubNavigatorFragment.Configuration(shouldApplyInsetsPadding = false, decorationTemplates=GuidedBand.templates()))
                 val hidden = hiddenFactory.instantiate(classLoader, EpubNavigatorFragment::class.java.name) as EpubNavigatorFragment
                 supportFragmentManager.commitNow { replace(R.id.measure_container, hidden, "measure") }
                 measuring = hidden
@@ -479,12 +527,14 @@ class ReaderActivity : FragmentActivity() {
             } }
         }
         LaunchedEffect(notice) { notice?.let { snackbar.showSnackbar(it); model.notice.value = null } }
-        LaunchedEffect(appearance, model.navigation.direction) {
+        // Non-layout policy/key settings do not pause reading, submit preferences or recount pages.
+        LaunchedEffect(appearance.preferences(model.navigation.direction)) {
             guided?.pause()
             updatePreferences()
-            if (appearance.keepAwake) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = appearance.theme != "Night"
+        }
+        LaunchedEffect(appearance.awakePolicy,guiding,publication,error) {
+            awake.policy(appearance.awakePolicy);awake.reading(publication!=null && error==null);awake.guided(guiding)
         }
         LaunchedEffect(controls) {
             val controller = WindowCompat.getInsetsController(window, window.decorView)
@@ -562,9 +612,9 @@ class ReaderActivity : FragmentActivity() {
 
             }
         }
-        if (sheet != null && publication != null) ModalBottomSheet(onDismissRequest = { sheet = null; model.cancelSearch() }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        if (sheet != null && publication != null) ModalBottomSheet(onDismissRequest = { sheet = null; model.cancelSearch() }, modifier=dialogInteraction(), sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
             when (sheet) {
-                "settings" -> SettingsPanel(appearance, model.navigation, model.bookNavigation, { model.navigation(model.navigation, it) }, { model.navigation(it) }) { model.settings(it) }
+                "settings" -> SettingsPanel(appearance, model.navigation, model.bookNavigation, { model.navigation(model.navigation, it) }, { model.navigation(it) }) { readerInteraction();model.settings(it) }
                 "guided" -> guided?.let { guide -> GuidedPanel(guide) { fromHere ->
                     lifecycleScope.launch {
                         SpeechController.pause(this@ReaderActivity)
@@ -594,8 +644,8 @@ class ReaderActivity : FragmentActivity() {
         }
         notePosition?.let { position ->
             val note = model.noteDraft
-            AlertDialog(onDismissRequest = { notePosition = null }, title = { Text("Add a note") },
-                text = { OutlinedTextField(note, { model.noteDraft = it }, label = { Text("Your note") }, minLines = 3, maxLines = 6) },
+            AlertDialog(onDismissRequest = { notePosition = null }, modifier=dialogInteraction(), title = { Text("Add a note") },
+                text = { OutlinedTextField(note, { readerInteraction();model.noteDraft = it }, label = { Text("Your note") }, minLines = 3, maxLines = 6) },
                 confirmButton = { TextButton(onClick = { model.mark(position, highlight = true, note = note.trim()); notePosition = null }) { Text("Save") } },
                 dismissButton = { TextButton(onClick = { notePosition = null }) { Text("Cancel") } })
         }
@@ -625,7 +675,15 @@ internal fun SettingsPanel(value: Appearance, navigation: NavigationSettings, bo
             SettingSwitch("Scroll instead of page turns", value.scroll) { change(value.copy(scroll = it)) }
             SettingSwitch("Use publisher's layout", value.publisher) { change(value.copy(publisher = it)) }
             Text("Publisher layout preserves the book's typography. Turn it off to use your own spacing and typeface.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            SettingSwitch("Keep screen awake", value.keepAwake) { change(value.copy(keepAwake = it)) }
+            val awake=value.awakePolicy
+            ChoiceRow("Screen awake",listOf("Device timeout","Timed","Always"),when(awake.mode) { "device" -> "Device timeout"; "always" -> "Always"; else -> "Timed" }) {
+                change(value.withAwake(awake.copy(mode=when(it) { "Device timeout" -> "device"; "Always" -> "always"; else -> "timed" })))
+            }
+            if(awake.mode=="timed") ChoiceRow("After interaction · minutes",ReaderAwakePolicy.presets.map { it.toString() },awake.minutes.toString()) {
+                change(value.withAwake(awake.copy(minutes=it.toInt())))
+            }
+            Text(when(awake.mode) { "always" -> "Keep the visible book awake until you leave or lock the phone."; "device" -> "Use Android's normal screen timeout."; else -> "Stay awake for ${awake.minutes} minutes after touch or page keys, then use Android's timeout." },fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Guided reading keeps the visible page awake while it runs. Narration can continue with the screen off.",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
             SettingSwitch("Turn pages with volume keys", value.volumeKeys) { change(value.copy(volumeKeys = it)) }
             HorizontalDivider(Modifier.padding(vertical = 20.dp))
             Text("Page navigation", style = MaterialTheme.typography.titleLarge)

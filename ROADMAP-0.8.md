@@ -1,12 +1,12 @@
 # Folio 0.8 plan
 
-Updated 13 October 2026. Planning only; the released APK remains 0.7.1. The owner is handling GitHub publication.
+Updated 13 October 2026. Implementation and release validation in progress. Folio 0.7.1 is published on GitHub; 0.8 adds the scope below.
 
 ## Goals and recommended scope
 
 Make reading comfortable without frequent screen taps, and extend Browse with book discovery and downloads. Limit 0.8 to two built-in source adapters: Project Gutenberg and Wikisource. An installable extension system is unnecessary for the initial release: it introduces a separate executable-code, compatibility and distribution lifecycle.
 
-Agreed source-count limit: two. Recommended 0.8 scope: screen-awake policy; Browse → Sources and Downloads; Project Gutenberg and Wikisource with English/Danish choices; robust EPUB download/import and supported TXT/book-HTML conversion. Use Gutenberg's downloadable editions and Wikisource's EPUB export where available. Verify complete-book exports before offering Download. Standard Ebooks, custom OPDS catalogs, Calibre/Kavita and Internet Archive are deferred. Litteraturbanken remains relevant only if a useful collection of Danish-language EPUBs is verified; Swedish-only availability does not qualify. Do not silently expand the release beyond two sources.
+Agreed source-count limit: two. Recommended 0.8 scope: screen-awake policy; Browse → Sources and Downloads; Project Gutenberg and Wikisource with English/Danish choices; robust EPUB download/import and supported TXT/book-HTML conversion. Use Gutenberg's downloadable editions and Wikisource's official text API with local EPUB preparation. Verify complete-book exports before offering Download. Standard Ebooks, custom OPDS catalogs, Calibre/Kavita and Internet Archive are deferred. Litteraturbanken remains relevant only if a useful collection of Danish-language EPUBs is verified; Swedish-only availability does not qualify. Do not silently expand the release beyond two sources.
 
 ## Screen-awake behavior
 

@@ -45,7 +45,8 @@ class ReaderV7InstrumentedTest {
             withContext(Dispatchers.Main) { g.setOptions(GuidedOptions(words = 4)); g.seek(point.locator) }
             waitFor { g.hasHighlight }
             withContext(Dispatchers.Main) {
-                withTimeout(10000) { while (n.evaluateJavascript("window.readium.getDecorations('guided').items.length") != "4") delay(80) }
+                withTimeout(10000) { while (n.evaluateJavascript("window.readium.getDecorations('guided').items.length") != "1") delay(80) }
+                withTimeout(10000) { while(n.evaluateJavascript("(function(){let d=window.readium.getDecorations('guided').items[0];return !!(d&&d.folioWindowRange&&d.folioWindowRange.toString().trim().split(/\\s+/u).length===4);})()")!="true") delay(20) }
                 val line = n.renderedReadingLine(point.locator)!!
                 assertEquals(point.wordIndex, text.locate(line.first)!!.wordIndex)
                 assertTrue(text.locate(line.last)!!.wordIndex >= point.wordIndex)

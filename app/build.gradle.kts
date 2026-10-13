@@ -16,8 +16,8 @@ android {
         applicationId = "app.folio.reader"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "0.7.1"
+        versionCode = 9
+        versionName = "0.8.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }
@@ -58,6 +58,7 @@ dependencies {
     implementation("androidx.fragment:fragment-ktx:1.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.0")
+    implementation("androidx.work:work-runtime-ktx:2.10.5")
     implementation("androidx.compose.ui:ui:1.8.2")
     implementation("androidx.compose.foundation:foundation:1.8.2")
     implementation("androidx.compose.material3:material3:1.3.2")

@@ -16,8 +16,11 @@ import org.readium.r2.navigator.preferences.Theme
 data class Appearance(
     val theme: String = "Paper", val fontSize: Float = 1.1f, val lineHeight: Float = 1.55f,
     val margins: Float = 1.0f, val font: String = "Original", val scroll: Boolean = false,
-    val publisher: Boolean = true, val keepAwake: Boolean = false, val volumeKeys: Boolean = false
+    val publisher: Boolean = true, val keepAwake: Boolean = false, val volumeKeys: Boolean = false,
+    val awakeMode: String = "timed", val awakeMinutes: Int = 10
 ) {
+    val awakePolicy: ReaderAwakePolicy get() = ReaderAwakePolicy(if(keepAwake) "always" else awakeMode,awakeMinutes).normalized()
+    fun withAwake(policy: ReaderAwakePolicy): Appearance = policy.normalized().let { copy(keepAwake=it.mode=="always",awakeMode=it.mode,awakeMinutes=it.minutes) }
     fun preferences(direction: String = "Book") = EpubPreferences(
         readingProgression = when (direction) { "LTR" -> org.readium.r2.navigator.preferences.ReadingProgression.LTR; "RTL" -> org.readium.r2.navigator.preferences.ReadingProgression.RTL; else -> null },
         theme = when (theme) { "Night" -> Theme.DARK; "Sepia" -> Theme.SEPIA; else -> Theme.LIGHT },
@@ -35,14 +38,17 @@ data class Appearance(
         context.getSharedPreferences("appearance", Context.MODE_PRIVATE).edit()
             .putString("theme", theme).putFloat("fontSize", fontSize).putFloat("lineHeight", lineHeight)
             .putFloat("margins", margins).putString("font", font).putBoolean("scroll", scroll)
-            .putBoolean("publisher", publisher).putBoolean("awake", keepAwake).putBoolean("volume", volumeKeys).apply()
+            .putBoolean("publisher", publisher).putBoolean("awake", awakePolicy.mode=="always").putBoolean("volume", volumeKeys)
+            .putString("awakeMode",awakePolicy.mode).putInt("awakeMinutes",awakePolicy.minutes).apply()
     }
     companion object {
         fun load(context: Context): Appearance {
             val p = context.getSharedPreferences("appearance", Context.MODE_PRIVATE)
+            val awake=ReaderAwakePolicy(if(p.contains("awakeMode")) p.getString("awakeMode","timed").orEmpty() else if(p.getBoolean("awake",false)) "always" else "timed",
+                p.getInt("awakeMinutes",10)).normalized()
             return Appearance(p.getString("theme", "Paper") ?: "Paper", p.getFloat("fontSize", 1.1f),
                 p.getFloat("lineHeight", 1.55f), p.getFloat("margins", 1f), p.getString("font", "Original") ?: "Original",
-                p.getBoolean("scroll", false), p.getBoolean("publisher", true), p.getBoolean("awake", false), p.getBoolean("volume", false))
+                p.getBoolean("scroll", false), p.getBoolean("publisher", true), awake.mode=="always", p.getBoolean("volume", false),awake.mode,awake.minutes)
         }
     }
 }

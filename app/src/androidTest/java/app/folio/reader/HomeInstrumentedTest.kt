@@ -47,7 +47,7 @@ class HomeInstrumentedTest {
             device.takeScreenshot(File(app.filesDir, "home-v5-details.png"))
             description("Back to library"); click("History")
             assertTrue(device.wait(Until.hasObject(By.text("The Quiet Hour")), 15000))
-            click("Browse"); assertTrue(device.wait(Until.hasObject(By.text("Local EPUB files")), 15000))
+            click("Browse"); click("Local"); assertTrue(device.wait(Until.hasObject(By.text("Local EPUB files")), 15000))
             click("More"); assertTrue(device.wait(Until.hasObject(By.text("Reader settings")), 15000))
             click("Dark"); assertEquals("Dark", HomePreferences.load(app).theme)
             scenario.recreate(); assertTrue(device.wait(Until.hasObject(By.text("Reader settings")), 15000))
