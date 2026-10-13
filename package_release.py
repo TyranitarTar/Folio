@@ -8,7 +8,7 @@ import zipfile
 root = Path(__file__).resolve().parent
 output = root.parent / "output"
 output.mkdir(exist_ok=True)
-version = "0.8.0"
+version = "0.8.1"
 apk = output / f"Folio-{version}.apk"
 shutil.copy2(root / "app/build/outputs/apk/release/app-release.apk", apk)
 digest = hashlib.sha256(apk.read_bytes()).hexdigest()

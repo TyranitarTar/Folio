@@ -14,6 +14,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable internal fun AppUpdatesSheet(close: () -> Unit, model: AppUpdateModel = viewModel()) {
     val state by model.state.collectAsStateWithLifecycle()
+    // Material may read this callback during semantics/layout after the model advances.
+    // Capture this composition's non-null value rather than reading a later nullable state.
+    val progress = state.progress
     val context = LocalContext.current
     val installed = remember { context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty() }
     ModalBottomSheet(onDismissRequest = close, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
@@ -23,9 +26,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
             Text("Updates are checked on GitHub only when you choose. Your books and reading activity stay on your device.", style = MaterialTheme.typography.bodySmall)
             Text(state.status, color = if (state.error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
             if (state.busy) {
-                if (state.progress != null) {
-                    LinearProgressIndicator(progress = { state.progress!! }, modifier = Modifier.fillMaxWidth())
-                    Text("${(state.progress!! * 100).toInt()}% downloaded")
+                if (progress != null) {
+                    LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+                    Text("${(progress * 100).toInt()}% downloaded")
                 } else LinearProgressIndicator(Modifier.fillMaxWidth())
                 OutlinedButton(onClick = model::cancel) { Text("Cancel update") }
             }
