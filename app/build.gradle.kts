@@ -9,6 +9,13 @@ val releaseKey = Properties().apply {
     val file = rootProject.file("signing/key.properties")
     if (file.exists()) file.inputStream().use { load(it) }
 }
+val coreAssets = layout.buildDirectory.dir("generated/folio-assets")
+val stageCoreAssets = tasks.register<Sync>("stageCoreAssets") {
+    from("src/main/assets")
+    into(coreAssets)
+    exclude("kokoro/model.onnx", "kokoro/voices.bin", "kokoro/tokens.txt", "kokoro/espeak-ng-data/**",
+        "supertonic/*.onnx", "supertonic/voice.bin", "supertonic/unicode_indexer.bin", "supertonic/tts.json")
+}
 android {
     namespace = "app.folio.reader"
     compileSdk = 35
@@ -16,11 +23,14 @@ android {
         applicationId = "app.folio.reader"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "0.8.1"
+        versionCode = 11
+        versionName = "0.9.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }
+    sourceSets.getByName("main").assets.setSrcDirs(listOf(coreAssets))
+    // Only development debug builds may carry models for offline sample-generation fixtures.
+    if (providers.gradleProperty("folioBundledVoices").orNull == "true") sourceSets.getByName("debug").assets.srcDir("src/main/assets")
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -51,6 +61,7 @@ android {
         }
     }
 }
+tasks.named("preBuild") { dependsOn(stageCoreAssets) }
 dependencies {
     implementation("androidx.core:core-ktx:1.16.0")
     implementation("androidx.activity:activity-compose:1.10.1")

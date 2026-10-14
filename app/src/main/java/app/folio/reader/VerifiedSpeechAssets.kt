@@ -18,7 +18,7 @@ internal object VerifiedSpeechAssets {
     private val mutex = Mutex()
     suspend fun prepare(context: Context, assets: String, version: String, specifications: List<SpeechModelFile>,
         stopped: () -> Boolean, validate: (File) -> Unit = {}): File = withContext(Dispatchers.IO) {
-        mutex.withLock {
+        VoicePackStore.operations.withLock { mutex.withLock {
             check(specifications.isNotEmpty())
             val directory = File(context.noBackupFilesDir, "local-voices/$version")
             check(directory.isDirectory || directory.mkdirs()) { "Not enough storage to prepare the local voice." }
@@ -53,7 +53,10 @@ internal object VerifiedSpeechAssets {
                     val output = target.startWrite()
                     try {
                         val digest = MessageDigest.getInstance("SHA-256"); var count = 0L
-                        context.assets.open("$assets/" + spec.name).use { input ->
+                        val bundled=try { context.assets.open("$assets/" + spec.name) } catch(e: java.io.FileNotFoundException) {
+                            throw IllegalStateException("Download the ${if(assets=="supertonic") "Supertonic" else "Kokoro"} voice pack in More → Voice packs.",e)
+                        }
+                        bundled.use { input ->
                             while (true) {
                                 currentCoroutineContext().ensureActive()
                                 check(!stopped()) { "The local voice engine has been closed." }
@@ -74,7 +77,10 @@ internal object VerifiedSpeechAssets {
             val output = ready.startWrite()
             try { output.write(version.toByteArray()); ready.finishWrite(output) }
             catch (error: Throwable) { ready.failWrite(output); throw error }
+            (context.applicationContext as? FolioApp)?.voicePacks?.catalog?.firstOrNull { it.version==version }?.let { pack ->
+                (context.applicationContext as FolioApp).voicePacks.update(VoicePackState(pack.id,"Ready",pack.bytes,"Available offline"))
+            }
             directory
-        }
+        } }
     }
 }

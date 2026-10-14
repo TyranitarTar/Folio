@@ -30,6 +30,9 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -85,6 +88,28 @@ class ReaderModel(app: Application) : AndroidViewModel(app) {
     val location = MutableStateFlow<Locator?>(null)
     val searchResults = MutableStateFlow<List<Locator>>(emptyList())
     val searching = MutableStateFlow(false)
+    internal val statistics = MutableStateFlow<BookStatistics?>(null)
+    internal val informationWord = MutableStateFlow<Int?>(null)
+    internal val statisticsError = MutableStateFlow<String?>(null)
+    private var statisticsText: BookText? = null
+    private var statisticsJob: Job? = null
+    internal fun readingInformation(anchor: Locator?) {
+        informationWord.value=null;statisticsError.value=null
+        statisticsJob?.cancel()
+        statisticsJob=viewModelScope.launch {
+            try {
+                val pub=publication.value ?: return@launch
+                if(statistics.value==null)statistics.value=BookStatisticsStore.read(getApplication(),bookId)
+                val text=statisticsText ?: try { BookText.load(pub,bookId) } catch(e: IllegalArgumentException) {
+                    if(e.message !in listOf("This book contains no text for paced reading or speech.","This book has no readable text."))throw e
+                    BookText(emptyList(),chapterEntries=pub.tableOfContents.mapNotNull { link -> pub.locatorFromLink(link)?.let { ReadingChapter(link.title ?: "Untitled chapter",0,it,null) } })
+                }.also { statisticsText=it }
+                val info=statistics.value ?: BookStatisticsStore.prepare(getApplication(),bookId,pub,text).also { statistics.value=it }
+                informationWord.value=if(info.totalWords==0) 0 else anchor?.let { info.wordOffset(text,it) }
+            } catch(e: kotlinx.coroutines.CancellationException){throw e}
+            catch(e: Exception){statisticsError.value="Reading information is unavailable: ${e.message}"}
+        }
+    }
     var appearance by mutableStateOf(Appearance.load(app))
         private set
     var navigation by mutableStateOf(NavigationSettings())
@@ -168,7 +193,7 @@ class ReaderModel(app: Application) : AndroidViewModel(app) {
         }
     }
     fun cancelSearch() { searchGeneration++; searchJob?.cancel(); searching.value = false }
-    override fun onCleared() { searchJob?.cancel(); publication.value?.close(); super.onCleared() }
+    override fun onCleared() { statisticsJob?.cancel(); searchJob?.cancel(); publication.value?.close(); super.onCleared() }
 }
 
 class ReaderActivity : FragmentActivity() {
@@ -184,6 +209,7 @@ class ReaderActivity : FragmentActivity() {
     private var counter by mutableStateOf<PageCounter?>(null)
     private var guided by mutableStateOf<GuidedReading?>(null)
     private var speechStart by mutableStateOf<Locator?>(null)
+    private var informationAnchor by mutableStateOf<Locator?>(null)
     private var restoreGuidedHighlight = false
     private var restoredGuidedSession = GuidedSession()
     private var viewport = ""
@@ -234,6 +260,10 @@ class ReaderActivity : FragmentActivity() {
         if(name!="settings") guided?.pause()
         sheet = name
         if (name == "guided") guided?.prepare()
+        if(name=="information") lifecycleScope.launch {
+            val anchor=navigator?.visibleReadingAnchor() ?: model.location.value
+            if(sheet=="information"){informationAnchor=anchor;model.readingInformation(anchor)}
+        }
         if (name == "speech" || name == "guided") lifecycleScope.launch {
             speechStart = navigator?.visibleReadingAnchor() ?: model.location.value
         }
@@ -573,7 +603,10 @@ class ReaderActivity : FragmentActivity() {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().height(48.dp)) {
                         IconButton(onClick = { openSheet("contents") }) { Icon(Icons.Outlined.FormatListBulleted, "Contents and bookmarks") }
                         IconButton(onClick = { location?.let { model.mark(it) } }) { Icon(Icons.Outlined.BookmarkAdd, "Save bookmark") }
-                        Text(pageLabel, Modifier.weight(1f), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(Modifier.weight(1f).heightIn(min=48.dp).clickable(role=Role.Button) { readerInteraction();openSheet("information") }.semantics { contentDescription="Reading information" },verticalAlignment=Alignment.CenterVertically) {
+                            Text(pageLabel,Modifier.weight(1f),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=2,overflow=TextOverflow.Ellipsis)
+                            Icon(Icons.Outlined.Info,null,Modifier.size(14.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                         IconButton(onClick = { turn(false) }) { Icon(Icons.AutoMirrored.Outlined.NavigateBefore, "Previous page") }
                         IconButton(onClick = { turn(true) }) { Icon(Icons.AutoMirrored.Outlined.NavigateNext, "Next page") }
                     }
@@ -636,6 +669,9 @@ class ReaderActivity : FragmentActivity() {
                         }
                     }
                 }
+                "information" -> BookStatisticsPanel(model,counter,informationAnchor,
+                    jump={ target -> manualNavigation();navigator?.go(target);sheet=null },
+                    pauseSpeech={ SpeechController.pause(this@ReaderActivity) })
                 "search" -> SearchPanel(model) { result -> manualNavigation(); navigator?.go(result); sheet = null; model.cancelSearch() }
                 else -> OutlinePanel(publication!!, book, model, go = { link -> manualNavigation(); navigator?.go(link); sheet = null },
                     markGo = { mark -> manualNavigation(); mark.position()?.let { navigator?.go(it) }; sheet = null },

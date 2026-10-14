@@ -10,6 +10,7 @@ import androidx.compose.ui.unit.dp
 
 internal data class VersionNote(val version: String, val changes: List<String>)
 internal val versionHistory = listOf(
+    VersionNote("0.9.0", listOf("A smaller app with optional Supertonic and Kokoro voice-pack downloads; existing prepared voices are reused.", "English and Danish samples let you compare voices before downloading. Installed voices also offer a local preview.", "Moving guided windows retain their overlapping words continuously; added 300 WPM.", "Narration speeds now include 2.5× and 3×.", "Tap the page counter for cached word counts, reading time and chapter distribution.")),
     VersionNote("0.8.1", listOf("Fixed an updater crash when download progress switches to APK verification.")),
     VersionNote("0.8.0", listOf("Reader screen-awake choices: device timeout, timed interaction window or always on.", "Guided word windows use one continuous, uniformly colored highlight.", "Project Gutenberg and Wikisource downloads add English and Danish works directly to the library.", "Downloads persist across reopening, with local text-to-EPUB preparation and preserved source attribution.")),
     VersionNote("0.7.1", listOf("Guided-reading skips move by sentence or paragraph independently of focus mode.", "Stop is directly available in both reader players.", "Faster cache-first pagination and adaptive chapter measurement.", "Version history and user-initiated GitHub updates with verified APKs.")),

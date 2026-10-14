@@ -108,6 +108,8 @@ class BookTextTest {
         val text = try { BookText.load(publication) } finally { publication.close() }
         val internal = text.chapters.single { it.locator.text.highlight == "Internal" }
         assertTrue(internal.wordIndex > 0)
+        assertEquals("Second internal chapter",text.chapterEntries.single { it.cursor==internal }.title)
+        assertEquals("Inline chapter",text.chapterEntries.single { it.cursor?.locator?.text?.highlight=="Following" }.title)
         assertTrue(text.chapters.any { it.sectionIndex == internal.sectionIndex && it.wordIndex == 0 })
         assertEquals(text.cursor(internal.sectionIndex, internal.wordIndex), internal)
         val inline = text.chapters.single { it.locator.text.highlight == "Following" }

@@ -28,12 +28,17 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val state by SpeechController.state.collectAsStateWithLifecycle()
+    val app=context.applicationContext as FolioApp
+    val packStates by app.voicePacks.states.collectAsStateWithLifecycle()
+    var packsOpen by remember { mutableStateOf(false) }
     var settings by remember { mutableStateOf(SpeechSettings.load(context)) }
     var voices by remember { mutableStateOf<List<SpeechVoice>>(emptyList()) }
     var probing by remember { mutableStateOf(true) }
     var voiceMenu by remember { mutableStateOf(false) }
     var settingsError by remember { mutableStateOf<String?>(null) }
     val thisBook = state.bookId == bookId
+    val pack=app.voicePacks.forBackend(settings.backend)
+    val localReady=!settings.isLocal || pack?.let { packStates[it.id]?.phase=="Ready" }==true
     val localVoices = when (settings.backend) {
         "supertonic" -> SupertonicEngine.voices.map { SpeechVoice(it.id.toString(), it.label) }
         "kokoro" -> KokoroEngine.voices.map { SpeechVoice(it.id.toString(), it.label) }
@@ -54,6 +59,7 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
     }
     LaunchedEffect(state.voices) { if (state.backend == "android" && state.voices.isNotEmpty()) voices = state.voices }
     LaunchedEffect(context) { SpeechController.loadFollow(context) }
+    LaunchedEffect(state.error) { if(state.error!=null)settings=SpeechSettings.load(context) }
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(if (settingsOnly) "Speech settings" else "Read aloud", style = MaterialTheme.typography.headlineSmall)
@@ -70,10 +76,14 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
                 settings = settings.copy(backend = "android"); SpeechController.settings(context, settings)
             }, label = { Text("Android speech") })
         }
-        if (settings.backend == "kokoro") Text("Kokoro speaks entirely on your device. The first start prepares the bundled model and may take a little longer.",
+        if(settings.isLocal) {
+            OutlinedButton(onClick={packsOpen=true}) { Icon(Icons.Outlined.Download,null);Text("Voice packs and samples") }
+            if(!localReady)Text("Download this voice pack before starting local narration. You can hear a sample first.",style=MaterialTheme.typography.bodySmall)
+        }
+        if (settings.backend == "kokoro") Text("Kokoro speaks entirely on your device after its voice pack is installed. Model loading may take a little longer on the first start.",
             style = MaterialTheme.typography.bodySmall)
         if (settings.backend == "supertonic") {
-            Text("Supertonic speaks English and Danish on your device. The first start prepares the bundled voices.", style = MaterialTheme.typography.bodySmall)
+            Text("Supertonic speaks English and Danish offline after its voice pack is installed.", style = MaterialTheme.typography.bodySmall)
             Text("Language", style = MaterialTheme.typography.titleSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 listOf("en" to "English", "da" to "Dansk").forEach { (code, label) ->
@@ -93,14 +103,15 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
         if (thisBook && state.passage.isNotBlank()) Text(state.passage.take(240), style = MaterialTheme.typography.bodySmall)
         if (!settingsOnly) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = {
+                if(!localReady){packsOpen=true;return@Button}
                 if (thisBook && !state.finished && state.error == null) {
                     if (state.playing || state.preparing) SpeechController.pause(context)
                     else { SpeechController.resume(context); onAcceptedStart() }
                 } else { SpeechController.start(context, bookId); onAcceptedStart() }
             }, modifier = Modifier.weight(1f)) {
-                Text(if (thisBook && state.playing) "Pause" else "Resume listening")
+                Text(if(!localReady)"Download voice pack" else if (thisBook && state.playing) "Pause" else "Resume listening")
             }
-            OutlinedButton(onClick = onReadFromHere,
+            OutlinedButton(onClick = { if(localReady)onReadFromHere() else packsOpen=true },
                 enabled = currentLocator != null, modifier = Modifier.weight(1f)) { Text("Read from here") }
         }
         if (thisBook) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
@@ -132,18 +143,20 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
             }
         }
         Text("Speed: ${String.format(Locale.ENGLISH, "%.2f", settings.rate)}×")
-        Slider(value = settings.rate, onValueChange = { settings = settings.copy(rate = it) }, valueRange = .5f..2f, steps = 29,
+        Slider(value = settings.rate, onValueChange = { settings = settings.copy(rate = it) }, valueRange = .5f..3f, steps = 49,
             onValueChangeFinished = { SpeechController.settings(context, settings) })
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(.75f, 1f, 1.25f, 1.5f, 1.75f, 2f).forEach { rate ->
+            listOf(.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f).forEach { rate ->
                 FilterChip(kotlin.math.abs(settings.rate - rate) < .01f, {
                     settings = settings.copy(rate = rate); SpeechController.settings(context, settings)
                 }, label = { Text("${rate}×") })
             }
         }
         OutlinedButton(onClick = {
+            if(!localReady){packsOpen=true;return@OutlinedButton}
+            app.voiceSamples.stop()
             if (state.previewing) SpeechController.cancelPreview(context) else SpeechController.preview(context, settings)
-        }) { Text(if (state.previewing) "Cancel voice preview" else "Preview voice") }
+        }) { Text(if(!localReady)"Hear voice samples" else if (state.previewing) "Cancel voice preview" else "Preview voice") }
         if (state.previewing) {
             if (state.preparing) LinearProgressIndicator(Modifier.fillMaxWidth())
             Text(if (state.preparing) state.preparation else "Playing voice preview…", style = MaterialTheme.typography.bodySmall)
@@ -187,4 +200,5 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
         Text("All options work offline. Android speech uses installed English voices.",
             style = MaterialTheme.typography.bodySmall)
     }
+    if(packsOpen)VoicePacksPanel(initialBackend=settings.backend,close={packsOpen=false})
 }

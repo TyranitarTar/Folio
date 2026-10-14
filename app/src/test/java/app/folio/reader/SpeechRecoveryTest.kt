@@ -74,7 +74,9 @@ class SpeechRecoveryTest {
     }
     @Test fun installedModelFileIsRehashedAndSameLengthCorruptionIsRepairedBeforeJni() = runBlocking {
         val context = isolated()
-        val spec = KokoroAssetIdentity.files.first { it.name == "tokens.txt" }
+        // Small pinned metadata fixture exercises the same AtomicFile/SHA repair path in a core APK.
+        val bytes=context.assets.open("kokoro/LICENSE").use { it.readBytes() }
+        val spec = SpeechModelFile("LICENSE",bytes.size.toLong(),SpeechPcm.hex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes)))
         val directory = VerifiedSpeechAssets.prepare(context, "kokoro", "integrity-fixture", listOf(spec), { false })
         val file = File(directory, spec.name); val expected = file.readBytes()
         RandomAccessFile(file, "rw").use { val first = it.read(); it.seek(0); it.write(first xor 1) }
@@ -84,5 +86,12 @@ class SpeechRecoveryTest {
         file.writeBytes(expected.copyOf(expected.size / 2))
         VerifiedSpeechAssets.prepare(context, "kokoro", "integrity-fixture", listOf(spec), { false })
         assertArrayEquals(expected, file.readBytes())
+    }
+    @Test fun thinApkMissingModelRequestsPackDownloadWithoutPublishingReadyMarker()=runBlocking {
+        val context=isolated()
+        val result=runCatching { VerifiedSpeechAssets.prepare(context,"kokoro","missing-model-fixture",
+            listOf(SpeechModelFile("missing-model.onnx",1,"a".repeat(64))),{false}) }
+        assertTrue(result.exceptionOrNull()?.message.orEmpty().contains("Download the Kokoro voice pack"))
+        assertFalse(File(context.noBackupFilesDir,"local-voices/missing-model-fixture/.ready").exists())
     }
 }

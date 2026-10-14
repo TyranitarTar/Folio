@@ -36,9 +36,8 @@ internal object GuidedBand {
     fun templates()=HtmlDecorationTemplates.defaultTemplates().apply {
         set(GuidedBandStyle::class,HtmlDecorationTemplate(layout=HtmlDecorationTemplate.Layout.BOXES,
             element={ decoration ->
-                val style=decoration.style as GuidedBandStyle
-                if(style.hidden) "<div style=\"display:none !important\"/>"
-                else """<div class="folio-guided-band" style="background-color:rgba(${Color.red(style.tint)},${Color.green(style.tint)},${Color.blue(style.tint)},0.38) !important;"/>"""
+                // Anchors are always invisible. Only the persistent layer paints a whole window.
+                "<div style=\"display:none !important\"/>"
             },stylesheet=""".folio-guided-band{pointer-events:none !important;border:0 !important;border-radius:2px;box-sizing:border-box;margin:0 !important;padding:0 !important;opacity:1 !important;}"""))
     }
     suspend fun apply(navigator: EpubNavigatorFragment,first: Locator,last: Locator,tint: Int) {
@@ -46,14 +45,15 @@ internal object GuidedBand {
         try {
             if(!same) navigator.commitDecorations(listOf(Decoration("window-end",last,GuidedBandStyle(tint,true))),endpointGroup)
             withTimeout(1500) {
-                while(navigator.evaluateJavascript(script(first,last,same))!="true") delay(12)
+                while(navigator.evaluateJavascript(script(first,last,same,tint))!="true") delay(12)
             }
         } finally {
             if(!same) withContext(NonCancellable) { navigator.commitDecorations(emptyList(),endpointGroup) }
         }
     }
+    internal fun anchorReady(locator: Locator): String = """(function(){const expected=${locator.toJSON()},a=expected.text||{},l=expected.locations||{};return window.readium.getDecorations('guided').items.some(x=>{const b=x.decoration.locator.text||{},m=x.decoration.locator.locations||{};return ['before','highlight','after'].every(k=>(a[k]||'')===(b[k]||''))&&(l.cssSelector||'')===(m.cssSelector||'')&&l.folioOffset===m.folioOffset;});})()""".replace("\u2028","\\u2028").replace("\u2029","\\u2029")
     /** Readium anchors both endpoints. A native DOM Range includes the actual intervening spaces/markup. */
-    internal fun script(first: Locator,last: Locator,same: Boolean) = """
+    internal fun script(first: Locator,last: Locator,same: Boolean,tint: Int = 0xFF77C1AA.toInt()) = """
     (function(){
       const group=window.readium.getDecorations('guided'),item=group.items.find(x=>x.decoration.id==='current-word');
       const end=$same?item:window.readium.getDecorations('$endpointGroup').items.find(x=>x.decoration.id==='window-end');
@@ -83,10 +83,44 @@ internal object GuidedBand {
         return lines.map(r=>({left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.right-r.left,height:r.bottom-r.top}));
       }
       if(!segments().length)return false;
-      // Keep the dominant word's bounding rect/toString for navigation/cursor checks. Only the
-      // painted boxes use the contiguous range, recalculated when Readium reflows it.
-      item.folioWindowRange=selected;item.range.getClientRects=segments;
-      group.requestLayout();return true;
+      // This layer belongs to the document, not a disposable Readium decoration item.
+      let state=window.folioGuidedPaint;
+      if(!state){
+        const layer=document.createElement('div');layer.id='folio-guided-paint';layer.setAttribute('aria-hidden','true');
+        layer.style.cssText='position:absolute !important;left:0 !important;top:0 !important;width:0 !important;height:0 !important;min-width:0 !important;min-height:0 !important;max-width:none !important;max-height:none !important;opacity:1 !important;visibility:visible !important;background:transparent !important;box-shadow:none !important;margin:0 !important;padding:0 !important;border:0 !important;overflow:visible !important;pointer-events:none !important;transform:none !important;';document.body.appendChild(layer);
+        // A positioned body, column transform or publisher padding can move the layer's
+        // containing block. Measure its real CSS coordinate basis instead of adding scroll twice.
+        const probe=document.createElement('div');probe.setAttribute('aria-hidden','true');probe.style.cssText='position:absolute !important;left:0 !important;top:0 !important;width:1px !important;height:1px !important;min-width:0 !important;min-height:0 !important;max-width:none !important;max-height:none !important;padding:0 !important;margin:0 !important;border:0 !important;visibility:hidden !important;pointer-events:none !important;transform:none !important;';layer.appendChild(probe);
+        state={layer,probe,nodes:[],signature:null,pending:null,range:null,segments:null,color:null,frame:0};window.folioGuidedPaint=state;
+        state.paint=function(rects,color){
+          const origin=state.probe.getBoundingClientRect(),scaleX=origin.width||1,scaleY=origin.height||1;
+          for(let i=0;i<rects.length;i++){
+            let node=state.nodes[i];if(!node){node=document.createElement('div');node.className='folio-guided-band';node.setAttribute('aria-hidden','true');state.nodes.push(node);layer.appendChild(node);}
+            const r=rects[i];node.style.cssText='position:absolute !important;pointer-events:none !important;border:0 !important;border-radius:2px !important;box-shadow:none !important;visibility:visible !important;opacity:1 !important;box-sizing:border-box !important;margin:0 !important;padding:0 !important;min-width:0 !important;min-height:0 !important;max-width:none !important;max-height:none !important;transform:none !important;';
+            node.style.setProperty('background-color',color,'important');node.style.setProperty('left',(r.left-origin.left)/scaleX+'px','important');node.style.setProperty('top',(r.top-origin.top)/scaleY+'px','important');node.style.setProperty('width',r.width/scaleX+'px','important');node.style.setProperty('height',r.height/scaleY+'px','important');
+          }
+          while(state.nodes.length>rects.length)state.nodes.pop().remove();
+        };
+        state.relayout=function(){if(state.frame||!state.range)return;state.frame=requestAnimationFrame(function(){state.frame=0;if(state.range&&state.segments){let rects=state.segments();if(rects.length)state.paint(rects,state.color);}});};
+        window.addEventListener('resize',state.relayout);window.addEventListener('scroll',state.relayout,true);
+        state.observer=new MutationObserver(state.relayout);state.observer.observe(document.documentElement,{attributes:true,attributeFilter:['style','class']});
+        if(document.fonts)document.fonts.ready.then(state.relayout);
+        state.stop=function(){state.pending=null;state.range=null;if(state.frame)cancelAnimationFrame(state.frame);window.removeEventListener('resize',state.relayout);window.removeEventListener('scroll',state.relayout,true);state.observer.disconnect();layer.remove();if(window.folioGuidedPaint===state)window.folioGuidedPaint=null;};
+      }
+      if(!group.folioPersistentClear){const original=group.clear;group.clear=function(){const current=window.folioGuidedPaint;if(current)current.stop();original.apply(group,arguments);};group.folioPersistentClear=true;}
+      const key=JSON.stringify([${first.toJSON()},${last.toJSON()},$tint]);
+      if(state.signature===key){item.folioWindowRange=state.range;return true;}
+      if(state.pending===key)return false;
+      state.pending=key;
+      requestAnimationFrame(function(){
+        if(window.folioGuidedPaint!==state||state.pending!==key||!group.items.includes(item))return;
+        const rects=segments();if(!rects.length){state.pending=null;return;}
+        // All segment changes happen together; the old complete band stays until this callback.
+        state.paint(rects,'rgba(${Color.red(tint)},${Color.green(tint)},${Color.blue(tint)},0.38)');
+        state.range=selected;state.segments=segments;state.color='rgba(${Color.red(tint)},${Color.green(tint)},${Color.blue(tint)},0.38)';state.signature=key;state.pending=null;
+        item.folioWindowRange=selected;item.range.getClientRects=segments;
+      });
+      return false;
     })()
     """.trimIndent().replace("\u2028","\\u2028").replace("\u2029","\\u2029")
 }

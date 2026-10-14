@@ -184,7 +184,7 @@ class GuidedReading(private val context: Context, private val id: String, privat
     private suspend fun show(position: ReadingCursor, force: Boolean): Long {
         hasHighlight = true; active.value = true
         var movedPage = false
-        if (force || navigator.currentLocator.value.href.removeFragment() != position.locator.href.removeFragment()) {
+        if (navigator.currentLocator.value.href.removeFragment() != position.locator.href.removeFragment()) {
             movedPage = true
             navigator.go(position.locator, false)
             delay(120)
@@ -192,15 +192,9 @@ class GuidedReading(private val context: Context, private val id: String, privat
         val applied = android.os.SystemClock.elapsedRealtime()
         val tint=GuidedBand.tint(context)
         navigator.commitDecorations(listOf(Decoration("current-word", position.locator,GuidedBandStyle(tint))), "guided")
-        // Readium's quote anchoring locates the actual word, including repeated words and inline markup.
-        delay(25)
-        val visible = navigator.evaluateJavascript("""(function(){let d=window.readium.getDecorations('guided').items[0];if(!d)return false;let r=d.range.getBoundingClientRect();return r.width>0&&r.left>=-2&&r.right<=innerWidth+2&&r.top>=-2&&r.bottom<=innerHeight+2;})()""")
-        if (visible != "true") {
-            movedPage = true
-            navigator.go(position.locator, false)
-            withTimeout(2500) {
-                while (navigator.evaluateJavascript("(function(){let d=window.readium.getDecorations('guided').items[0];if(!d)return false;let r=d.range.getBoundingClientRect();return r.width>0&&r.left>=-2&&r.right<=innerWidth+2&&r.top>=-2&&r.bottom<=innerHeight+2;})()") != "true") delay(20)
-            }
+        // Resolve invisible anchors without replacing the previous complete painted window.
+        withTimeout(2500) {
+            while(navigator.evaluateJavascript(GuidedBand.anchorReady(position.locator))!="true") delay(12)
         }
         val book = text
         if (book != null) {
@@ -211,6 +205,15 @@ class GuidedReading(private val context: Context, private val id: String, privat
                 else (position.wordIndex + options.words).coerceAtMost(paragraphEnd)
             val last=book.cursor(position.sectionIndex,end-1) ?: position
             GuidedBand.apply(navigator,position.locator,last.locator,tint)
+        }
+        // Paint the complete destination while offscreen before a same-document page jump.
+        val visible = navigator.evaluateJavascript("""(function(){let d=window.readium.getDecorations('guided').items[0];if(!d)return false;let r=d.range.getBoundingClientRect();return r.width>0&&r.left>=-2&&r.right<=innerWidth+2&&r.top>=-2&&r.bottom<=innerHeight+2;})()""")
+        if (force || visible != "true") {
+            movedPage = true
+            navigator.go(position.locator, false)
+            withTimeout(2500) {
+                while (navigator.evaluateJavascript("(function(){let d=window.readium.getDecorations('guided').items[0];if(!d)return false;let r=d.range.getBoundingClientRect();return r.width>0&&r.left>=-2&&r.right<=innerWidth+2&&r.top>=-2&&r.bottom<=innerHeight+2;})()") != "true") delay(20)
+            }
         }
         // Include ordinary decoration work in the scheduled interval; page transitions get full visible dwell.
         return if (movedPage) android.os.SystemClock.elapsedRealtime() else applied

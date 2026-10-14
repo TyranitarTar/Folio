@@ -26,6 +26,15 @@ class PageCounter(private val context: Context, private val id: String, private 
     private val visible: EpubNavigatorFragment, private val measuring: suspend () -> EpubNavigatorFragment, private val scope: CoroutineScope) {
     val label = MutableStateFlow("Calculating pages…")
     val counting = MutableStateFlow(true)
+    internal val information = MutableStateFlow(PageInformation())
+    private var boundaryRequests: List<Locator> = emptyList()
+    private val boundaryPages = linkedMapOf<String,Int>()
+    private var boundaryCache: AtomicFile? = null
+    internal fun requestBoundaries(locators: List<Locator>) {
+        boundaryRequests=locators.distinctBy(::pageBoundaryKey).take(5000)
+        // Reuse the already visible renderer; never restart a whole-book count/create a renderer.
+        if(currentKey.isNotEmpty() && !fixed) verifyVisible()
+    }
     internal val diagnostics = MutableStateFlow(PaginationDiagnostics())
     internal val measurements = MutableStateFlow<Map<String,PaginationMeasurement>>(emptyMap())
     private val retainEvidence=context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
@@ -70,9 +79,11 @@ class PageCounter(private val context: Context, private val id: String, private 
         if (currentKey.isNotEmpty() && !fixed) verifyVisible()
     }
     private fun update() {
+        information.value=PageInformation(label.value,hrefs,counts.toList(),boundaryPages.toMap(),scroll)
         val index = hrefs.indexOf(localHref)
         if (index < 0) return
         label.value = PaginationCounts.label(counts, index, localPage, scroll)
+        information.value=information.value.copy(label=label.value)
     }
     fun recalculate(key: String, scrolling: Boolean) {
         if (closed || key == currentKey) return
@@ -89,6 +100,8 @@ class PageCounter(private val context: Context, private val id: String, private 
         val hash = MessageDigest.getInstance("SHA-256").digest(key.toByteArray()).joinToString("") { "%02x".format(it) }
         val atomic = AtomicFile(File(File(context.cacheDir, "pagination"), "$id-v3-$hash.json"))
         cache = atomic; dirty = false
+        boundaryPages.clear()
+        boundaryCache=AtomicFile(File(File(context.cacheDir,"pagination"),"$id-v3-$hash-boundaries.json"))
         diagnostics.value = PaginationDiagnostics(memoryHit = counts.all { it > 0 })
         measurements.value=emptyMap()
         counting.value = counts.any { it == 0 }
@@ -98,8 +111,10 @@ class PageCounter(private val context: Context, private val id: String, private 
                 val start = SystemClock.elapsedRealtime()
                 // No reflow debounce on cache IO/display. Do not overwrite newer live results.
                 val saved = withContext(Dispatchers.IO) { PaginationCache.read(atomic, hrefs) }
+                val savedBoundaries=withContext(Dispatchers.IO) { PaginationBoundaryCache.read(checkNotNull(boundaryCache)) }
                 ensureActive(); if (ticket != generation) return@launch
                 counts = PaginationCounts.merge(saved, counts)
+                savedBoundaries.forEach { (k,v) -> if(k !in boundaryPages)boundaryPages[k]=v }
                 if (fixed) counts.fill(1)
                 layouts[key] = counts.copyOf()
                 diagnostics.value = diagnostics.value.copy(cacheReadMillis = SystemClock.elapsedRealtime() - start)
@@ -125,6 +140,7 @@ class PageCounter(private val context: Context, private val id: String, private 
                         val began = SystemClock.elapsedRealtime()
                         val measured = sample(renderer, hrefs[index], ticket)
                         ensureActive(); if (ticket != generation) return@launch
+                        captureBoundaries(renderer,hrefs[index],ticket,measured.pages)
                         retainMeasurement(hrefs[index],renderer,"hidden",measured)
                         record(index, measured.pages)
                         diagnostics.value = diagnostics.value.copy(hiddenResources = diagnostics.value.hiddenResources + 1,
@@ -154,6 +170,7 @@ class PageCounter(private val context: Context, private val id: String, private 
                 val index = hrefs.indexOf(expected)
                 if (index < 0) return@launch
                 localPage = measured.page
+                captureBoundaries(visible,expected,ticket,measured.pages)
                 retainMeasurement(expected,visible,"visible",measured)
                 record(index, measured.pages)
                 diagnostics.value = diagnostics.value.copy(visibleMeasureMillis = SystemClock.elapsedRealtime() - began)
@@ -199,6 +216,30 @@ class PageCounter(private val context: Context, private val id: String, private 
             delay(polling)
         }
     }
+    private suspend fun captureBoundaries(renderer: EpubNavigatorFragment,href: String,ticket: Long,pages: Int) {
+        val requests=boundaryRequests.filter { it.href.removeFragment().toString()==href && pageBoundaryKey(it) !in boundaryPages }.take(128)
+        if(requests.isEmpty())return
+        val group="folio-statistics-boundaries"
+        val script="""(function(){const result={},d=document.scrollingElement,vertical=getComputedStyle(document.documentElement).writingMode.startsWith('vertical'),span=${if(scroll) "innerHeight" else "Android.getViewportWidth()/devicePixelRatio"};if(!(span>0)||($scroll&&vertical))return result;
+            const items=window.readium.getDecorations('$group').items;
+            for(const item of items){try{const rect=item.range.getBoundingClientRect();if(!(rect.width>0&&rect.height>0))continue;const offset=${if(scroll) "rect.top+d.scrollTop" else "Math.abs(rect.left+d.scrollLeft)"};result[item.decoration.id]=Math.max(0,Math.min($pages-1,Math.floor(offset/span+.001)));}catch(e){}}
+            return result;})()"""
+        var data: String?=null
+        try {
+            withTimeoutOrNull(250) {
+                renderer.commitDecorations(requests.map { org.readium.r2.navigator.Decoration(pageBoundaryKey(it),it,GuidedBandStyle(0,true)) },group)
+                // Readium's supported decoration API exposes its verified DOM quote range.
+                // A failed anchor stays unknown; retain only what resolves within this small budget.
+                while(true){data=renderer.evaluateJavascript(script);if(runCatching { JSONObject(data ?: "{}").length()==requests.size }.getOrDefault(false))break;delay(20)}
+            }
+        } finally { withContext(NonCancellable) { renderer.commitDecorations(emptyList(),group) } }
+        if(ticket!=generation||closed)return
+        val json=runCatching { JSONObject(data) }.getOrNull() ?: return
+        var changed=false
+        requests.forEach { locator -> val key=pageBoundaryKey(locator);val value=(json.opt(key) as? Number)?.toInt()
+            if(value!=null && value in 0 until pages){boundaryPages[key]=value;changed=true} }
+        if(changed){dirty=true;schedulePersist();update()}
+    }
     private fun retainMeasurement(href: String,renderer: EpubNavigatorFragment,source: String,sample: PaginationSample) {
         if(!retainEvidence) return
         measurements.value=(measurements.value-href+Pair(href,PaginationMeasurement.capture(renderer,source,sample) )).entries.toList().takeLast(32).associate { it.toPair() }
@@ -211,7 +252,7 @@ class PageCounter(private val context: Context, private val id: String, private 
         update()
         if (counts.all { it > 0 }) counting.value = false
     }
-    private fun snapshot(): PaginationCacheSnapshot? = if (dirty) cache?.let { PaginationCacheSnapshot(it, hrefs, counts.copyOf()) } else null
+    private fun snapshot(): PaginationCacheSnapshot? = if (dirty) cache?.let { PaginationCacheSnapshot(it, hrefs, counts.copyOf(),boundaryCache,boundaryPages.toMap()) } else null
     private fun schedulePersist() {
         if (persistJob?.isActive == true) return
         val ticket=generation
@@ -222,7 +263,7 @@ class PageCounter(private val context: Context, private val id: String, private 
                 withContext(Dispatchers.IO) { PaginationCache.write(saved) }
                 // Keep the pending snapshot dirty through cancellable IO, so close/key changes
                 // can still flush it if the activity write is cancelled while waiting for the lock.
-                if(ticket==generation && counts.contentEquals(saved.counts)) dirty=false
+                if(ticket==generation && counts.contentEquals(saved.counts) && boundaryPages==saved.boundaries) dirty=false
             } finally {
                 if(ticket==generation) {
                     persistJob=null
@@ -344,7 +385,8 @@ internal class PaginationSettler(private val quietMillis: Long = 80) {
     }
 }
 
-internal data class PaginationCacheSnapshot(val atomic: AtomicFile, val hrefs: List<String>, val counts: IntArray)
+internal data class PaginationCacheSnapshot(val atomic: AtomicFile, val hrefs: List<String>, val counts: IntArray,
+    val boundaryAtomic: AtomicFile? = null, val boundaries: Map<String,Int> = emptyMap())
 internal object PaginationCache {
     private val mutex=Mutex()
     private val io=CoroutineScope(SupervisorJob()+Dispatchers.IO)
@@ -376,7 +418,45 @@ internal object PaginationCache {
             val out=saved.atomic.startWrite()
             try { out.write(bytes); saved.atomic.finishWrite(out) } catch(e:Throwable) { saved.atomic.failWrite(out); throw e }
         }
+        saved.boundaryAtomic?.let { PaginationBoundaryCache.write(it,saved.boundaries) }
         Unit
     }
     fun flush(saved: PaginationCacheSnapshot) { io.launch { write(saved) } }
+}
+
+internal fun pageBoundaryKey(locator: Locator): String {
+    val identity=org.json.JSONArray(listOf(locator.href.removeFragment().toString(),locator.locations.fragments.joinToString("|"),locator.locations["cssSelector"]?.toString().orEmpty(),(locator.locations["folioOffset"] as? Number)?.toInt() ?: -1,locator.text.before.orEmpty(),locator.text.highlight.orEmpty(),locator.text.after.orEmpty())).toString()
+    return MessageDigest.getInstance("SHA-256").digest(identity.toByteArray()).joinToString("") { "%02x".format(it) }
+}
+internal data class PageInformation(val label: String="Calculating pages…",val hrefs: List<String> = emptyList(),val counts: List<Int> = emptyList(),val boundaries: Map<String,Int> = emptyMap(),val scrolling: Boolean=false) {
+    fun page(locator: Locator): Long? {
+        val index=hrefs.indexOf(locator.href.removeFragment().toString());if(index !in counts.indices||counts.take(index+1).any { it<=0 })return null
+        val local=boundaries[pageBoundaryKey(locator)] ?: if(counts[index]==1||(locator.text.highlight.isNullOrBlank()&&locator.locations.fragments.isEmpty()&&locator.locations["cssSelector"]==null)) 0 else return null
+        if(local !in 0 until counts[index])return null
+        return counts.take(index).sumOf { it.toLong() }+local+1L
+    }
+    fun lastPageInResource(locator: Locator): Long? {
+        val index=hrefs.indexOf(locator.href.removeFragment().toString())
+        if(index !in counts.indices||counts.take(index+1).any { it<=0 })return null
+        return counts.take(index+1).sumOf { it.toLong() }
+    }
+    val total: Long? get() = counts.takeIf { it.isNotEmpty()&&it.all { n->n>0 } }?.sumOf { it.toLong() }
+}
+internal object PaginationBoundaryCache {
+    fun read(atomic: AtomicFile): Map<String,Int> = runCatching {
+        atomic.openRead().use { input -> val bytes=input.readNBytesCompat(500001);require(bytes.size<=500000);val j=JSONObject(bytes.toString(Charsets.UTF_8));require(j.length()<=5000)
+            j.keys().asSequence().mapNotNull { key -> val value=(j.opt(key) as? Number)?.toInt();if(key.matches(Regex("[a-f0-9]{64}"))&&value!=null&&value in 0..99999)key to value else null }.toMap() }
+    }.getOrDefault(emptyMap())
+    fun write(atomic: AtomicFile,values: Map<String,Int>) {
+        if(values.isEmpty())return
+        val merged=read(atomic)+values;val bytes=JSONObject(merged.entries.take(5000).associate { it.toPair() }).toString().toByteArray()
+        if(bytes.size>500000)return
+        atomic.baseFile.parentFile?.mkdirs()
+        runCatching { val out=atomic.startWrite();try{out.write(bytes);atomic.finishWrite(out)}catch(e:Throwable){atomic.failWrite(out);throw e} }
+    }
+    private fun java.io.InputStream.readNBytesCompat(limit: Int): ByteArray {
+        val out=java.io.ByteArrayOutputStream();val buffer=ByteArray(8192)
+        while(out.size()<limit){val n=read(buffer,0,minOf(buffer.size,limit-out.size()));if(n<0)break;if(n>0)out.write(buffer,0,n)}
+        return out.toByteArray()
+    }
 }

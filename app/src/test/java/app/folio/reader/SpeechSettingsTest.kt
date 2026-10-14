@@ -12,6 +12,15 @@ import org.robolectric.annotation.Config
 @Config(sdk = [35])
 class SpeechSettingsTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
+    @Test fun fasterRatesPersistWithoutChangingSupertonicWaveformOrKokoroCachePolicy() {
+        for(rate in listOf(2.5f,3f)) {
+            val settings=SpeechSettings(backend="supertonic",rate=rate)
+            settings.save(context)
+            assertEquals(rate,SpeechSettings.load(context).rate,0f)
+            assertEquals(SpeechSettings(backend="supertonic").audioKey("A final word."),settings.audioKey("A final word."))
+            assertNotEquals(SpeechSettings(backend="kokoro").audioKey("A final word."),settings.copy(backend="kokoro").audioKey("A final word."))
+        }
+    }
     @Test fun upgradingRetainsTheOldVoiceAndAddsSafeSupertonicDefaults() {
         context.getSharedPreferences("speech", Context.MODE_PRIVATE).edit().clear()
             .putString("backend", "kokoro").putInt("aiVoice", 3).putFloat("rate", 1.25f).commit()

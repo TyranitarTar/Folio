@@ -52,7 +52,7 @@ class SpeechV7InstrumentedTest {
             assertNotNull(before.audioDigest)
             val clip=AiListeningStore(app).loadClip(before.key)!!
             val summary=JSONObject().put("samples",clip.samples.size).put("rate",clip.sampleRate).put("digest",before.audioDigest)
-            for(rate in listOf(1.25f,1.5f,1.75f,2f,.75f,1f)) {
+            for(rate in listOf(1.25f,1.5f,1.75f,2f,2.5f,3f,.75f,1f)) {
                 SpeechController.settings(app,SpeechSettings(backend="supertonic",rate=rate))
                 waitFor { SpeechController.state.value.error!=null || SpeechController.state.value.playbackRate==rate }
                 assertNull(SpeechController.state.value.error)
@@ -68,8 +68,8 @@ class SpeechV7InstrumentedTest {
             waitFor { SpeechController.state.value.error!=null || SpeechController.state.value.audioSample>before.playedSamples+2400 }
             assertNull(SpeechController.state.value.error)
             assertEquals(before.key,AiListeningStore(app).read(book.id)!!.key)
-            SpeechController.settings(app,SpeechSettings(backend="supertonic",rate=2f))
-            waitFor { SpeechController.state.value.error!=null || SpeechController.state.value.playbackRate==2f }
+            SpeechController.settings(app,SpeechSettings(backend="supertonic",rate=3f))
+            waitFor { SpeechController.state.value.error!=null || SpeechController.state.value.playbackRate==3f }
             assertNull(SpeechController.state.value.error)
             SpeechController.pause(app); waitFor { !SpeechController.state.value.playing }
             waitFor { AiListeningStore(app).read(book.id)?.playedSamples==SpeechController.state.value.audioSample }

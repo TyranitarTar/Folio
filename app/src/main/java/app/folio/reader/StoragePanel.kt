@@ -19,8 +19,8 @@ import kotlinx.coroutines.withContext
 private data class StorageUsage(val books: Long = 0, val models: Long = 0, val cache: Long = 0)
 private suspend fun storageUsage(context: Context) = withContext(Dispatchers.IO) {
     fun bytes(file: File) = file.walkTopDown().filter { it.isFile }.sumOf { it.length() }
-    StorageUsage(bytes(File(context.filesDir, "library")), bytes(File(context.noBackupFilesDir, "local-voices")),
-        bytes(File(context.cacheDir, "ai-audio")) + bytes(File(context.cacheDir, "pagination")))
+    StorageUsage(bytes(File(context.filesDir, "library")), bytes(File(context.noBackupFilesDir, "local-voices")) + bytes(File(context.noBackupFilesDir, "voice-transfers")),
+        bytes(File(context.cacheDir, "ai-audio")) + bytes(File(context.cacheDir, "pagination")) + bytes(File(context.cacheDir, "book-statistics")) + bytes(File(context.cacheDir, "voice-samples")))
 }
 private fun megabytes(bytes: Long) = "%.1f MB".format(java.util.Locale.ROOT, bytes / 1_000_000.0)
 
@@ -48,8 +48,8 @@ private fun megabytes(bytes: Long) = "%.1f MB".format(java.util.Locale.ROOT, byt
     ModalBottomSheet(onDismissRequest = dismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Storage and recovery", style = MaterialTheme.typography.headlineSmall)
-            Text("Library and annotations: ${megabytes(usage.books)}\nPrepared voices: ${megabytes(usage.models)}\nGenerated audio and page cache: ${megabytes(usage.cache)}")
-            Text("The installed APK also contains both voice packs. Backups omit voice models and generated audio.", style = MaterialTheme.typography.bodySmall)
+            Text("Library and annotations: ${megabytes(usage.books)}\nVoices and partial downloads: ${megabytes(usage.models)}\nGenerated audio, samples, statistics and page cache: ${megabytes(usage.cache)}")
+            Text("Offline voices are optional downloads in More → Voice packs. Backups omit voice models and generated audio.", style = MaterialTheme.typography.bodySmall)
             recovery?.let {
                 Text(it, color = MaterialTheme.colorScheme.error)
                 TextButton(onClick = { model.storageOperation({ model.store.dismissRecovery(); "Recovery notice dismissed. Preserved files remain available." }) }) { Text("Dismiss recovery notice") }
@@ -65,9 +65,9 @@ private fun megabytes(bytes: Long) = "%.1f MB".format(java.util.Locale.ROOT, byt
             OutlinedButton(onClick = { model.storageOperation({ withContext(Dispatchers.IO) {
                 SpeechCheckpointCoordinator.exclusive(context) {
                     AiListeningStore.clearCache(context)
-                    File(context.cacheDir, "pagination").listFiles().orEmpty().forEach { it.delete() }
+                    listOf("pagination", "book-statistics", "voice-samples").forEach { name -> File(context.cacheDir, name).listFiles().orEmpty().forEach { it.delete() } }
                 }
-            }; "Generated audio and page cache cleared." }) { refresh++ } }, enabled = !busy && speech.bookId == null, modifier = Modifier.fillMaxWidth()) { Text("Clear generated caches") }
+            }; "Generated audio, samples, statistics and page cache cleared." }) { refresh++ } }, enabled = !busy && speech.bookId == null, modifier = Modifier.fillMaxWidth()) { Text("Clear generated caches") }
             OutlinedButton(onClick = { model.storageOperation({ withContext(Dispatchers.IO) {
                 File(context.noBackupFilesDir, "local-voices").listFiles().orEmpty().filter { it.isDirectory }.forEach { folder ->
                     folder.listFiles().orEmpty().filter { it.name.startsWith(".ready") }.forEach { it.delete() }

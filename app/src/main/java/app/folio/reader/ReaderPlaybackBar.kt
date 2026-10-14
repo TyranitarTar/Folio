@@ -72,10 +72,10 @@ internal fun ReaderPlaybackBar(bookId: String, guide: GuidedReading?, navigate: 
             IconButton(onClick = { navigate(1) }, enabled = !preparing && countdown == 0 && (!active || guideReady), modifier = Modifier.size(48.dp).semantics { contentDescription = "Next $unit" }) { Icon(Icons.Outlined.SkipNext, null) }
             TextButton(onClick = {
                 if (active && guide != null) {
-                    val presets = if (guide.pace.unit == "CPS") listOf(10.0,15.0,25.0,40.0) else listOf(150.0,200.0,225.0,250.0,275.0,350.0,400.0,450.0,500.0)
+                    val presets = if (guide.pace.unit == "CPS") listOf(10.0,15.0,25.0,40.0) else listOf(150.0,200.0,225.0,250.0,275.0,300.0,350.0,400.0,450.0,500.0)
                     guide.setPace(guide.pace.copy(speed = presets.firstOrNull { it > guide.pace.speed } ?: presets.first()))
                 } else {
-                    val rates = listOf(.75f,1f,1.25f,1.5f,1.75f,2f)
+                    val rates = listOf(.75f,1f,1.25f,1.5f,1.75f,2f,2.5f,3f)
                     SpeechController.settings(context, options.copy(rate = rates.firstOrNull { it > options.rate + .01f } ?: rates.first()))
                 }
             }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text(if (active) "${guide?.pace?.speed?.toInt()} ${guide?.pace?.unit}" else String.format(Locale.ENGLISH, "%.2f×", speech.playbackRate)) }

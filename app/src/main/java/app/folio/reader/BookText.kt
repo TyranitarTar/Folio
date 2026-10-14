@@ -36,9 +36,11 @@ data class ReadingParagraph(val firstWord: Int, val endWord: Int)
 data class ReadingSentence(val text: String, val locator: Locator, val firstWord: Int, val endWord: Int)
 data class TextSection(val href: Url, val title: String, val words: List<ReadingWord>, val sentences: List<ReadingSentence>)
 data class ReadingCursor(val sectionIndex: Int, val wordIndex: Int, val locator: Locator)
+/** Verified EPUB contents entry; nested entries are metadata, not duplicate word partitions. */
+data class ReadingChapter(val title: String, val depth: Int, val locator: Locator, val cursor: ReadingCursor?)
 
 /** Text quotes, rather than screen coordinates, survive changes to the reading layout. */
-data class BookText(val sections: List<TextSection>, val chapters: List<ReadingCursor> = emptyList()) {
+data class BookText(val sections: List<TextSection>, val chapters: List<ReadingCursor> = emptyList(), val chapterEntries: List<ReadingChapter> = emptyList()) {
     private val paragraphRanges = sections.map { section ->
         val ranges = mutableListOf<ReadingParagraph>(); var first = 0
         while (first < section.words.size) {
@@ -181,21 +183,30 @@ data class BookText(val sections: List<TextSection>, val chapters: List<ReadingC
             val sections = groups.values.filter { it.words.isNotEmpty() }.map { TextSection(it.href, it.title, it.words, it.sentences) }
             require(sections.isNotEmpty()) { "This book contains no text for paced reading or speech." }
             val book = BookText(sections)
-            book.copy(chapters = chapterAnchors(publication, book))
+            val entries = chapterAnchors(publication, book)
+            val points = entries.mapNotNull { it.cursor }.distinctBy { it.sectionIndex to it.wordIndex }
+                .sortedWith(compareBy({ it.sectionIndex }, { it.wordIndex }))
+            book.copy(chapters = if(points.isEmpty()) emptyList() else (listOfNotNull(book.first()) + points).distinctBy { it.sectionIndex to it.wordIndex }, chapterEntries = entries)
         }
         /** Verify TOC fragments against resource DOM order, including chapters sharing one spine item. */
-        private suspend fun chapterAnchors(publication: Publication, book: BookText): List<ReadingCursor> {
-            fun flatten(items: List<org.readium.r2.shared.publication.Link>): List<org.readium.r2.shared.publication.Link> =
-                items.flatMap { listOf(it) + flatten(it.children) }
-            val links = flatten(publication.tableOfContents).take(5000)
-            val anchors = mutableListOf<ReadingCursor>()
+        private suspend fun chapterAnchors(publication: Publication, book: BookText): List<ReadingChapter> {
+            data class Toc(val link: org.readium.r2.shared.publication.Link, val depth: Int)
+            val pending=java.util.ArrayDeque<Toc>()
+            publication.tableOfContents.take(5000).asReversed().forEach { pending.addLast(Toc(it,0)) }
+            val links=mutableListOf<Toc>()
+            while(pending.isNotEmpty()&&links.size<5000) {
+                val item=pending.removeLast();links+=item
+                if(item.depth<128)item.link.children.take((5000-links.size-pending.size).coerceAtLeast(0)).asReversed().forEach { pending.addLast(Toc(it,item.depth+1)) }
+            }
+            val anchors = mutableListOf<ReadingChapter>()
+            fun add(item: Toc, point: ReadingCursor) { anchors += ReadingChapter(item.link.title?.takeIf { it.isNotBlank() } ?: "Untitled chapter", item.depth, point.locator, point) }
             var clonedCharacters = 0L
             book.sections.forEachIndexed { sectionIndex, section ->
                 currentCoroutineContext().ensureActive()
-                val chapters = links.filter { it.url().removeFragment() == section.href }
+                val chapters = links.filter { it.link.url().removeFragment() == section.href }
                 if (chapters.isEmpty()) return@forEachIndexed
-                chapters.filter { it.url().fragment == null }.forEach { book.cursor(sectionIndex, 0)?.let(anchors::add) }
-                val fragments = chapters.mapNotNull { it.url().fragment }.distinct()
+                chapters.filter { it.link.url().fragment == null }.forEach { item -> book.cursor(sectionIndex, 0)?.let { add(item, it) } }
+                val fragments = chapters.mapNotNull { it.link.url().fragment }.distinct()
                 if (fragments.isEmpty()) return@forEachIndexed
                 val html = publication.get(section.href)?.use { resource ->
                     resource.read().flatMap { it.decodeString() }.getOrElse { null }
@@ -244,13 +255,17 @@ data class BookText(val sections: List<TextSection>, val chapters: List<ReadingC
                             } ?: atOrAfter(ordinal + 1)
                         }
                     } else atOrAfter(ordinal)
-                    word?.let { book.cursor(sectionIndex, it)?.let(anchors::add) }
+                    word?.let { book.cursor(sectionIndex, it) }?.let { point -> chapters.filter { it.link.url().fragment == fragment }.forEach { add(it, point) } }
                 }
             }
-            val sorted = anchors.distinctBy { it.sectionIndex to it.wordIndex }.sortedWith(compareBy({ it.sectionIndex }, { it.wordIndex }))
-            if (sorted.isEmpty()) return emptyList()
-            // Front matter before the first TOC anchor remains a navigable boundary.
-            return (listOfNotNull(book.first()) + sorted).distinctBy { it.sectionIndex to it.wordIndex }
+            // Image-only spine resources still have contents entries and pages, with zero words.
+            val textHrefs = book.sections.map { it.href }.toSet()
+            links.filter { it.link.url().removeFragment() !in textHrefs && it.link.url().fragment == null }.forEach { item ->
+                publication.locatorFromLink(item.link)?.let { anchors += ReadingChapter(item.link.title ?: "Untitled chapter", item.depth, it, null) }
+            }
+            val order = publication.readingOrder.map { it.url().removeFragment() }
+            return anchors.distinctBy { Triple(it.locator.href.removeFragment(), it.cursor?.wordIndex ?: 0, it.depth) }
+                .sortedWith(compareBy({ order.indexOf(it.locator.href.removeFragment()) }, { it.cursor?.wordIndex ?: 0 }, { it.depth }))
         }
         internal fun quoteAt(locator: Locator, text: String, start: Int, end: Int) = quote(locator, text, start, end)
 

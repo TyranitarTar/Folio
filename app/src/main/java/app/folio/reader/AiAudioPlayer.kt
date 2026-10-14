@@ -113,7 +113,7 @@ internal class AiPresentationClock(private val sampleRate: Int) {
     private var minimumTimestampTime = 0L
     private var requiredFrame = -1L
     fun setPlaybackRate(rate: Float, now: Long) {
-        require(rate.isFinite() && rate in .5f..2f)
+        require(rate.isFinite() && rate in .5f..3f)
         playbackRate = rate.toDouble()
         resetTimestamp(now)
     }
@@ -314,7 +314,7 @@ class AiAudioPlayer internal constructor(
 
     /** Speed changes retain source PCM/sample positions and queued passage bases. */
     fun setPlaybackRate(rate: Float): Boolean = synchronized(lock) {
-        require(rate.isFinite() && rate in .5f..2f)
+        require(rate.isFinite() && rate in .5f..3f)
         check(!closed)
         if (rate==playbackRate) return@synchronized true
         val current = stream

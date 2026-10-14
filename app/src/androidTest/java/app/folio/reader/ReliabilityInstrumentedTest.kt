@@ -81,7 +81,7 @@ class ReliabilityInstrumentedTest {
             device.findObject(By.text("Cancel")).click(); device.waitForIdle()
             device.findObject(By.text("Guided reading")).click()
             repeat(2) { device.findObjects(By.scrollable(true)).lastOrNull()?.scroll(Direction.DOWN, .45f) }
-            for (speed in listOf(150, 200, 225, 250, 275, 350, 400, 450, 500)) assertTrue("Missing $speed", device.wait(Until.hasObject(By.text(speed.toString())), 10000))
+            for (speed in listOf(150, 200, 225, 250, 275, 300, 350, 400, 450, 500)) assertTrue("Missing $speed", device.wait(Until.hasObject(By.text(speed.toString())), 10000))
             device.takeScreenshot(File(app.filesDir, "v6-guided-presets.png"))
         }
     }

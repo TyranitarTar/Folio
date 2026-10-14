@@ -69,7 +69,7 @@ class KokoroEngine(context: Context, private val assetDirectory: String = "kokor
     suspend fun generate(text: String, voiceId: Int, speed: Float): AiAudioClip {
         require(text.isNotBlank()) { "There is no text to read aloud." }
         require(text.length <= MAX_TEXT_CHARACTERS) { "This passage is too long for one local speech chunk." }
-        require(speed.isFinite() && speed in .5f..2f) { "Choose a speech speed between 0.5× and 2×." }
+        require(speed.isFinite() && speed in .5f..3f) { "Choose a speech speed between 0.5× and 3×." }
         val voice = voices.firstOrNull { it.id == voiceId } ?: throw IllegalArgumentException("Choose Emma or Heart for local English speech.")
         val requested = generation.get()
         prepare()

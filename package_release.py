@@ -8,7 +8,7 @@ import zipfile
 root = Path(__file__).resolve().parent
 output = root.parent / "output"
 output.mkdir(exist_ok=True)
-version = "0.8.1"
+version = "0.9.0"
 apk = output / f"Folio-{version}.apk"
 shutil.copy2(root / "app/build/outputs/apk/release/app-release.apk", apk)
 digest = hashlib.sha256(apk.read_bytes()).hexdigest()
@@ -24,7 +24,7 @@ for name in (".gitignore", "README.md", "TTS-roadmap.md", "build.gradle.kts", "a
              "bootstrap.py", "make_sample.py", "collect_notices.py", "prepare_signing.py",
              "package_release.py", "write_validation.py", "runtime-dependencies.txt", "LICENSE", "AI-NATIVE-BUILD.md",
              "bootstrap_ai.py", "bootstrap_supertonic.py", "Danish-TTS-feasibility.md", "Mihon-adaptation.md",
-             "collect_ai_sources.py", "capture_ai_evidence.py", "validate_release_v6.py", "validate_release_v7.py", "verify_upgrade_v7.py", "IMPLEMENTATION-v0.6.md", "IMPLEMENTATION-v0.7.md", "GITHUB-RELEASES.md", "validate_release_v071.py", "verify_upgrade_v071.py", "IMPLEMENTATION-v0.8.md", "ROADMAP-0.8.md", "validate_release_v08.py", "verify_upgrade_v08.py"):
+             "collect_ai_sources.py", "capture_ai_evidence.py", "validate_release_v6.py", "validate_release_v7.py", "verify_upgrade_v7.py", "IMPLEMENTATION-v0.6.md", "IMPLEMENTATION-v0.7.md", "GITHUB-RELEASES.md", "validate_release_v071.py", "verify_upgrade_v071.py", "IMPLEMENTATION-v0.8.md", "ROADMAP-0.8.md", "validate_release_v08.py", "verify_upgrade_v08.py", "ROADMAP-0.9.md", "IMPLEMENTATION-v0.9.md", "build_voice_packs.py", "validate_voice_packs.py", "validate_release_v09.py", "verify_upgrade_v09.py"):
     path = root / name
     if path.is_file():
         files.append(path)

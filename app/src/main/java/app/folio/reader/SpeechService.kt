@@ -54,14 +54,14 @@ data class SpeechSettings(val voice: String = "", val rate: Float = 1f, val back
         (backend != "android" || voice == other.voice) && localVoiceIdentity == other.localVoiceIdentity && synthesisRate == other.synthesisRate
     fun audioKey(text: String): String = AiListeningStore.key(text, localVoice, synthesisRate, backend, supertonicLanguage)
     fun save(context: Context) = context.getSharedPreferences("speech", Context.MODE_PRIVATE).edit()
-        .putString("voice", voice).putFloat("rate", rate.coerceIn(.5f, 2f))
+        .putString("voice", voice).putFloat("rate", rate.coerceIn(.5f, 3f))
         .putString("backend", backend).putInt("aiVoice", aiVoice)
         .putInt("supertonicVoice", supertonicVoice).putString("supertonicLanguage", supertonicLanguage)
         .putString("navigationUnit", navigationUnit).putInt("sentencePauseMillis", sentencePauseMillis.coerceIn(0,5000))
         .putInt("paragraphPauseMillis", paragraphPauseMillis.coerceIn(0,5000)).apply()
     companion object {
         fun load(context: Context): SpeechSettings = context.getSharedPreferences("speech", Context.MODE_PRIVATE).let {
-            SpeechSettings(it.getString("voice", "").orEmpty(), it.getFloat("rate", 1f).takeIf { value -> value.isFinite() }?.coerceIn(.5f,2f) ?: 1f,
+            SpeechSettings(it.getString("voice", "").orEmpty(), it.getFloat("rate", 1f).takeIf { value -> value.isFinite() }?.coerceIn(.5f,3f) ?: 1f,
                 it.getString("backend", "android").takeIf { value -> value in setOf("android", "kokoro", "supertonic") } ?: "android",
                 it.getInt("aiVoice", 21).takeIf { id -> id == 21 || id == 3 } ?: 21,
                 it.getInt("supertonicVoice", 0).takeIf { id -> id in 0..9 } ?: 0,
@@ -133,7 +133,10 @@ object SpeechController {
     fun resume(context: Context) = command(context, SpeechService.RESUME)
     fun previous(context: Context) = command(context, SpeechService.PREVIOUS)
     fun next(context: Context) = command(context, SpeechService.NEXT)
-    fun stop(context: Context) = command(context, SpeechService.STOP)
+    @Volatile internal var serviceRunning=false
+    fun stop(context: Context) {
+        if(serviceRunning || mutable.value.bookId!=null || mutable.value.previewing)runCatching { context.startService(intent(context,SpeechService.STOP)) }
+    }
     fun settings(context: Context, settings: SpeechSettings) {
         settings.save(context)
         if (mutable.value.bookId != null) command(context, SpeechService.SETTINGS)
@@ -209,6 +212,7 @@ class SpeechService : Service() {
     }
 
     override fun onCreate() {
+        SpeechController.serviceRunning=true
         super.onCreate()
         settings = SpeechSettings.load(this)
         SpeechController.loadFollow(this)
@@ -262,7 +266,7 @@ class SpeechService : Service() {
             PREVIEW -> {
                 startForeground(NOTIFICATION, notification())
                 val selected = settings.copy(backend = intent.getStringExtra("backend") ?: "android", voice = intent.getStringExtra("voice").orEmpty(),
-                    rate = intent.getFloatExtra("rate",1f).takeIf { it.isFinite() }?.coerceIn(.5f,2f) ?: 1f,
+                    rate = intent.getFloatExtra("rate",1f).takeIf { it.isFinite() }?.coerceIn(.5f,3f) ?: 1f,
                     aiVoice = intent.getIntExtra("aiVoice",21), supertonicVoice = intent.getIntExtra("supertonicVoice",0),
                     supertonicLanguage = intent.getStringExtra("language") ?: "en")
                 preview(selected, intent.getLongExtra("request",0))
@@ -781,8 +785,8 @@ class SpeechService : Service() {
         val old=settings
         if (old.backend=="supertonic" && changed.sameSource(old) &&
             changed.sentencePauseMillis==old.sentencePauseMillis && changed.paragraphPauseMillis==old.paragraphPauseMillis) {
+            if (aiPlayer?.setPlaybackRate(changed.playbackRate)==false) { settings=old;old.save(this);fail("This audio output cannot preserve pitch at ${changed.rate}×. Your previous speed is kept.");return }
             settings=changed
-            if (aiPlayer?.setPlaybackRate(changed.playbackRate)==false) { fail("Pitch-preserving speed is unavailable. Choose 1.0x."); return }
             SpeechController.mutable.value=state().copy(playbackRate=changed.rate,error=null)
             aiClip?.let { rememberAi(mandatory=true) }
             publishPlayback(); return
@@ -942,6 +946,7 @@ class SpeechService : Service() {
         session.isActive = false; session.release()
         publication?.close()
         scope.cancel()
+        SpeechController.serviceRunning=false
         SpeechController.mutable.value = state().copy(bookId = null, playing = false, preparing = false)
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()

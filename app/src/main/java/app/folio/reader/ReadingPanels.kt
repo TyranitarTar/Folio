@@ -56,7 +56,7 @@ fun GuidedPanel(guide: GuidedReading, start: (Boolean) -> Unit) {
             Slider(options.words.toFloat(), { options = options.copy(words = it.roundToInt()); guide.setOptions(options) }, valueRange = 1f..8f, steps = 6)
         }
         Text(when (options.mode) {
-            "Window" -> "The leading word advances one word at a time; upcoming words are softly marked."
+            "Window" -> "The leading word advances one word at a time; the whole moving window stays uniformly marked."
             "Groups" -> "Groups do not overlap. Four words at 200 WPM receive 1.2 seconds."
             else -> "Uses the visible text layout. Reflow keeps your leading word."
         }, style = MaterialTheme.typography.bodySmall)
@@ -67,7 +67,7 @@ fun GuidedPanel(guide: GuidedReading, start: (Boolean) -> Unit) {
             pace = Pace(it, if (it == "CPS") 15.0 else 200.0); guide.setPace(pace)
         }
         Text(if (pace.unit == "CPS") "Characters per second · longer words stay highlighted longer" else "Words per minute · equal time for each word", style = MaterialTheme.typography.bodySmall)
-        val presets = if (pace.unit == "CPS") listOf(10, 15, 25, 40) else listOf(150, 200, 225, 250, 275, 350, 400, 450, 500)
+        val presets = if (pace.unit == "CPS") listOf(10, 15, 25, 40) else listOf(150, 200, 225, 250, 275, 300, 350, 400, 450, 500)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             presets.forEach { speed -> FilterChip(pace.speed == speed.toDouble(), { pace = pace.copy(speed = speed.toDouble()); guide.setPace(pace); custom = speed.toString() }, label = { Text(speed.toString()) }) }
         }

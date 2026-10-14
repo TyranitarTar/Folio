@@ -87,6 +87,7 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
         var historyNotes by rememberSaveable { mutableStateOf(false) }
         var updates by rememberSaveable { mutableStateOf(false) }
         var speechSettings by rememberSaveable { mutableStateOf(false) }
+        var voicePacks by rememberSaveable { mutableStateOf(false) }
         var storage by rememberSaveable { mutableStateOf(false) }
         var renameShelf by remember { mutableStateOf<String?>(null) }
         var licenses by remember { mutableStateOf(false) }
@@ -195,6 +196,7 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
                     else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
                         HomeAction("Reader settings", "Typography, page turns and tap zones", Icons.Outlined.MenuBook, { readerSettings = true })
                         HomeAction("Speech settings", "Offline voices and playback speed", Icons.Outlined.RecordVoiceOver, { speechSettings = true })
+                        HomeAction("Voice packs", "Listen to samples and download offline voices", Icons.Outlined.Download, { voicePacks = true })
                         HomeAction("Library display", "Grid, list, sorting and filters", Icons.Outlined.GridView, { settings = true })
                         HomeAction("Shelves", "Organise your library", Icons.Outlined.FolderOpen, { shelfDialog = true })
                         HomeAction("Storage and backup", "Export, restore, repair and free space", Icons.Outlined.Save, { storage = true })
@@ -212,6 +214,7 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
         }
         if (historyNotes) VersionHistorySheet { historyNotes = false }
         if (updates) AppUpdatesSheet(close = { updates = false })
+        if (voicePacks) VoicePacksPanel(close = { voicePacks = false })
         if (speechSettings) ModalBottomSheet(onDismissRequest = { speechSettings = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
             SpeechPanel("", null, settingsOnly = true) {}
         }

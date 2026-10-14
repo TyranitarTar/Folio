@@ -228,7 +228,7 @@ class LibraryBackup(private val context: Context, private val store: LibraryStor
                 if (v is String) require(v.length <= 65536)
                 if (v is Number) {
                     val number = v.toDouble(); require(number.isFinite())
-                    val range = when (key) { "rate" -> .5..2.0; "columns" -> 2.0..6.0; "aiVoice" -> 3.0..21.0; "supertonicVoice" -> 0.0..9.0
+                    val range = when (key) { "rate" -> .5..3.0; "columns" -> 2.0..6.0; "aiVoice" -> 3.0..21.0; "supertonicVoice" -> 0.0..9.0
                         "focusWords" -> 1.0..8.0; "countdown" -> 0.0..5.0; "practiceMinutes" -> 0.0..30.0;
                         "sentencePauseMillis", "paragraphPauseMillis" -> 0.0..5000.0; "speed" -> 1.0..1200.0; "fontSize" -> .5..3.0; "lineHeight" -> .8..3.0; "margins" -> .0..3.0; else -> .0..10000.0 }
                     require(number in range) { "A backup setting is outside its supported range." }

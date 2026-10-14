@@ -379,6 +379,20 @@ class AiAudioPlayerTest {
         assertEquals(6000L,clock.position(10000,10000,AiPcmTimestamp(6000,1_150_000_000),1_150_000_000,6000))
         assertEquals(7800L,clock.position(10000,10000,AiPcmTimestamp(6000,1_150_000_000),1_250_000_000,6000))
     }
+    @Test fun highSpeedsCannotCompleteUntilFinalSourceFrameIsPresented() {
+        for(speed in listOf(2.5f,3f)) {
+            val clock=AiPresentationClock(24000)
+            clock.setPlaybackRate(speed,1_000_000_000)
+            assertEquals(1000L,clock.position(24000,24000,AiPcmTimestamp(1000,1_000_000_000),1_000_000_000,6000))
+            val expected=1000+(2400*speed).toLong()
+            assertEquals(expected,clock.position(24000,24000,null,1_100_000_000,6000))
+            // A stale stamp at a new speed is not evidence of the final word being heard.
+            clock.setPlaybackRate(1f,1_100_000_000)
+            assertEquals(expected,clock.position(24000,24000,AiPcmTimestamp(24000,1_050_000_000),1_150_000_000,6000))
+            assertEquals(23999L,clock.position(24000,24000,AiPcmTimestamp(23999,1_150_000_000),1_150_000_000,6000))
+            assertEquals(24000L,clock.position(24000,24000,AiPcmTimestamp(24000,1_151_000_000),1_151_000_000,6000))
+        }
+    }
     @Test fun multipleShortClipsEnterOneFifoBeforeMetadataHandoffsAndStayBounded() {
         val track=Track(); val events=Events(); val worker=Executors.newSingleThreadExecutor()
         val player=AiAudioPlayer(events,{track},{it()},worker)
