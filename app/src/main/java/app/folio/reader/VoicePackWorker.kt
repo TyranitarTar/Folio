@@ -55,7 +55,7 @@ class VoicePackCancelReceiver: BroadcastReceiver() {
     override fun onReceive(context: Context,intent: Intent) {
         val id=intent.getStringExtra("pack") ?: return
         val store=(context.applicationContext as FolioApp).voicePacks
-        if(store.catalog.any { it.id==id })store.cancel(id)
+        if(store.catalog.any { it.id==id })store.cancelDownload(id)
     }
 }
 

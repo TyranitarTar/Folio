@@ -94,7 +94,7 @@ import kotlinx.coroutines.*
                     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                         when {
                             state.phase=="Ready" -> TextButton(onClick={remove=pack}) { Icon(Icons.Outlined.Delete,null);Text("Remove pack") }
-                            state.phase in setOf("Queued","Downloading","Verifying","Installing") -> TextButton(onClick={scope.launch(Dispatchers.IO){store.cancel(pack.id)}}) { Text("Cancel download") }
+                            state.phase in setOf("Queued","Downloading","Verifying","Installing") -> TextButton(onClick={scope.launch(Dispatchers.IO){store.cancelDownload(pack.id)}}) { Text("Cancel download") }
                             state.busy -> Unit
                             else -> Button(onClick={download=pack}) { Icon(Icons.Outlined.Download,null);Text(if(state.phase=="Cancelled")"Resume download" else if(state.phase=="Failed")"Retry download" else "Download pack") }
                         }

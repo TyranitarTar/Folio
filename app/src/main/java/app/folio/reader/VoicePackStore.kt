@@ -71,7 +71,7 @@ internal class VoicePackStore(private val context: Context) {
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL,30,TimeUnit.SECONDS).addTag("folio-voice-pack").build()
         WorkManager.getInstance(context).enqueueUniqueWork("folio-voice-$id",ExistingWorkPolicy.REPLACE,request)
     }
-    fun cancel(id: String) {
+    fun cancelDownload(id: String) {
         val old=state(id)
         if(old.phase in setOf("Ready","Removing"))return
         update(old.copy(phase="Cancelled",message="Partial download kept for resume"))
@@ -81,7 +81,7 @@ internal class VoicePackStore(private val context: Context) {
         val pack=pack(id)
         val speech=SpeechController.state.value
         require(!(speech.backend==pack.backend && (speech.bookId!=null || speech.previewing || speech.preparing))) { "Stop narration and local previews before removing this pack." }
-        cancel(id)
+        cancelDownload(id)
         operations.withLock {
             // SpeechService closes its engine before clearing bookId; drain the JNI release queue.
             val drained=CompletableDeferred<Unit>()

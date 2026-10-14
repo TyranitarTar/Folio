@@ -39,6 +39,7 @@ class VoicePacksInstrumentedTest {
     @Test fun predownloadSampleDoesNotLoadModelsOrChangeVoiceOrBookCheckpoint()=runBlocking {
         org.junit.Assume.assumeTrue(InstrumentationRegistry.getArguments().getString("networkVoiceSamples")=="true")
         SpeechController.stop(app);waitFor { !SpeechController.serviceRunning }
+        app.voicePacks.existingCheck.join()
         val before=SpeechSettings.load(app)
         val book=app.library.importSample();val listening=AiListeningStore(app).read(book.id)
         val cursor=ReaderCursorStore(app).read(book.id,"speech")
@@ -73,7 +74,7 @@ class VoicePacksInstrumentedTest {
                 withContext(Dispatchers.Main){app.voiceSamples.stop()}
                 app.voicePacks.enqueue(pack.id)
                 waitFor { app.voicePacks.state(pack.id).bytes>1_000_000 || app.voicePacks.state(pack.id).phase=="Failed" }
-                app.voicePacks.cancel(pack.id);assertEquals("Cancelled",app.voicePacks.state(pack.id).phase)
+                app.voicePacks.cancelDownload(pack.id);assertEquals("Cancelled",app.voicePacks.state(pack.id).phase)
                 delay(1200);assertEquals("Cancelled",app.voicePacks.state(pack.id).phase)
                 val partial=File(app.voicePacks.transferFolder(pack),"archive.part").length()
                 assertTrue(partial>0);app.voicePacks.enqueue(pack.id)

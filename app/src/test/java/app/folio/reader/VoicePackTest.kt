@@ -8,6 +8,7 @@ import java.security.MessageDigest
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.ensureActive
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
@@ -94,5 +95,13 @@ class VoicePackTest {
         reloaded.update(VoicePackState(id,"Checking"))
         val checked=VoicePackStore(context);checked.existingCheck.join()
         assertFalse(checked.state(id).busy)
+    }
+    @Test fun removalDeletesOnlyVoiceDataAndDoesNotCancelTheCallingCoroutine()=runBlocking {
+        val store=VoicePackStore(isolated());store.existingCheck.join();val pack=store.catalog.first()
+        val target=store.directory(pack).apply { mkdirs() };File(target,"fixture").writeText("model data")
+        store.update(VoicePackState(pack.id,"Ready"))
+        store.remove(pack.id)
+        assertFalse(target.exists());assertEquals("Not downloaded",store.state(pack.id).phase)
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
     }
 }
