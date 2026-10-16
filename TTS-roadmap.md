@@ -1,5 +1,18 @@
 # Folio: page navigation and speech implementation record
 
+## Current priority: Plapre Pico
+
+Updated 16 October 2026. Folio 0.9.0 is released; the older version-specific plans below are historical records. Current selection: evaluate and then implement an optional local Danish Plapre Pico pack, keeping Kokoro for English and Supertonic available. See [Pico feasibility, corrected component sizes and delivery checks](DESIGN-plapre-pico.md) and [released 0.9 status](ROADMAP-0.9.md).
+
+- [x] Evaluate Pico against the existing engine, downloader, cache and playback architecture. This is a source/documentation assessment; no Pico synthesis or phone benchmark yet.
+- [x] Prove the complete Pico → Kanade → HiFT waveform path with a public INT8 ONNX conversion; correct its rotary configuration and compare dynamic acoustic outputs with the reference. The all-ONNX path was selected over adding llama.cpp.
+- [x] Implement the Android engine, source-sample playback/checkpoint integration, downloadable voice pack and authentic Danish samples. Initial Android native/cancellation/checkpoint, ordered 1.5× PCM playback and real Danish EPUB service checks passed. Physical-phone quality and throughput remain unmeasured.
+- [x] Validate native generation, continuous playback and checkpoint recovery on the emulator, run existing-engine/public-download regressions, and build the signed 0.10.0 APK with the original certificate.
+- [ ] Physical Galaxy S10/Fold7 acceptance: Danish listening quality, sustained speed, RAM, heat/battery and Bluetooth. Keep Pico marked experimental until this is measured.
+- [ ] Future: Plapre 3, including possible shared acoustic components and an FP32 quality/performance evaluation.
+- [ ] Future: Røst v3 Chatterbox 350M Danish quality pack investigation.
+- [ ] Future: Folio Cat Café with durable reading/listening rewards, streaks and a small incremental game; [design](DESIGN-next-voices-and-cat-game.md).
+
 ## Next release: pagination performance and guided-reading presets
 
 Updated 2026-10-04. These are planned changes; the current release is v0.5.0; the items below remain planned.

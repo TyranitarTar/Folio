@@ -13,6 +13,7 @@ internal interface LocalSpeechEngine {
 }
 
 internal fun createLocalSpeechEngine(context: Context, backend: String): LocalSpeechEngine = when (backend) {
+    "pico" -> PicoEngine(context)
     "kokoro" -> object : LocalSpeechEngine {
         private val engine = KokoroEngine(context)
         override val backend = "kokoro"

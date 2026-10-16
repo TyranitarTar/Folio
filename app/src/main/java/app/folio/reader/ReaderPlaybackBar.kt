@@ -50,7 +50,7 @@ internal fun ReaderPlaybackBar(bookId: String, guide: GuidedReading?, navigate: 
                 preparing -> speech.preparation
                 speech.finished -> "End of book"
                 !speech.playing -> "Listening paused"
-                else -> if (speech.backend == "supertonic") "Supertonic 3" else if (speech.backend == "kokoro") "Kokoro" else "Android speech"
+                else -> options.copy(backend=speech.backend).engineLabel
             }, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
                 color = if (isSpeech && speech.error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
             if (preparing) TextButton(onClick = { SpeechController.stop(context) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Cancel") }

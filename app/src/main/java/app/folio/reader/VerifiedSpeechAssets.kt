@@ -54,7 +54,7 @@ internal object VerifiedSpeechAssets {
                     try {
                         val digest = MessageDigest.getInstance("SHA-256"); var count = 0L
                         val bundled=try { context.assets.open("$assets/" + spec.name) } catch(e: java.io.FileNotFoundException) {
-                            throw IllegalStateException("Download the ${if(assets=="supertonic") "Supertonic" else "Kokoro"} voice pack in More → Voice packs.",e)
+                            throw IllegalStateException("Download the ${when(assets){"pico" -> "Plapre Pico"; "supertonic" -> "Supertonic"; else -> "Kokoro"}} voice pack in More → Voice packs.",e)
                         }
                         bundled.use { input ->
                             while (true) {

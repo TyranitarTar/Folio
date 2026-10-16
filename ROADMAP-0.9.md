@@ -1,6 +1,6 @@
 # Folio 0.9 design
 
-14 October 2026. Implementation completed; consolidated release validation in progress. The released app remains 0.8.1 until final publication.
+14 October 2026. Implemented and released as Folio 0.9.0. Validation: 129 JVM tests, 16 targeted Android checks, real interrupted voice downloads and the signed 0.8.1 → 0.9.0 in-app upgrade passed. Galaxy S10/Bluetooth performance and acoustic acceptance remain device checks.
 
 ## Continuous moving word window
 
@@ -104,3 +104,9 @@ Acceptance: fresh install with no packs, first download, offline reuse, process 
 4. Introduce optional voice-pack storage/downloads, migrate existing prepared copies and build/measure the smaller APK.
 
 Keep 0.8.1 available during testing. Publish the thin APK after missing-pack, migration, offline use and interrupted-download paths pass.
+
+## Delivered behavior and follow-up
+
+More → Voice packs includes 22 authentic pre-download samples, local previews for installed voices, optional model downloads, safe removal and a catalog for future compatible packs. Downloading alone does not automatically start narration; an explicit future Download and read flow remains deferred. The core APK is 61,045,559 bytes (61 MB), about 88% smaller than 0.8.1. Supertonic downloads 124,047,062 bytes; Kokoro 336,458,261 bytes. Previously prepared copies are reused. Guided paint, 300 WPM, 2.5/3× speech and cached reading information are implemented.
+
+[Published release and validation](https://github.com/TyranitarTar/Folio/releases/tag/v0.9.0).

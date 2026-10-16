@@ -44,30 +44,35 @@ import org.readium.r2.shared.publication.Publication
 data class SpeechVoice(val name: String, val label: String)
 data class SpeechSettings(val voice: String = "", val rate: Float = 1f, val backend: String = "android", val aiVoice: Int = 21,
     val supertonicVoice: Int = 0, val supertonicLanguage: String = "en",
-    val navigationUnit: String = "sentence", val sentencePauseMillis: Int = 0, val paragraphPauseMillis: Int = 0) {
-    val isLocal: Boolean get() = backend == "kokoro" || backend == "supertonic"
-    val localVoice: Int get() = if (backend == "supertonic") supertonicVoice else aiVoice
-    val localVoiceIdentity: String get() = if (backend == "supertonic") "supertonic:$supertonicLanguage:$supertonicVoice" else "kokoro:$aiVoice"
-    val synthesisRate: Float get() = if (backend == "supertonic") 1f else rate
-    val playbackRate: Float get() = if (backend == "supertonic") rate else 1f
+    val navigationUnit: String = "sentence", val sentencePauseMillis: Int = 0, val paragraphPauseMillis: Int = 0,
+    val picoVoice: Int = 0) {
+    val isLocal: Boolean get() = backend in setOf("kokoro", "supertonic", "pico")
+    val stretchesPlayback: Boolean get() = backend in setOf("supertonic", "pico")
+    val localVoice: Int get() = when(backend) { "supertonic" -> supertonicVoice; "pico" -> picoVoice; else -> aiVoice }
+    val localVoiceIdentity: String get() = when(backend) { "supertonic" -> "supertonic:$supertonicLanguage:$supertonicVoice"; "pico" -> "pico:da:$picoVoice"; else -> "kokoro:$aiVoice" }
+    val engineLabel: String get() = when(backend) { "pico" -> "Plapre Pico"; "supertonic" -> "Supertonic 3"; "kokoro" -> "Kokoro"; else -> "Android speech" }
+    val synthesisRate: Float get() = if (stretchesPlayback) 1f else rate
+    val playbackRate: Float get() = if (stretchesPlayback) rate else 1f
     fun sameSource(other: SpeechSettings) = backend == other.backend &&
         (backend != "android" || voice == other.voice) && localVoiceIdentity == other.localVoiceIdentity && synthesisRate == other.synthesisRate
-    fun audioKey(text: String): String = AiListeningStore.key(text, localVoice, synthesisRate, backend, supertonicLanguage)
+    fun audioKey(text: String): String = AiListeningStore.key(text, localVoice, synthesisRate, backend, if(backend=="pico") "da" else supertonicLanguage)
     fun save(context: Context) = context.getSharedPreferences("speech", Context.MODE_PRIVATE).edit()
         .putString("voice", voice).putFloat("rate", rate.coerceIn(.5f, 3f))
         .putString("backend", backend).putInt("aiVoice", aiVoice)
+        .putInt("picoVoice", picoVoice)
         .putInt("supertonicVoice", supertonicVoice).putString("supertonicLanguage", supertonicLanguage)
         .putString("navigationUnit", navigationUnit).putInt("sentencePauseMillis", sentencePauseMillis.coerceIn(0,5000))
         .putInt("paragraphPauseMillis", paragraphPauseMillis.coerceIn(0,5000)).apply()
     companion object {
         fun load(context: Context): SpeechSettings = context.getSharedPreferences("speech", Context.MODE_PRIVATE).let {
             SpeechSettings(it.getString("voice", "").orEmpty(), it.getFloat("rate", 1f).takeIf { value -> value.isFinite() }?.coerceIn(.5f,3f) ?: 1f,
-                it.getString("backend", "android").takeIf { value -> value in setOf("android", "kokoro", "supertonic") } ?: "android",
+                it.getString("backend", "android").takeIf { value -> value in setOf("android", "kokoro", "supertonic", "pico") } ?: "android",
                 it.getInt("aiVoice", 21).takeIf { id -> id == 21 || id == 3 } ?: 21,
                 it.getInt("supertonicVoice", 0).takeIf { id -> id in 0..9 } ?: 0,
                 it.getString("supertonicLanguage", "en").takeIf { language -> language == "en" || language == "da" } ?: "en",
                 it.getString("navigationUnit", "sentence").takeIf { unit -> unit in setOf("line","sentence","paragraph","chapter") } ?: "sentence",
-                it.getInt("sentencePauseMillis", 0).coerceIn(0,5000), it.getInt("paragraphPauseMillis", 0).coerceIn(0,5000))
+                it.getInt("sentencePauseMillis", 0).coerceIn(0,5000), it.getInt("paragraphPauseMillis", 0).coerceIn(0,5000),
+                it.getInt("picoVoice", 0).takeIf { id -> id in 0..4 } ?: 0)
         }
     }
 }
@@ -122,6 +127,7 @@ object SpeechController {
     fun preview(context: Context, settings: SpeechSettings) {
         val request=intent(context, SpeechService.PREVIEW).putExtra("backend", settings.backend)
             .putExtra("voice", settings.voice).putExtra("rate", settings.rate).putExtra("aiVoice", settings.aiVoice)
+            .putExtra("picoVoice", settings.picoVoice)
             .putExtra("supertonicVoice", settings.supertonicVoice).putExtra("language", settings.supertonicLanguage)
             .putExtra("request", requests.incrementAndGet())
         runCatching { ContextCompat.startForegroundService(context,request) }.onFailure {
@@ -267,7 +273,7 @@ class SpeechService : Service() {
                 startForeground(NOTIFICATION, notification())
                 val selected = settings.copy(backend = intent.getStringExtra("backend") ?: "android", voice = intent.getStringExtra("voice").orEmpty(),
                     rate = intent.getFloatExtra("rate",1f).takeIf { it.isFinite() }?.coerceIn(.5f,3f) ?: 1f,
-                    aiVoice = intent.getIntExtra("aiVoice",21), supertonicVoice = intent.getIntExtra("supertonicVoice",0),
+                    aiVoice = intent.getIntExtra("aiVoice",21), picoVoice = intent.getIntExtra("picoVoice",0).coerceIn(0,4), supertonicVoice = intent.getIntExtra("supertonicVoice",0),
                     supertonicLanguage = intent.getStringExtra("language") ?: "en")
                 preview(selected, intent.getLongExtra("request",0))
             }
@@ -555,8 +561,8 @@ class SpeechService : Service() {
         val selected = settings
         val key = selected.audioKey(message)
         aiKey = key
-        if (selected.backend=="supertonic" && aiPoint!=null && aiPoint?.key!=key) {
-            SpeechController.mutable.value=state().copy(recoveryNote="The previous Supertonic audio bookmark belongs to a different source waveform. This passage is repeated once so no words are skipped.")
+        if (selected.stretchesPlayback && aiPoint!=null && aiPoint?.key!=key) {
+            SpeechController.mutable.value=state().copy(recoveryNote="The previous audio bookmark belongs to a different source waveform. This passage is repeated once so no words are skipped.")
         }
         val savedPoint = aiPoint?.takeIf { it.key == key && it.section == position.sectionIndex && it.word == position.wordIndex }
         val offset = savedPoint?.playedSamples ?: 0
@@ -579,7 +585,7 @@ class SpeechService : Service() {
                 val cached = upcoming?.audio?.await()?.getOrThrow() ?: withContext(Dispatchers.IO) { aiStore.loadClip(key) }
                 val clip = cached ?: run {
                     val engine = localEngine(selected)
-                    if(!engine.prepared) SpeechController.mutable.value = state().copy(preparation = if (selected.backend=="supertonic") "Loading Supertonic 3…" else "Loading Kokoro…", preparationStage="loading")
+                    if(!engine.prepared) SpeechController.mutable.value = state().copy(preparation = "Loading ${selected.engineLabel}…", preparationStage="loading")
                     engine.prepare()
                     if (!gate.accepts(id)) return@launch
                     SpeechController.mutable.value = state().copy(preparation = "Preparing speech…", preparationStage="speech")
@@ -622,7 +628,7 @@ class SpeechService : Service() {
         val chapterEnd=SpeechNavigation.nextChapter(book,position)?.takeIf { it.sectionIndex==position.sectionIndex }?.wordIndex
         val endWord=minOf(sentence.endWord,chapterEnd ?: sentence.endWord)
         val remaining = book.sections[position.sectionIndex].words.subList(position.wordIndex, endWord)
-        val limit = if (bounded) 320 else TextToSpeech.getMaxSpeechInputLength()
+        val limit = if (bounded && settings.backend=="pico") 160 else if (bounded) 320 else TextToSpeech.getMaxSpeechInputLength()
         var characters = 0; var end = 0
         for (word in remaining) {
             if (end > 0 && characters + word.text.length + 1 > limit) break
@@ -783,7 +789,7 @@ class SpeechService : Service() {
         cancelPreview()
         val changed=SpeechSettings.load(this)
         val old=settings
-        if (old.backend=="supertonic" && changed.sameSource(old) &&
+        if (old.stretchesPlayback && changed.sameSource(old) &&
             changed.sentencePauseMillis==old.sentencePauseMillis && changed.paragraphPauseMillis==old.paragraphPauseMillis) {
             if (aiPlayer?.setPlaybackRate(changed.playbackRate)==false) { settings=old;old.save(this);fail("This audio output cannot preserve pitch at ${changed.rate}×. Your previous speed is kept.");return }
             settings=changed
@@ -837,10 +843,10 @@ class SpeechService : Service() {
         pause(); idleRelease?.cancel(); idleRelease=null
         generation++; loading?.cancel(); loading=null
         val ticket=++previewGeneration
-        val phrase=if(selected.backend=="supertonic" && selected.supertonicLanguage=="da")
+        val phrase=if(selected.backend=="pico" || (selected.backend=="supertonic" && selected.supertonicLanguage=="da"))
             "Regnen er holdt op. Hun lukker bogen, tager sin jakke og går stille ud i den klare morgen."
         else "The rain has stopped. She closes the book, puts on her coat, and walks quietly into the clear morning."
-        SpeechController.mutable.value=state().copy(previewing=true,preparing=true,playing=false,error=null,
+        SpeechController.mutable.value=state().copy(previewing=true,preparing=true,playing=false,error=null,backend=selected.backend,
             preparation=if(selected.isLocal) "Buffering audio…" else "Preparing voice preview…",preparationStage=if(selected.isLocal) "buffering" else "speech",requestId=request)
         publishPlayback()
         previewJob=scope.launch {
@@ -871,7 +877,7 @@ class SpeechService : Service() {
                     val key=selected.audioKey(phrase)
                     val clip=withContext(Dispatchers.IO) { aiStore.loadClip(key) } ?: run {
                         val engine=localEngine(selected)
-                        if(!engine.prepared) SpeechController.mutable.value=state().copy(preparation=if(selected.backend=="supertonic") "Loading Supertonic 3…" else "Loading Kokoro…",preparationStage="loading")
+                        if(!engine.prepared) SpeechController.mutable.value=state().copy(preparation="Loading ${selected.engineLabel}…",preparationStage="loading")
                         engine.prepare()
                         if(ticket!=previewGeneration) return@launch
                         SpeechController.mutable.value=state().copy(preparation="Preparing speech…",preparationStage="speech")

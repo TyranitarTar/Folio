@@ -10,6 +10,7 @@ import androidx.compose.ui.unit.dp
 
 internal data class VersionNote(val version: String, val changes: List<String>)
 internal val versionHistory = listOf(
+    VersionNote("0.10.0", listOf("Experimental Plapre Pico Danish narration with five voices in an optional download.", "Pico voice samples before downloading, offline previews, visible engine loading and cancellation.", "Pico uses the existing continuous player and saved listening position; speed changes reuse source audio.", "Plapre 3, Røst v3 and the reading cat game remain planned future work.")),
     VersionNote("0.9.0", listOf("A smaller app with optional Supertonic and Kokoro voice-pack downloads; existing prepared voices are reused.", "English and Danish samples let you compare voices before downloading. Installed voices also offer a local preview.", "Moving guided windows retain their overlapping words continuously; added 300 WPM.", "Narration speeds now include 2.5× and 3×.", "Tap the page counter for cached word counts, reading time and chapter distribution.")),
     VersionNote("0.8.1", listOf("Fixed an updater crash when download progress switches to APK verification.")),
     VersionNote("0.8.0", listOf("Reader screen-awake choices: device timeout, timed interaction window or always on.", "Guided word windows use one continuous, uniformly colored highlight.", "Project Gutenberg and Wikisource downloads add English and Danish works directly to the library.", "Downloads persist across reopening, with local text-to-EPUB preparation and preserved source attribution.")),

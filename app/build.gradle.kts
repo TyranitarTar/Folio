@@ -19,15 +19,18 @@ val stageCoreAssets = tasks.register<Sync>("stageCoreAssets") {
 android {
     namespace = "app.folio.reader"
     compileSdk = 35
+    ndkVersion = "27.2.12479018"
     defaultConfig {
         applicationId = "app.folio.reader"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.9.0"
+        versionCode = 12
+        versionName = "0.10.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_static" } }
     }
     buildFeatures { compose = true }
+    externalNativeBuild { cmake { path = file("src/main/cpp/pico/CMakeLists.txt"); version = "3.22.1" } }
     sourceSets.getByName("main").assets.setSrcDirs(listOf(coreAssets))
     // Only development debug builds may carry models for offline sample-generation fixtures.
     if (providers.gradleProperty("folioBundledVoices").orNull == "true") sourceSets.getByName("debug").assets.srcDir("src/main/assets")
@@ -41,6 +44,9 @@ android {
         resources.excludes += setOf("META-INF/AL2.0", "META-INF/LGPL2.1")
         // Compress the four CPU runtime variants; Android extracts only the installed ABI.
         jniLibs.useLegacyPackaging = true
+        // Preserve the checksum-pinned runtime used by existing voices. A newly
+        // installed NDK must not rewrite its ELF padding while packaging Pico.
+        jniLibs.keepDebugSymbols += "**/libonnxruntime.so"
     }
     testOptions { unitTests.isIncludeAndroidResources = true }
     signingConfigs {

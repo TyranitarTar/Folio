@@ -1,0 +1,9 @@
+/venv/
+/artifacts/
+/cache/
+/export/
+/native-build/
+/results/
+/vendor/
+/__pycache__/
+*.log

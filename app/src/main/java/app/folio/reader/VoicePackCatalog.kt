@@ -22,8 +22,8 @@ internal object VoicePackCatalog {
             val p=packs.getJSONObject(n)
             val id=p.getString("id").also { require(it.matches(Regex("[a-z0-9-]{1,48}"))) }
             val version=p.getString("version").also { require(it.matches(Regex("[a-zA-Z0-9._-]{1,160}"))) }
-            val backend=p.getString("backend").also { require(it in setOf("kokoro","supertonic")) }
-            require(p.getString("runtime")=="sherpa-onnx-1.13.8")
+            val backend=p.getString("backend").also { require(it in setOf("kokoro","supertonic","pico")) }
+            require(p.getString("runtime")==if(backend=="pico") "pico-onnx-v1" else "sherpa-onnx-1.13.8")
             val array=p.getJSONArray("files");require(array.length() in 1..5000)
             val required=mutableSetOf<String>()
             val files=(0 until array.length()).map { i -> val f=array.getJSONObject(i)

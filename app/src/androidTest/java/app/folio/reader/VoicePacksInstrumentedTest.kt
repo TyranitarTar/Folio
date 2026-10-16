@@ -23,7 +23,7 @@ class VoicePacksInstrumentedTest {
         for(pack in app.voicePacks.catalog) {
             assertEquals("Ready",app.voicePacks.state(pack.id).phase)
             assertTrue(app.voicePacks.verify(app.voicePacks.directory(pack),pack))
-            val asset=if(pack.backend=="kokoro")"kokoro/model.onnx" else "supertonic/voice.bin"
+            val asset=when(pack.backend){"pico" -> "pico/pico.onnx"; "kokoro" -> "kokoro/model.onnx"; else -> "supertonic/voice.bin"}
             assertTrue("Development upgrade must be thin",runCatching { app.assets.open(asset).close() }.isFailure)
         }
         ActivityScenario.launch<MainActivity>(Intent(app,MainActivity::class.java)).use {
@@ -64,7 +64,7 @@ class VoicePacksInstrumentedTest {
         SpeechController.stop(app);waitFor { !SpeechController.serviceRunning };app.voicePacks.existingCheck.join()
         val report=JSONArray()
         ActivityScenario.launch<MainActivity>(Intent(app,MainActivity::class.java)).use {
-            for(pack in app.voicePacks.catalog) {
+            for(pack in app.voicePacks.catalog.filter { InstrumentationRegistry.getArguments().getString("packBackend")?.let { selected -> it.backend==selected } ?: true }) {
                 app.voicePacks.remove(pack.id)
                 // A missing model does not prevent comparison through the small recorded sample.
                 withContext(Dispatchers.Main){app.voiceSamples.play(pack,pack.voices.first())}
@@ -83,7 +83,7 @@ class VoicePacksInstrumentedTest {
                 assertTrue(app.voicePacks.verify(app.voicePacks.directory(pack),pack))
                 val engine=createLocalSpeechEngine(app,pack.backend)
                 try {
-                    val clip=engine.generate("This downloaded voice works offline.",SpeechSettings(backend=pack.backend))
+                    val clip=engine.generate(if(pack.backend=="pico") "Denne stemme virker uden internet." else "This downloaded voice works offline.",SpeechSettings(backend=pack.backend))
                     assertTrue(clip.samples.size>clip.sampleRate)
                     report.put(JSONObject().put("pack",pack.id).put("resumedPartialBytes",partial).put("filesVerified",pack.files.size)
                         .put("nativeSamples",clip.samples.size).put("digest",clip.digest))

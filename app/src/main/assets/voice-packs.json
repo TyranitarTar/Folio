@@ -2471,7 +2471,7 @@
       "voices": [
         {
           "id": "21",
-          "label": "Emma · British English",
+          "label": "Emma Ã‚Â· British English",
           "language": "en",
           "sample": {
             "url": "https://github.com/TyranitarTar/Folio/releases/download/voice-packs-v1/sample-kokoro-emma-en.m4a",
@@ -2481,7 +2481,7 @@
         },
         {
           "id": "3",
-          "label": "Heart · American English",
+          "label": "Heart Ã‚Â· American English",
           "language": "en",
           "sample": {
             "url": "https://github.com/TyranitarTar/Folio/releases/download/voice-packs-v1/sample-kokoro-heart-en.m4a",
@@ -2491,6 +2491,110 @@
         }
       ],
       "license": "Apache-2.0 (weights), GPL-3.0-or-later (phonemizer runtime)"
+    },
+    {
+      "id": "pico",
+      "backend": "pico",
+      "label": "Plapre Pico · Dansk (experimental)",
+      "version": "pico-int8-r100k-40060c99-kanade961f20bf-hift-v1",
+      "runtime": "pico-onnx-v1",
+      "languages": [
+        "da"
+      ],
+      "url": "https://github.com/TyranitarTar/Folio/releases/download/voice-packs-pico-v1/Folio-Voice-Pico-v1.zip",
+      "bytes": 528869334,
+      "sha256": "84f7ea1939719278e1e24db3751431a0cdf4d7c674a0c1d6f0a32eab9730ac2f",
+      "expandedBytes": 621778031,
+      "files": [
+        {
+          "name": "embeddings.bin",
+          "bytes": 47927808,
+          "sha256": "934ac112185c6365a9cc800a3d9afa9d1f0c8ea76a986d79ef2309273e1c5ae6"
+        },
+        {
+          "name": "hift.onnx",
+          "bytes": 83419196,
+          "sha256": "711af380b6eedac5cb832cccbd464054ac77d8bd383dc3bc25f97f59a4370ebb"
+        },
+        {
+          "name": "kanade.onnx",
+          "bytes": 365520009,
+          "sha256": "6e68d9876e2f5d38eabf91214da6393c2429ea3b6fb4d994c41af62053c87fcb"
+        },
+        {
+          "name": "NOTICE.txt",
+          "bytes": 32833,
+          "sha256": "6b516303a833b63b89c18a0b81e46c3e904a72f8be4c4a5e26ec8291bbecad22"
+        },
+        {
+          "name": "pico.onnx",
+          "bytes": 121845710,
+          "sha256": "f71d8e7ac3943fa6a08e05e2da282526a2ea01c99ede99445ed37f91c93f58c1"
+        },
+        {
+          "name": "tokenizer.json",
+          "bytes": 2962493,
+          "sha256": "5c30f79c6bc3a29ef624e4223d072fdfe2ef6d11b9a546e67e8b8abbbc07b888"
+        },
+        {
+          "name": "voices.json",
+          "bytes": 69982,
+          "sha256": "4081a1f485911938a810b75570b6a00b554f8fded4d8e8699d3cdfc05df89098"
+        }
+      ],
+      "voices": [
+        {
+          "id": "0",
+          "label": "Ida",
+          "language": "da",
+          "sample": {
+            "url": "https://github.com/TyranitarTar/Folio/releases/download/voice-packs-pico-v1/Pico-da-ida.wav",
+            "bytes": 376364,
+            "sha256": "4de80c0ffedd68a571c5fdc38962ce53359a6da6107f6181e564aecf338621bc"
+          }
+        },
+        {
+          "id": "1",
+          "label": "Tor",
+          "language": "da",
+          "sample": {
+            "url": "https://github.com/TyranitarTar/Folio/releases/download/voice-packs-pico-v1/Pico-da-tor.wav",
+            "bytes": 345644,
+            "sha256": "ed825b1e645911944978004e2fb011bb86915f8b7aa3999697f6231519fbe5ad"
+          }
+        },
+        {
+          "id": "2",
+          "label": "Liv",
+          "language": "da",
+          "sample": {
+            "url": "https://github.com/TyranitarTar/Folio/releases/download/voice-packs-pico-v1/Pico-da-liv.wav",
+            "bytes": 337964,
+            "sha256": "454133b67e4f6983642c232ca0756527ed9958b0cd5f11a014d9b759c8c0c2cd"
+          }
+        },
+        {
+          "id": "3",
+          "label": "Ask",
+          "language": "da",
+          "sample": {
+            "url": "https://github.com/TyranitarTar/Folio/releases/download/voice-packs-pico-v1/Pico-da-ask.wav",
+            "bytes": 343724,
+            "sha256": "7c086377d9b04f28c7a7d67a9ed78461db9b199023dc589ad74a4a9a094bc3e1"
+          }
+        },
+        {
+          "id": "4",
+          "label": "Kaj",
+          "language": "da",
+          "sample": {
+            "url": "https://github.com/TyranitarTar/Folio/releases/download/voice-packs-pico-v1/Pico-da-kaj.wav",
+            "bytes": 286124,
+            "sha256": "8b6bd2c5a194fab567a7e6339d03fe3c38cd9d184273fa4676bcf22ba4eea5dc"
+          }
+        }
+      ],
+      "license": "Plapre Pico: syv.ai, CC-BY-4.0. Kanade: MIT. HiFT: Apache-2.0. Experimental Folio ONNX conversion; source attribution included in the pack."
     }
   ]
 }

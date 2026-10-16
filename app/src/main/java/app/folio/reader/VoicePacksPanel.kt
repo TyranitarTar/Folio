@@ -85,6 +85,7 @@ import kotlinx.coroutines.*
                     if(sampleState.key==key)sampleState.error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
                     if(state.phase=="Ready") {
                         val selected=SpeechSettings.load(context).copy(backend=pack.backend,aiVoice=if(pack.backend=="kokoro")voice.id.toInt() else SpeechSettings.load(context).aiVoice,
+                            picoVoice=if(pack.backend=="pico")voice.id.toInt() else SpeechSettings.load(context).picoVoice,
                             supertonicVoice=if(pack.backend=="supertonic")voice.id.toInt() else SpeechSettings.load(context).supertonicVoice,supertonicLanguage=language)
                         TextButton(onClick={ samples.stop();if(speech.previewing)SpeechController.cancelPreview(context) else SpeechController.preview(context,selected) }) {
                             Text(if(speech.previewing)"Stop local preview" else "Local preview · ${selected.rate}×")

@@ -40,6 +40,7 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
     val pack=app.voicePacks.forBackend(settings.backend)
     val localReady=!settings.isLocal || pack?.let { packStates[it.id]?.phase=="Ready" }==true
     val localVoices = when (settings.backend) {
+        "pico" -> PicoEngine.voiceNames.mapIndexed { i, label -> SpeechVoice(i.toString(), label) }
         "supertonic" -> SupertonicEngine.voices.map { SpeechVoice(it.id.toString(), it.label) }
         "kokoro" -> KokoroEngine.voices.map { SpeechVoice(it.id.toString(), it.label) }
         else -> emptyList()
@@ -66,6 +67,9 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
         Text("Offline speech", style = MaterialTheme.typography.titleSmall)
         Text(if (settingsOnly) "Choose an offline voice and speed. Open a book to start listening." else "Listening has its own saved position. Browsing the book does not move it.", style = MaterialTheme.typography.bodyMedium)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = settings.backend == "pico", onClick = {
+                settings = settings.copy(backend = "pico"); SpeechController.settings(context, settings)
+            }, label = { Text("Plapre Pico · Dansk") })
             FilterChip(selected = settings.backend == "kokoro", onClick = {
                 settings = settings.copy(backend = "kokoro"); SpeechController.settings(context, settings)
             }, label = { Text("Kokoro · English") })
@@ -82,6 +86,7 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
         }
         if (settings.backend == "kokoro") Text("Kokoro speaks entirely on your device after its voice pack is installed. Model loading may take a little longer on the first start.",
             style = MaterialTheme.typography.bodySmall)
+        if (settings.backend == "pico") Text("Experimental Danish narration, entirely on your device. Preparing the voice can take longer on first use. Higher playback speeds may need more buffering.", style = MaterialTheme.typography.bodySmall)
         if (settings.backend == "supertonic") {
             Text("Supertonic speaks English and Danish offline after its voice pack is installed.", style = MaterialTheme.typography.bodySmall)
             Text("Language", style = MaterialTheme.typography.titleSmall)
@@ -133,7 +138,8 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
             DropdownMenu(expanded = voiceMenu, onDismissRequest = { voiceMenu = false }) {
                 if (settings.isLocal) localVoices.forEach { voice ->
                     DropdownMenuItem(text = { Text(voice.label) }, onClick = {
-                        settings = if (settings.backend == "supertonic") settings.copy(supertonicVoice = voice.name.toInt())
+                        settings = if (settings.backend == "pico") settings.copy(picoVoice = voice.name.toInt())
+                            else if (settings.backend == "supertonic") settings.copy(supertonicVoice = voice.name.toInt())
                             else settings.copy(aiVoice = voice.name.toInt())
                         SpeechController.settings(context, settings); voiceMenu = false
                     })

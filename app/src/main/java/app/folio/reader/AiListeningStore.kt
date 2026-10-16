@@ -171,6 +171,7 @@ class AiListeningStore(context: Context) {
         // Keep existing text keys; legacy PCM is health-checked and migrated rather than invalidating positions.
         fun key(text: String, voice: Int, rate: Float, backend: String = "kokoro", language: String = "en"): String {
             val identity = when (backend) {
+                "pico" -> "${PicoEngine.VERSION}/normalization-v1/native-ort1.28.2/sampling-t07-p095-k50-seed42/$language"
                 "kokoro" -> "kokoro-v1.0-fp32/sherpa-v1.13.8"
                 "supertonic" -> "supertonic-3-int8/cca5a0e6c96e1d2c720986bf7e75fcc81dee3ae4/sherpa-v1.13.8/steps8/seed42/$language"
                 else -> throw IllegalArgumentException("Only bundled speech has cached audio.")
