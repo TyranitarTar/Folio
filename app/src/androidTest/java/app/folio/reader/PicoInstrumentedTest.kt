@@ -144,6 +144,25 @@ class PicoInstrumentedTest {
         } finally { SpeechController.stop(app);SpeechSettings().save(app) }
         Unit
     }
+    @Test fun allFiveVoicesProduceValidatedPaddingProcessedDanishAudio() = runBlocking {
+        installFixture()
+        val engine = PicoEngine(app)
+        val reports = org.json.JSONArray()
+        try {
+            for (voice in PicoEngine.voiceNames.indices) {
+                SpeechDiagnostics.start()
+                val clip = engine.generate("Fire små fugle synger stille, før hun åbner sin bog.", SpeechSettings(backend="pico", picoVoice=voice))
+                val generated = SpeechDiagnostics.stop().single { it.kind == "pico.synthesis.end" }
+                assertTrue(clip.samples.size >= 24000)
+                assertTrue(generated.originalFrames >= clip.samples.size)
+                assertTrue("Never discard most of a generated utterance", clip.samples.size > generated.originalFrames / 2)
+                wav(File(app.filesDir,"pico-padding-voice-$voice.wav"),clip)
+                reports.put(JSONObject().put("voice",PicoEngine.voiceNames[voice]).put("originalSamples",generated.originalFrames)
+                    .put("samples",clip.samples.size).put("removedSeconds",(generated.originalFrames-clip.samples.size)/24000.0).put("digest",clip.digest))
+            }
+            File(app.filesDir,"pico-padding-voices-validation.json").writeText(reports.toString(2))
+        } finally { SpeechDiagnostics.stop(); engine.close() }
+    }
     private fun wav(file:File,clip:AiAudioClip) {
         DataOutputStream(file.outputStream().buffered()).use { out ->
             fun short(value:Int) { out.writeByte(value and 255);out.writeByte((value ushr 8) and 255) }

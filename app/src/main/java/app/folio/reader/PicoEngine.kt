@@ -65,11 +65,16 @@ internal class PicoEngine(context: Context) : LocalSpeechEngine {
             val tokens = requireNotNull(tokenizer)
             val voice = voices[settings.picoVoice]
             val started = System.nanoTime()
-            val samples = try { PicoNative.generate(native, tokens.prompt(normalized), voice.first, voice.second, tokens.eos, tokens.audioStart, 42, generation, request) }
+            SpeechDiagnostics.record("pico.synthesis.start")
+            val raw = try { PicoNative.generate(native, tokens.prompt(normalized), voice.first, voice.second, tokens.eos, tokens.audioStart, 42, generation, request) }
                 catch (error: Exception) { if (request != generation.get() || closed.get()) throw CancellationException("Pico generation cancelled"); throw error }
             if (request != generation.get()) throw CancellationException("Pico generation cancelled")
+            SpeechPcm.validate(raw, 24000, normalize = false)
+            val samples = PicoPadding.trim(raw, 24000).samples
             SpeechPcm.validate(samples, 24000, normalize = false)
-            AiAudioClip(samples, 24000, (System.nanoTime() - started) / 1_000_000, SpeechPcm.digest(samples, 24000))
+            val clip = AiAudioClip(samples, 24000, (System.nanoTime() - started) / 1_000_000, SpeechPcm.digest(samples, 24000))
+            SpeechDiagnostics.record("pico.synthesis.end", clip.digest.orEmpty(), samples.size, 24000, raw.size)
+            clip
         }
     }
     private suspend fun <T> onWorker(block: () -> T): T = suspendCancellableCoroutine { continuation ->

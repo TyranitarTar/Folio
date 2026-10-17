@@ -180,6 +180,9 @@ class AiAudioPlayer internal constructor(
         var id: String, var epoch: Long) {
         val totalSamples = clip.samples.size
         val sampleRate = clip.sampleRate
+        val diagnosticId = clip.digest.orEmpty()
+        var diagnosticStarted = false
+        var diagnosticCompleted = false
         var samples: FloatArray? = clip.samples
         var written = 0
         var presented = 0
@@ -237,6 +240,7 @@ class AiAudioPlayer internal constructor(
             val previous = current.queued.peekLast()?.passage ?: current.passage
             val base = previous.baseFrame + previous.totalSamples - previous.startSample
             current.queued.addLast(Queued(clip, Passage(clip, 0, base, "", 0)))
+            SpeechDiagnostics.record("player.queued", clip.digest.orEmpty(), clip.samples.size, clip.sampleRate)
             lock.notifyAll()
             true
         }
@@ -370,6 +374,14 @@ class AiAudioPlayer internal constructor(
             runCatching { track.timestamp() }.getOrNull(), nanoTime(), track.fallbackSafetyFrames())
         fun update(passage: Passage) {
             passage.presented = maxOf(passage.presented, (absolute - passage.baseFrame).coerceIn(0, passage.written.toLong()).toInt())
+            if (!passage.diagnosticStarted && passage.presented > 0) {
+                passage.diagnosticStarted = true
+                SpeechDiagnostics.record("player.presented-start", passage.diagnosticId, passage.totalSamples, passage.sampleRate)
+            }
+            if (!passage.diagnosticCompleted && passage.presented == passage.totalSamples - passage.startSample) {
+                passage.diagnosticCompleted = true
+                SpeechDiagnostics.record("player.presented-end", passage.diagnosticId, passage.totalSamples, passage.sampleRate)
+            }
         }
         update(current.passage)
         current.queued.forEach { update(it.passage) }
@@ -422,6 +434,7 @@ class AiAudioPlayer internal constructor(
                         val count = minOf(4096, unsent)
                         val accepted = track.write(requireNotNull(target.samples), target.startSample + target.written, count)
                         check(accepted in 0..count) { "The device stopped accepting voice audio (error $accepted)." }
+                        if (target.written == 0 && accepted > 0) SpeechDiagnostics.record("player.first-write", target.diagnosticId, target.totalSamples, target.sampleRate)
                         target.written += accepted; current.written += accepted
                     }
                     submit(passage)

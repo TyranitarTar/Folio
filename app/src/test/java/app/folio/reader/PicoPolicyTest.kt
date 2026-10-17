@@ -36,6 +36,14 @@ class PicoPolicyTest {
         assertNotEquals(pico.audioKey("Hej."), pico.copy(picoVoice=2).audioKey("Hej."))
         assertFalse(pico.sameSource(pico.copy(backend="supertonic")))
     }
+    @Test fun trimmedPicoCannotReuseAnOldPaddedWaveformOrSampleOffset() {
+        val text = "Hun læser en bog."
+        val oldIdentity = "${PicoEngine.VERSION}/normalization-v1/native-ort1.28.2/sampling-t07-p095-k50-seed42/da"
+        val oldKey = SpeechPcm.hex(java.security.MessageDigest.getInstance("SHA-256").digest("$oldIdentity|0|1.0|$text".toByteArray()))
+        val selected = SpeechSettings(backend="pico")
+        assertNotEquals(oldKey, selected.audioKey(text))
+        assertEquals(selected.audioKey(text), selected.copy(rate=1.5f).audioKey(text))
+    }
     @Test fun picoVoiceSurvivesSettingsRoundTripWithoutOverwritingOtherVoices() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val expected = SpeechSettings(backend="pico", picoVoice=4, aiVoice=3, supertonicVoice=7, rate=2.5f)

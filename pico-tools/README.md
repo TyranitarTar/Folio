@@ -16,3 +16,5 @@ Folio's Gradle build compiles the native C++ bridge from `android-reader/app/src
 The optional `build-native.ps1` is a standalone diagnostic build; do not copy its output into `jniLibs` when using Gradle's native build, or the APK would contain duplicate libraries.
 
 Physical Galaxy S10/Fold7 speed, heat, battery and listening quality require device acceptance. Desktop timings, emulator results and recognizer transcripts cannot establish those properties.
+
+For the 17 October continuity investigation, run `python tools/pico/analyze_boundaries.py tools/pico/results/pico-native-da.wav tools/pico/results/samples --output tools/pico/results/pico-boundary-analysis.json` from the workspace root. This standard-library-only tool reports leading/trailing quiet energy windows from existing WAVs without editing them. Thresholds are diagnostic, not speech boundaries suitable for automatic trimming. See `android-reader/DESIGN-v0.10.1-speech-continuity-and-storage.md` for findings, the cold-synthesis test gap and the obsolete model-version cleanup plan. The latest physical-device report names a Galaxy Flip 7.

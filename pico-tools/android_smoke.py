@@ -2,7 +2,7 @@
 import pathlib
 import subprocess
 import sys
-from probe_lm import ROOT
+ROOT=pathlib.Path(__file__).resolve().parent
 
 project=ROOT.parent.parent
 adb=project/"android-reader/toolchain/sdk/platform-tools/adb.exe"
@@ -18,13 +18,15 @@ if "--reuse-fixture" not in sys.argv:
     with archive.open("rb") as source:
         call("exec-in","run-as",app,"dd","of=cache/pico-input.zip","bs=65536",stdin=source,stdout=subprocess.DEVNULL)
 print("Running real Pico native checks",flush=True)
-with (ROOT/"android-instrumentation.log").open("w",encoding="utf-8") as output:
+with (ROOT/"android-instrumentation-v0101.log").open("w",encoding="utf-8") as output:
     call("shell","am","instrument","-w","-r","-e","class","app.folio.reader.PicoInstrumentedTest",
          app+".test/androidx.test.runner.AndroidJUnitRunner",stdout=output,stderr=subprocess.STDOUT,timeout=600)
-text=(ROOT/"android-instrumentation.log").read_text(encoding="utf-8")
+text=(ROOT/"android-instrumentation-v0101.log").read_text(encoding="utf-8")
 print(text,flush=True)
-if "OK (3 tests)" not in text or "FAILURES!!!" in text:
+if "OK (4 tests)" not in text or "FAILURES!!!" in text:
     raise SystemExit(2)
-for name in ["pico-native-validation.json","pico-playback-validation.json","pico-service-validation.json","pico-native-da.wav"]:
-    with (ROOT/"results"/name).open("wb") as target:
+results=ROOT/"results/v0101"
+results.mkdir(exist_ok=True)
+for name in ["pico-native-validation.json","pico-playback-validation.json","pico-service-validation.json","pico-native-da.wav","pico-padding-voices-validation.json",*[f"pico-padding-voice-{i}.wav" for i in range(5)]]:
+    with (results/name).open("wb") as target:
         call("exec-out","run-as",app,"cat","files/"+name,stdout=target)

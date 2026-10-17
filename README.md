@@ -1,6 +1,8 @@
 # Folio
 Folio is a vibe-coded Android reader with Danish and English TTS.
 
+Version **0.10.1** reduces excess quiet padding around Pico passages, retaining short speech margins and all internal pauses. Update the app using `Folio-0.10.1.apk`; the existing Pico pack is reused. An older Pico audio bookmark repeats its current passage once to avoid applying an old sample offset to shortened audio. See [implementation and verification scope](IMPLEMENTATION-v0.10.1.md). All three optional voice packs are hosted in this repository's GitHub Releases; Folio does not require Hugging Face access.
+
 An original Android app for reading local EPUB books. Kotlin and Jetpack Compose provide the library and controls; Readium Kotlin Toolkit 3.1.2 renders EPUB content. The Windows Icecream executable and its code or artwork were not used.
 
 Version 0.10.0 adds experimental offline Danish Plapre Pico narration with five voices. Download its optional pack and compare genuine samples in **More → Voice packs**, then choose **Read aloud → Plapre Pico · Dansk**. Pico uses the existing continuous player and listening checkpoints; 0.5–3× speed changes reuse its source waveform. The pack downloads approximately 0.529 GB and installs 0.622 GB; allow approximately 1.19 GB free while installing. Physical Galaxy S10/Fold7 speed, battery and listening quality remain device checks. English Kokoro and Supertonic remain available. Plapre 3, Røst v3 and the cat game are future work; see [Pico implementation](IMPLEMENTATION-v0.10.md).
@@ -9,7 +11,7 @@ Version 0.9.0 adds optional voice-pack downloads with authentic pre-download sam
 
 ## Install and use
 
-Copy `Folio-0.10.0.apk` to your Android phone, open it, and allow installation from that source if Android asks. Install over the earlier signed Folio release to retain your library, annotations and saved positions. Minimum supported version: Android 8.0 (API 26). Android 15 emulator checks do not establish physical-phone performance.
+Copy `Folio-0.10.1.apk` to your Android phone, open it, and allow installation from that source if Android asks. Install over the earlier signed Folio release to retain your library, annotations and saved positions. Minimum supported version: Android 8.0 (API 26). Android 15 emulator checks do not establish physical-phone performance.
 
 Choose **Read aloud → Supertonic 3 → English / Dansk**, then choose one of ten voices. **Kokoro · English** retains British Emma and American Heart for comparison; **Android speech** uses installed offline English voices. Choose **Resume listening** for the saved listening position or **Read from here** for the first visible word on the current page. Download a neural voice pack once in **More → Voice packs**. Reading then works offline; Android speech uses its already installed voices.
 
