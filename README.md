@@ -1,7 +1,7 @@
 # Folio
 Folio is a vibe-coded Android reader with Danish and English TTS.
 
-Version **0.10.1** reduces excess quiet padding around Pico passages, retaining short speech margins and all internal pauses. Update the app using `Folio-0.10.1.apk`; the existing Pico pack is reused. An older Pico audio bookmark repeats its current passage once to avoid applying an old sample offset to shortened audio. See [implementation and verification scope](IMPLEMENTATION-v0.10.1.md). All three optional voice packs are hosted in this repository's GitHub Releases; Folio does not require Hugging Face access.
+Version **0.10.2** adds Pico thread selection and on-device performance diagnostics, paused audio preparation ahead, and measured voice storage with protected cleanup. Update using Folio-0.10.2.apk; existing GitHub-hosted voice packs are reused without another model download. Automatic Pico settings retain 0.10.1 audio bookmarks; changing the thread count repeats the current passage safely. See [implementation and verification scope](IMPLEMENTATION-v0.10.2.md).
 
 An original Android app for reading local EPUB books. Kotlin and Jetpack Compose provide the library and controls; Readium Kotlin Toolkit 3.1.2 renders EPUB content. The Windows Icecream executable and its code or artwork were not used.
 
@@ -11,7 +11,7 @@ Version 0.9.0 adds optional voice-pack downloads with authentic pre-download sam
 
 ## Install and use
 
-Copy `Folio-0.10.1.apk` to your Android phone, open it, and allow installation from that source if Android asks. Install over the earlier signed Folio release to retain your library, annotations and saved positions. Minimum supported version: Android 8.0 (API 26). Android 15 emulator checks do not establish physical-phone performance.
+Copy `Folio-0.10.2.apk` to your Android phone, open it, and allow installation from that source if Android asks. Install over the earlier signed Folio release to retain your library, annotations and saved positions. Minimum supported version: Android 8.0 (API 26). Emulator checks do not establish physical-phone performance.
 
 Choose **Read aloud → Supertonic 3 → English / Dansk**, then choose one of ten voices. **Kokoro · English** retains British Emma and American Heart for comparison; **Android speech** uses installed offline English voices. Choose **Resume listening** for the saved listening position or **Read from here** for the first visible word on the current page. Download a neural voice pack once in **More → Voice packs**. Reading then works offline; Android speech uses its already installed voices.
 

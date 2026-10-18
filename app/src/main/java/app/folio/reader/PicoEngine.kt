@@ -18,9 +18,13 @@ internal object PicoNative {
     external fun generate(handle: Long, prompt: IntArray, prefix: FloatArray, speaker: FloatArray, eos: Int, audioStart: Int, seed: Int, cancellation: AtomicLong, expected: Long): FloatArray
     external fun cancel(handle: Long)
     external fun close(handle: Long)
+    external fun profile(handle: Long): LongArray
 }
 
-internal class PicoEngine(context: Context) : LocalSpeechEngine {
+internal class PicoEngine(context: Context, requestedThreads: Int = 0) : LocalSpeechEngine {
+    val inferenceThreads = if (requestedThreads == 0) Runtime.getRuntime().availableProcessors().coerceIn(1,4) else requestedThreads.also { require(it in 1..8) }
+    @Volatile var lastProfile: LongArray = LongArray(7); private set
+    private var modelLease: java.io.Closeable? = null
     override val backend = "pico"
     private val app = context.applicationContext
     private val closed = AtomicBoolean()
@@ -33,6 +37,7 @@ internal class PicoEngine(context: Context) : LocalSpeechEngine {
 
     override suspend fun prepare() {
         if (prepared) return
+        synchronized(this) { check(!closed.get()) { "Pico engine is closed." }; if (modelLease == null) modelLease = VoiceModelUse.acquire(app, VERSION) }
         val files = VerifiedSpeechAssets.prepare(app, "pico", VERSION, PicoPackIdentity.files, closed::get)
         onWorker {
             if (native == 0L) {
@@ -48,7 +53,7 @@ internal class PicoEngine(context: Context) : LocalSpeechEngine {
                     array("prefix", 576) to array("embedding", 128)
                 }
                 require(loaded.size == voiceNames.size)
-                val handle = PicoNative.open(files.absolutePath, Runtime.getRuntime().availableProcessors().coerceIn(1, 4))
+                val handle = PicoNative.open(files.absolutePath, inferenceThreads)
                 if (closed.get()) { PicoNative.close(handle); throw CancellationException("Pico preparation cancelled") }
                 tokenizer = tokens; voices = loaded; native = handle; ready = true
             }
@@ -68,6 +73,7 @@ internal class PicoEngine(context: Context) : LocalSpeechEngine {
             SpeechDiagnostics.record("pico.synthesis.start")
             val raw = try { PicoNative.generate(native, tokens.prompt(normalized), voice.first, voice.second, tokens.eos, tokens.audioStart, 42, generation, request) }
                 catch (error: Exception) { if (request != generation.get() || closed.get()) throw CancellationException("Pico generation cancelled"); throw error }
+            lastProfile = PicoNative.profile(native)
             if (request != generation.get()) throw CancellationException("Pico generation cancelled")
             SpeechPcm.validate(raw, 24000, normalize = false)
             val samples = PicoPadding.trim(raw, 24000).samples
@@ -92,7 +98,10 @@ internal class PicoEngine(context: Context) : LocalSpeechEngine {
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
         ready = false; cancelGeneration()
-        LocalVoiceWorker.executor.execute { val old = native; native = 0; if (old != 0L) PicoNative.close(old); voices = emptyList(); tokenizer = null }
+        LocalVoiceWorker.executor.execute {
+            try { val old = native; native = 0; if (old != 0L) PicoNative.close(old); voices = emptyList(); tokenizer = null }
+            finally { synchronized(this) { modelLease?.close(); modelLease = null } }
+        }
     }
     companion object {
         const val VERSION = "pico-int8-r100k-40060c99-kanade961f20bf-hift-v1"

@@ -31,6 +31,13 @@ class KokoroEngine(context: Context, private val assetDirectory: String = "kokor
     init { require(cpuThreads in 1..4) { "Choose between one and four CPU threads for the local voice." } }
     private val app = context.applicationContext
     private val closed = AtomicBoolean(false)
+    private val useLock = Any()
+    private var modelUse: java.io.Closeable? = null
+    private fun acquireModelUse() = synchronized(useLock) {
+        check(!closed.get()) { "The local voice engine has been closed." }
+        if(modelUse==null)modelUse=VoiceModelUse.acquire(app,VERSION)
+    }
+
     private val generation = AtomicLong(0)
     @Volatile private var files: File? = null
     @Volatile private var prepared = false
@@ -40,6 +47,7 @@ class KokoroEngine(context: Context, private val assetDirectory: String = "kokor
 
     suspend fun prepare() {
         check(!closed.get()) { "The local voice engine has been closed." }
+        acquireModelUse()
         val directory = prepareFiles()
         onWorker {
             if (native == null) {
@@ -111,7 +119,7 @@ class KokoroEngine(context: Context, private val assetDirectory: String = "kokor
         if (!closed.compareAndSet(false, true)) return
         cancelGeneration(); prepared = false
         // Release is queued after every preceding inference. Never destroy an in-flight JNI pointer.
-        worker.execute { native?.release(); native = null }
+        worker.execute { try { native?.release() } finally { native=null;synchronized(useLock) { modelUse?.close();modelUse=null } } }
     }
 
     private suspend fun <T> onWorker(block: () -> T): T = suspendCancellableCoroutine { continuation ->

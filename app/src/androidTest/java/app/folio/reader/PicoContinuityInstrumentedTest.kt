@@ -32,7 +32,7 @@ class PicoContinuityInstrumentedTest {
         "Ved stationen venter en venlig gammel mand.", "Han har en brun taske og en blå hat.",
         "De går sammen ned ad den smalle gade.", "Til sidst finder de huset ved havnen."
     )
-    private suspend fun makeBook(): Book {
+    private suspend fun makeBook(lines:List<String> = passages): Book {
         val bytes = ByteArrayOutputStream()
         ZipOutputStream(bytes).use { zip ->
             fun entry(name: String, text: String) {
@@ -45,9 +45,59 @@ class PicoContinuityInstrumentedTest {
             entry("META-INF/container.xml", """<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="book.opf" media-type="application/oebps-package+xml"/></rootfiles></container>""")
             entry("book.opf", """<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">urn:folio:continuity:${UUID.randomUUID()}</dc:identifier><dc:title>Pico continuity check</dc:title><dc:language>da</dc:language><meta property="dcterms:modified">2026-10-17T00:00:00Z</meta></metadata><manifest><item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/></manifest><spine><itemref idref="chapter"/></spine></package>""")
             entry("nav.xhtml", """<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>Indhold</title></head><body><nav epub:type="toc"><ol><li><a href="chapter.xhtml">Morgen</a></li></ol></nav></body></html>""")
-            entry("chapter.xhtml", """<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="da"><head><title>Morgen</title></head><body>${passages.joinToString("") { "<p>$it</p>" }}</body></html>""")
+            entry("chapter.xhtml", """<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="da"><head><title>Morgen</title></head><body>${lines.joinToString("") { "<p>$it</p>" }}</body></html>""")
         }
         return app.library.importStream { bytes.toByteArray().inputStream() }
+    }
+    @Test fun prepareAheadKeepsBookmarkAndResumeUsesGeneratedCache()=runBlocking {
+        assertTrue(app.packageName.endsWith(".debug"))
+        assertFalse(SpeechController.serviceRunning)
+        app.voicePacks.existingCheck.join()
+        assertEquals("Ready",app.voicePacks.state("pico").phase)
+        val original=SpeechSettings.load(app)
+        val selected=SpeechSettings(backend="pico")
+        val book=makeBook(passages.take(3))
+        val publication=app.library.engine.open(app.library.file(book.id))
+        val text=try { BookText.load(publication) } finally { publication.close() }
+        val start=text.cursor(0,2)!!
+        var scan:ReadingCursor?=start
+        while(scan!=null) {
+            val here=scan;val words=SpeechPassages.words(text,here,selected)
+            val key=selected.audioKey(words.joinToString(" "){it.text})
+            File(app.cacheDir,"ai-audio/$key.pcm").delete()
+            scan=text.next(text.cursor(here.sectionIndex,here.wordIndex+words.lastIndex)!!)
+        }
+        ReaderCursorStore(app).write(book.id,"speech",start)
+        selected.save(app)
+        SpeechDiagnostics.start()
+        try {
+            ActivityScenario.launch<ReaderActivity>(Intent(app,ReaderActivity::class.java).putExtra("book",book.id)).use {
+                SpeechController.prepareChapter(app,book.id)
+                withTimeout(180000) {
+                    while(SpeechController.state.value.preparationStage!="prepared" && SpeechController.state.value.error==null)delay(50)
+                }
+                assertNull(SpeechController.state.value.error)
+                assertFalse(SpeechController.state.value.playing)
+                assertEquals(start,ReaderCursorStore(app).read(book.id,"speech"))
+                val prepared=SpeechDiagnostics.stop()
+                val generated=prepared.count{it.kind=="pico.synthesis.end"}
+                assertEquals(3,generated)
+                assertFalse(prepared.any{it.kind=="player.presented-start"})
+                SpeechDiagnostics.start()
+                SpeechController.resume(app)
+                withTimeout(90000) { while(!SpeechController.state.value.finished && SpeechController.state.value.error==null)delay(30) }
+                assertNull(SpeechController.state.value.error)
+                val playback=SpeechDiagnostics.stop()
+                assertEquals(3,playback.count{it.kind=="player.presented-end"})
+                assertEquals(0,playback.count{it.kind=="pico.synthesis.start"})
+                File(app.filesDir,"pico-prepare-ahead-validation.json").writeText(JSONObject().put("preparedPassages",generated)
+                    .put("bookmarkPreserved",true).put("silentPreparation",true).put("resumeSynthesisCalls",0).put("completedPassages",3).toString(2))
+            }
+        } finally {
+            SpeechDiagnostics.stop();SpeechController.stop(app)
+            withTimeout(10000) { while(SpeechController.serviceRunning)delay(20) }
+            original.save(app);app.library.removeBook(book.id)
+        }
     }
     @Test fun compareBoundedSentenceGroupsWithSeparatePassages() = runBlocking {
         assertTrue(app.packageName.endsWith(".debug"))

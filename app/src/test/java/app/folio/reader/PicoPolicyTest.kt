@@ -46,11 +46,25 @@ class PicoPolicyTest {
     }
     @Test fun picoVoiceSurvivesSettingsRoundTripWithoutOverwritingOtherVoices() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val expected = SpeechSettings(backend="pico", picoVoice=4, aiVoice=3, supertonicVoice=7, rate=2.5f)
+        val expected = SpeechSettings(backend="pico", picoVoice=4, picoThreads=8, aiVoice=3, supertonicVoice=7, rate=2.5f)
         expected.save(context)
         assertEquals(expected, SpeechSettings.load(context))
         expected.copy(picoVoice=-1).save(context)
         assertEquals(0, SpeechSettings.load(context).picoVoice)
+    }
+    @Test fun automaticThreadsKeepPublishedCheckpointIdentityAndExplicitChangesRepeatSafely() {
+        val text="Hun læser en bog."
+        val identity="${PicoEngine.VERSION}/normalization-v1/native-ort1.28.2/sampling-t07-p095-k50-seed42/${PicoPadding.IDENTITY}/da"
+        val published=SpeechPcm.hex(java.security.MessageDigest.getInstance("SHA-256").digest("$identity|0|1.0|$text".toByteArray()))
+        val automatic=SpeechSettings(backend="pico")
+        assertEquals(published,automatic.audioKey(text))
+        for(threads in listOf(1,2,4,6,8)) {
+            val changed=automatic.copy(picoThreads=threads)
+            assertFalse(automatic.sameSource(changed))
+            assertNotEquals(published,changed.audioKey(text))
+            assertEquals(changed.audioKey(text),changed.copy(rate=3f).audioKey(text))
+        }
+        assertTrue(SpeechSettings(backend="kokoro").sameSource(SpeechSettings(backend="kokoro",picoThreads=8)))
     }
     @Test fun danishNumbersAreSpokenWithoutChangingTheBookText() {
         assertEquals("Prisen er tolv komma fem nul kroner.", PicoEngine.normalize("Prisen er 12,50 kroner"))

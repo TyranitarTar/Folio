@@ -18,6 +18,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.*
 
+private data class VoiceCleanupRequest(val kind:VoiceCleanup,val entries:List<VoiceStorageEntry>)
+
 @OptIn(ExperimentalMaterial3Api::class,ExperimentalLayoutApi::class)
 @Composable internal fun VoicePacksPanel(initialBackend: String?=null,close: ()->Unit) {
     val context=LocalContext.current
@@ -32,6 +34,16 @@ import kotlinx.coroutines.*
     var download by remember { mutableStateOf<VoicePack?>(null) }
     var remove by remember { mutableStateOf<VoicePack?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var inventory by remember { mutableStateOf<VoiceStorageInventory?>(null) }
+    var storageMessage by remember { mutableStateOf<String?>(null) }
+    var storageRefresh by remember { mutableIntStateOf(0) }
+    var cleanup by remember { mutableStateOf<VoiceCleanupRequest?>(null) }
+    var cleanupJob by remember { mutableStateOf<Job?>(null) }
+    val phases=states.mapValues { it.value.phase }
+    LaunchedEffect(phases,storageRefresh) {
+        try { inventory=store.storage.inventory() } catch(cancelled:CancellationException){throw cancelled}
+        catch(e:Exception){storageMessage=e.message ?: "Voice storage could not be measured"}
+    }
     DisposableEffect(samples,lifecycle) {
         val observer=LifecycleEventObserver { _,event -> if(event==Lifecycle.Event.ON_STOP) { samples.stop();SpeechController.cancelPreview(context) } }
         lifecycle.lifecycle.addObserver(observer)
@@ -45,6 +57,8 @@ import kotlinx.coroutines.*
                 Text("Samples use the actual voice at 1×. Listening to a sample pauses narration and keeps your place.",style=MaterialTheme.typography.bodySmall,modifier=Modifier.padding(top=6.dp))
                 error?.let { Text(it,color=MaterialTheme.colorScheme.error,modifier=Modifier.padding(top=8.dp)) }
             }
+            item { VoiceStorageCard(inventory,cleanupJob!=null,storageMessage,
+                refresh={storageRefresh++},clean={kind->cleanup=VoiceCleanupRequest(kind,inventory?.reclaimable(kind).orEmpty())},cancel={cleanupJob?.cancel();storageMessage="Cleanup cancelled. Refreshing remaining files."}) }
             items(store.catalog.sortedBy { if(it.backend==initialBackend)0 else 1 },key={it.id}) { pack ->
                 val state=states.getValue(pack.id)
                 var language by rememberSaveable(pack.id) { mutableStateOf(pack.languages.first()) }
@@ -105,6 +119,21 @@ import kotlinx.coroutines.*
             }
             item { Text("Android speech uses voices installed through Android settings. Other compatible voice packs can be added in future app updates.",style=MaterialTheme.typography.bodySmall) }
         }
+    }
+    cleanup?.let { request ->
+        val kind=request.kind
+        val selected=request.entries
+        AlertDialog(onDismissRequest={cleanup=null},title={Text(if(kind==VoiceCleanup.OLD_VERSIONS)"Remove old voice versions?" else "Discard partial voice downloads?")},
+            text={Text("Up to ${voiceStorageSize(selected.sumOf { it.bytes })} can be recovered. "+if(kind==VoiceCleanup.DOWNLOADS)"Selected transfers will be cancelled and drained; resuming them later requires another download. Current packs, rollback data and unknown files are kept." else "Only verified, owned superseded versions are removed. Current packs, loaded engines, rollback/shared files and unknown folders are kept.")},
+            confirmButton={TextButton(onClick={
+                cleanup=null;val keys=selected.map { it.key }.toSet()
+                cleanupJob=scope.launch {
+                    try { val result=store.storage.clean(kind,keys);storageMessage="Recovered ${voiceStorageSize(result.bytes)}. ${result.skipped} changed or protected entries kept." }
+                    catch(cancelled:CancellationException){throw cancelled}
+                    catch(e:Exception){storageMessage=e.message ?: "Voice cleanup could not finish. Refresh and retry."}
+                    finally { cleanupJob=null;storageRefresh++ }
+                }
+            }){Text("Clean up")}},dismissButton={TextButton(onClick={cleanup=null}){Text("Cancel")}})
     }
     download?.let { pack -> AlertDialog(onDismissRequest={download=null},title={Text("Download ${pack.label}?")},
         text={Text("${pack.bytes/1_000_000} MB download. Allow ${(pack.bytes+pack.expandedBytes+32L*1024*1024)/1_000_000} MB free during installation. It works offline once installed. Downloading does not start narration.")},

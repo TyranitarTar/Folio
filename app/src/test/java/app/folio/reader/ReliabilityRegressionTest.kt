@@ -142,7 +142,7 @@ class ReliabilityRegressionTest {
         ReaderCursorStore(context).write(book.id, "speech", cursor); ReaderCursorStore(context).write(book.id, "guided", cursor)
         val ai = AiListeningPoint(0, 5, "b".repeat(64), 123)
         AiListeningStore(context).write(book.id, ai)
-        SpeechSettings(backend = "supertonic", aiVoice = 3, supertonicVoice = 7, supertonicLanguage = "da").save(context)
+        SpeechSettings(backend = "supertonic", aiVoice = 3, supertonicVoice = 7, supertonicLanguage = "da", picoThreads = 8).save(context)
         Appearance().withAwake(ReaderAwakePolicy("timed", 15)).save(context)
         val origin = SourceOrigin("WIKISOURCE", "Prøve", "da", SourceUrls.wikiPage("da", "Prøve"), "a".repeat(64))
         store.update(book.id) { it.copy(origin = origin) }
@@ -158,6 +158,7 @@ class ReliabilityRegressionTest {
         assertEquals(cursor, ReaderCursorStore(other).read(book.id, "guided"))
         assertEquals(ai, AiListeningStore(other).read(book.id))
         assertEquals(7, SpeechSettings.load(other).supertonicVoice)
+        assertEquals(8, SpeechSettings.load(other).picoThreads)
         assertEquals("da", SpeechSettings.load(other).supertonicLanguage)
         assertEquals(ReaderAwakePolicy("timed", 15), Appearance.load(other).awakePolicy)
         assertEquals(origin, restored.origin)

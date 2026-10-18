@@ -30,7 +30,8 @@ for name in (".gitignore", "README.md", "TTS-roadmap.md", "build.gradle.kts", "a
     if path.is_file():
         files.append(path)
 files.append(root / "verify_upgrade_v010.py")
-for name in ("IMPLEMENTATION-v0.10.1.md", "DESIGN-v0.10.1-speech-continuity-and-storage.md", "validate_release_v0101.py"):
+for name in ("IMPLEMENTATION-v0.10.1.md", "DESIGN-v0.10.1-speech-continuity-and-storage.md", "validate_release_v0101.py",
+             "IMPLEMENTATION-v0.10.2.md", "IMPLEMENTATION-v0.10.2-storage.md", "validate_release_v0102.py", "verify_upgrade_v0102.py"):
     if (root / name).is_file(): files.append(root / name)
 archive = output / f"Folio-source-{version}.zip"
 with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:

@@ -30,6 +30,8 @@ struct Engine {
     std::vector<std::string> input_names, output_names;
     std::vector<const char*> inputs, outputs;
     std::atomic<bool> cancelled{false};
+    std::mutex profile_mutex;
+    std::array<jlong,7> last_profile{}; // prefill, decode, sampling, Kanade, HiFT, total ns; code count.
     Engine(const std::string& folder, int threads) {
         options.SetIntraOpNumThreads(threads);
         options.SetInterOpNumThreads(1);
@@ -60,6 +62,9 @@ struct Engine {
         cancelled.store(false); run_options.UnsetTerminate();
         auto check=[&] { if(cancelled.load() || externally_cancelled()) throw std::runtime_error("Pico generation cancelled."); };
         check();
+        auto beginning=std::chrono::steady_clock::now();
+        auto nanos=[](auto start) {return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-start).count();};
+        std::array<jlong,7> timing{};
         auto memory=Ort::MemoryInfo::CreateCpu(OrtArenaAllocator,OrtMemTypeDefault);
         std::vector<Ort::Value> cache;
         std::array<int64_t,4> empty_shape{1,3,0,64}; float dummy=0;
@@ -89,6 +94,7 @@ struct Engine {
             if(token<0 || static_cast<size_t>(token)>=vocabulary) throw std::runtime_error("Invalid Pico prompt token.");
             logits=step(embeddings.data()+static_cast<size_t>(token)*hidden);
         }
+        timing[0]=nanos(beginning);
         std::mt19937 random(seed);
         std::vector<int64_t> codes;
         std::vector<size_t> indices(vocabulary); std::iota(indices.begin(),indices.end(),0);
@@ -98,6 +104,7 @@ struct Engine {
             check();
             if(std::chrono::steady_clock::now()-started > std::chrono::seconds(120))
                 throw std::runtime_error("Pico is too slow for this passage. Try a shorter passage or another voice engine.");
+            auto sampling_started=std::chrono::steady_clock::now();
             std::partial_sort(indices.begin(),indices.begin()+50,indices.end(),[&](size_t a,size_t b){return logits[a]==logits[b] ? a<b : logits[a]>logits[b];});
             std::vector<double> probabilities;
             double total=0;
@@ -111,11 +118,13 @@ struct Engine {
             probabilities.resize(keep);
             std::discrete_distribution<size_t> sample(probabilities.begin(),probabilities.end());
             int token=static_cast<int>(indices[sample(random)]);
+            timing[2]+=nanos(sampling_started);
             if(token==eos) {stopped=true;break;}
             if(token<audio_start || token>=audio_start+12800) throw std::runtime_error("Pico returned an invalid audio token.");
             codes.push_back(token-audio_start);
             logits=step(embeddings.data()+static_cast<size_t>(token)*hidden);
         }
+        timing[1]=nanos(started)-timing[2];
         // Exhausting a safety bound is never evidence that the sentence finished.
         if(!stopped || codes.empty()) throw std::runtime_error("Pico did not finish this passage cleanly. Your listening position is kept.");
         cache.clear(); check();
@@ -125,8 +134,11 @@ struct Engine {
             Ort::Value::CreateTensor<int64_t>(memory,codes.data(),codes.size(),tokens_shape.data(),1),
             Ort::Value::CreateTensor<float>(memory,voice.data(),voice.size(),speaker_shape.data(),2)};
         const char* kanade_inputs[]{"tokens","speaker"}; const char* kanade_outputs[]{"mel"};
+        auto acoustic_started=std::chrono::steady_clock::now();
         auto mel=kanade->Run(run_options,kanade_inputs,acoustic.data(),2,kanade_outputs,1);
+        timing[3]=nanos(acoustic_started);
         check();
+        auto waveform_started=std::chrono::steady_clock::now();
         size_t samples=codes.size()*960;
         std::vector<float> noise(samples*9), initial(9);
         std::normal_distribution<float> gaussian(0,1); std::uniform_real_distribution<float> uniform(0,1);
@@ -140,10 +152,13 @@ struct Engine {
             Ort::Value::CreateTensor<float>(memory,initial.data(),initial.size(),initial_shape.data(),2)};
         const char* wave_names[]{"mel","noise","initial_phase"}; const char* wave_outputs[]{"waveform"};
         auto wave=hift->Run(run_options,wave_names,waveform_inputs.data(),3,wave_outputs,1);
+        timing[4]=nanos(waveform_started);
         check();
         if(wave[0].GetTensorTypeAndShapeInfo().GetElementCount()!=samples)
             throw std::runtime_error("Pico waveform duration is inconsistent.");
         const auto* data=wave[0].GetTensorData<float>();
+        timing[5]=nanos(beginning); timing[6]=codes.size();
+        {std::lock_guard<std::mutex> lock(profile_mutex);last_profile=timing;}
         return {data,data+samples};
     }
 };
@@ -159,7 +174,7 @@ void error(JNIEnv* env,const std::exception& e) {env->ThrowNew(env->FindClass("j
 
 extern "C" JNIEXPORT jlong JNICALL Java_app_folio_reader_PicoNative_open(JNIEnv* env,jobject,jstring folder,jint threads) {
     try {
-        if(threads<1 || threads>4) throw std::runtime_error("Unsupported Pico thread count.");
+        if(threads<1 || threads>8) throw std::runtime_error("Unsupported Pico thread count.");
         const char* raw=env->GetStringUTFChars(folder,nullptr);
         std::string path(raw); env->ReleaseStringUTFChars(folder,raw);
         auto engine=std::make_shared<Engine>(path,threads);
@@ -186,6 +201,14 @@ extern "C" JNIEXPORT jfloatArray JNICALL Java_app_folio_reader_PicoNative_genera
 }
 extern "C" JNIEXPORT void JNICALL Java_app_folio_reader_PicoNative_cancel(JNIEnv*,jobject,jlong id) {
     try {auto engine=get(id);engine->cancelled.store(true);engine->run_options.SetTerminate();} catch(...) {}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_app_folio_reader_PicoNative_profile(JNIEnv* env,jobject,jlong id) {
+    try {
+        auto engine=get(id);std::lock_guard<std::mutex> lock(engine->profile_mutex);
+        auto result=env->NewLongArray(engine->last_profile.size());
+        if(result) env->SetLongArrayRegion(result,0,engine->last_profile.size(),engine->last_profile.data());
+        return result;
+    }catch(const std::exception& e){error(env,e);return nullptr;}
 }
 extern "C" JNIEXPORT void JNICALL Java_app_folio_reader_PicoNative_close(JNIEnv*,jobject,jlong id) {
     std::lock_guard<std::mutex> lock(engines_mutex);engines.erase(id);

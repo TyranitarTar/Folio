@@ -31,6 +31,7 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
     val app=context.applicationContext as FolioApp
     val packStates by app.voicePacks.states.collectAsStateWithLifecycle()
     var packsOpen by remember { mutableStateOf(false) }
+    var diagnosticsOpen by remember { mutableStateOf(false) }
     var settings by remember { mutableStateOf(SpeechSettings.load(context)) }
     var voices by remember { mutableStateOf<List<SpeechVoice>>(emptyList()) }
     var probing by remember { mutableStateOf(true) }
@@ -100,6 +101,21 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
         }
         if (thisBook && state.preparing) LinearProgressIndicator(Modifier.fillMaxWidth())
         if (thisBook && state.preparing) Text(state.preparation, style = MaterialTheme.typography.bodySmall)
+        if(thisBook && state.preparationStage=="prepared") Text(state.preparation,style=MaterialTheme.typography.bodySmall)
+        if(settings.backend=="pico") {
+            Text("Pico inference threads",style=MaterialTheme.typography.titleSmall)
+            FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                listOf(0,1,2,4,6,8).forEach { threads ->
+                    FilterChip(settings.picoThreads==threads,{
+                        settings=settings.copy(picoThreads=threads);SpeechController.settings(context,settings)
+                    },label={Text(if(threads==0)"Auto (up to 4)" else "$threads")})
+                }
+            }
+            Text("More threads may increase heat or be slower. Use the performance test to compare on this device.",style=MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick={diagnosticsOpen=true}) { Text("Pico performance test") }
+            if(!settingsOnly) OutlinedButton(onClick={SpeechController.prepareChapter(context,bookId)},enabled=localReady && !state.preparing) { Text("Prepare chapter ahead") }
+            if(!settingsOnly) Text("Prepare from the listening position while paused, up to about 8 minutes of audio. Books and listening progress stay in place; resume manually.",style=MaterialTheme.typography.bodySmall)
+        }
         if ((thisBook || state.previewing || settingsOnly) && state.error != null) Text(state.error!!, color = MaterialTheme.colorScheme.error)
         if (settings.backend == "android" && !probing && voices.isEmpty()) {
             Text("No installed offline English voice was found. Enable a speech engine and download English voice data in Android Speech settings.",
@@ -201,10 +217,11 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
         }) { Text("Android Speech settings") }
         settingsError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         state.recoveryNote?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
-        if (settings.isLocal) Text("Pause resumes at the saved point in the audio. Changing voice or language repeats the current passage. Supertonic speed changes keep the current audio position. AI speech follows passages; word timing is unavailable.",
+        if (settings.isLocal) Text("Pause resumes at the saved point in the audio. Changing voice, language or Pico thread count repeats the current passage. Speed changes keep the current audio position. AI speech follows passages; word timing is unavailable.",
             style = MaterialTheme.typography.bodySmall)
         Text("All options work offline. Android speech uses installed English voices.",
             style = MaterialTheme.typography.bodySmall)
     }
     if(packsOpen)VoicePacksPanel(initialBackend=settings.backend,close={packsOpen=false})
+    if(diagnosticsOpen)PicoDiagnosticsPanel(close={diagnosticsOpen=false})
 }

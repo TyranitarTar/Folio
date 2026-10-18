@@ -41,6 +41,23 @@ class BookTextTest {
             }
         }
     }
+    @Test fun liveAndPreparedPicoPassagesCoverEverySourceWordWithoutCrossingChapters()=runBlocking {
+        val (text,_)=extracted()
+        val selected=SpeechSettings(backend="pico")
+        val visited=mutableListOf<ReadingWord>()
+        var position=text.first()
+        while(position!=null) {
+            val current=position
+            val words=SpeechPassages.words(text,current,selected)
+            assertTrue(words.isNotEmpty())
+            assertTrue(words.joinToString(" "){it.text}.length<=160 || words.size==1)
+            val end=text.cursor(current.sectionIndex,current.wordIndex+words.lastIndex)!!
+            assertEquals(SpeechNavigation.chapterIndex(text,current),SpeechNavigation.chapterIndex(text,end))
+            visited+=words
+            position=text.next(end)
+        }
+        assertEquals(text.sections.flatMap{it.words},visited)
+    }
     @Test fun quotedCursorsSurviveLayoutChangesAndProgressionDoesNotResetToFirstWord() = runBlocking {
         val (text, _) = extracted()
         val section = text.sections.indexOfFirst { it.words.size > 20 }

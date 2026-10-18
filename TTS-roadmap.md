@@ -1,5 +1,29 @@
 # Folio: page navigation and speech implementation record
 
+## 0.10.2 and device priorities
+
+Updated 18 October 2026. The user accepts Pico's remaining Galaxy S10 limitations;
+Galaxy Flip7 is the priority for future Danish models. Flip7 listening is better,
+but can still exhaust the buffer during longer sessions, particularly at 1.5× / 2×.
+
+- Implemented for 0.10.2, under verification: explicit Pico inference threads up to
+  eight, native stage timings and warm reversed-order measurements; 20 / 30 / 35-word
+  sentence-boundary experiments; silent, bounded preparation ahead without moving
+  the listening bookmark; voice storage inventory and ownership-based cleanup.
+- Confirm sustained generation during actual playback on S10. Record the throughput
+  rather than promise continuous narration when the requested speed exceeds it.
+- Finish 0.10.2 installation/data-retention verification. The full public
+  0.9.0 → 0.10.1 flow has now passed on the populated test emulator.
+- Next: run the same benchmark and long 1× / 1.5× / 2× reads on Flip7. Cover Bluetooth,
+  heat, memory and unplugged battery use. USB-powered checks cannot establish battery life.
+- Continue evaluating Plapre 3 and Røst v3 as optional future packs using the shared
+  bounded producer/player and saved source positions. Keep English Kokoro available.
+- The reading-streak cat game remains a separate planned feature.
+
+See [0.10.2 implementation](IMPLEMENTATION-v0.10.2.md) and
+[voice storage](IMPLEMENTATION-v0.10.2-storage.md). Version-specific entries below
+record earlier decisions and their evidence at that time.
+
 ## Current priority: Plapre Pico
 
 Updated 17 October 2026. Folio 0.10.0 and its optional Danish Pico pack are published. Kokoro for English and Supertonic remain available. The older version-specific plans below are historical records. See [Pico implementation](IMPLEMENTATION-v0.10.md) and [continuity and obsolete-version storage evaluation](DESIGN-v0.10.1-speech-continuity-and-storage.md).

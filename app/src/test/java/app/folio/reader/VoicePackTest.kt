@@ -84,6 +84,20 @@ class VoicePackTest {
         assertFalse(File(target,"old").exists())
         assertEquals(pack.version,File(target,".ready").readText())
     }
+    @Test fun directEngineLeasePreventsInstallationFromReplacingLoadedModel()=runBlocking {
+        val context=isolated();val store=VoicePackStore(context);store.existingCheck.join()
+        val (pack,archive)=fixture(store)
+        val target=store.directory(pack).apply { mkdirs() }
+        File(target,"old").writeText("loaded model")
+        store.update(VoicePackState(pack.id,"Installing"),force=true)
+        VoiceModelUse.acquire(context,pack.version).use {
+            assertTrue(runCatching { store.install(pack,archive){_,_->} }.isFailure)
+            assertEquals("loaded model",File(target,"old").readText())
+            assertFalse(File(target,"model.onnx").exists())
+        }
+        store.install(pack,archive){_,_->}
+        assertEquals("a model fixture",File(target,"model.onnx").readText())
+    }
     @Test fun cancelledTransferDoesNotRevertToBusyAndStaleReadyOrCheckingRecoversOnRestart()=runBlocking {
         val context=isolated();val store=VoicePackStore(context);store.existingCheck.join();val id=store.catalog.first().id
         store.update(VoicePackState(id,"Cancelled",45))

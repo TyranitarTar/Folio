@@ -14,19 +14,20 @@ import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 
 internal data class VoicePackState(val id: String, val phase: String="Not downloaded", val bytes: Long=0, val message: String="", val retryAt: Long=0) {
-    val busy get()=phase in setOf("Queued","Downloading","Verifying","Installing","Checking","Removing")
+    val busy get()=phase in setOf("Queued","Downloading","Verifying","Installing","Checking","Removing","Cleaning")
     fun json()=JSONObject().put("id",id).put("phase",phase).put("bytes",bytes).put("message",message).put("retryAt",retryAt)
 }
 
 internal class VoicePackStore(private val context: Context) {
     companion object { internal val operations=Mutex() }
     val catalog=VoicePackCatalog.load(context)
+    internal val storage by lazy { VoiceStorage(context,this) }
     private val prefs=context.getSharedPreferences("voice-packs",0)
     private val scope=CoroutineScope(SupervisorJob()+Dispatchers.IO)
     private val mutable=MutableStateFlow(catalog.associate { p ->
         val old=runCatching { JSONObject(prefs.getString(p.id,null) ?: "{}") }.getOrNull()
         val saved=old?.optString("phase","Not downloaded") ?: "Not downloaded"
-        val phase=if(saved in setOf("Checking","Removing") || (saved=="Ready" && !directory(p).isDirectory))"Not downloaded" else saved
+        val phase=if(saved in setOf("Checking","Removing","Cleaning") || (saved=="Ready" && !directory(p).isDirectory))"Not downloaded" else saved
         p.id to VoicePackState(p.id,phase,old?.optLong("bytes") ?: 0,
             old?.optString("message").orEmpty(),old?.optLong("retryAt") ?: 0)
     })
@@ -42,6 +43,7 @@ internal class VoicePackStore(private val context: Context) {
                 if(directory(pack).isDirectory && !state(pack.id).busy) {
                 update(VoicePackState(pack.id,"Checking",message="Checking existing voice files"))
                 if(verify(directory(pack),pack)) {
+                    runCatching { storage.recordVerified(pack) }
                     File(directory(pack),".ready").writeText(pack.version)
                     update(VoicePackState(pack.id,"Ready",message="Available offline"))
                     deleteTree(previous)
@@ -55,10 +57,14 @@ internal class VoicePackStore(private val context: Context) {
     fun forBackend(backend: String)=catalog.firstOrNull { it.backend==backend }
     fun state(id: String)=mutable.value.getValue(id)
     fun directory(pack: VoicePack)=File(context.noBackupFilesDir,"local-voices/${pack.version}")
-    fun transferFolder(pack: VoicePack)=File(context.noBackupFilesDir,"voice-transfers/${pack.id}").apply { mkdirs() }
+    fun transferFolder(pack: VoicePack):File {
+        val folder=File(context.noBackupFilesDir,"voice-transfers/${pack.id}");val fresh=!folder.exists();folder.mkdirs()
+        storage.markTransfer(pack,folder,fresh);return folder
+    }
     @Synchronized fun update(value: VoicePackState, force: Boolean=false) {
         require(value.id in mutable.value)
         if(!force && mutable.value[value.id]?.phase=="Cancelled" && value.busy)return
+        if(!force && mutable.value[value.id]?.phase=="Cleaning" && value.phase!="Cleaning")return
         check(prefs.edit().putString(value.id,value.json().toString()).commit()) { "Voice download state could not be saved." }
         mutable.value=mutable.value+(value.id to value)
     }
@@ -77,22 +83,28 @@ internal class VoicePackStore(private val context: Context) {
         update(old.copy(phase="Cancelled",message="Partial download kept for resume"))
         WorkManager.getInstance(context).cancelUniqueWork("folio-voice-$id")
     }
-    suspend fun remove(id: String) = withContext(Dispatchers.IO) {
-        val pack=pack(id)
-        val speech=SpeechController.state.value
-        require(!(speech.backend==pack.backend && (speech.bookId!=null || speech.previewing || speech.preparing))) { "Stop narration and local previews before removing this pack." }
-        cancelDownload(id)
-        operations.withLock {
-            // SpeechService closes its engine before clearing bookId; drain the JNI release queue.
-            val drained=CompletableDeferred<Unit>()
-            LocalVoiceWorker.executor.execute { drained.complete(Unit) };drained.await()
-            val current=SpeechController.state.value
-            require(!(current.backend==pack.backend && (current.bookId!=null || current.previewing || current.preparing))) { "This voice is still in use." }
-            update(VoicePackState(id,"Removing",message="Removing downloaded voice files"))
-            deleteTree(directory(pack));deleteTree(transferFolder(pack))
-            update(VoicePackState(id,message="Your books and listening positions are kept"))
+    @Synchronized internal fun beginStorageCleanup(ids:Set<String>):Map<String,VoicePackState> {
+        val currentIds=ids.filter { it in mutable.value }.toSet()
+        check(currentIds.none { state(it).phase=="Cleaning" }) { "Voice storage cleanup is already running." }
+        val old=currentIds.associateWith(::state)
+        currentIds.forEach { update(state(it).copy(phase="Cleaning",message="Stopping transfer and checking storage"),force=true) }
+        return old
+    }
+    @Synchronized internal fun finishStorageCleanup(old:Map<String,VoicePackState>,removed:Set<String> = emptySet()) {
+        old.forEach { (id,before)->
+            if(state(id).phase!="Cleaning")return@forEach
+            val pack=pack(id);val folder=directory(pack)
+            val ready=folder.isDirectory&&runCatching { File(folder,".ready").readText()==pack.version }.getOrDefault(false)&&pack.files.filter { it.name in pack.required }.all { File(folder,it.name).length()==it.bytes }
+            val result=when {
+                ready->VoicePackState(id,"Ready",pack.bytes,"Available offline")
+                id in removed->VoicePackState(id,message="Voice files removed; books and positions kept")
+                before.phase=="Ready"&&folder.isDirectory->before
+                else->VoicePackState(id,"Cancelled",message="Partial voice download discarded or stopped; download again when needed")
+            }
+            update(result,force=true)
         }
     }
+    suspend fun remove(id: String)=storage.removePack(id)
     private fun deleteTree(folder: File) {
         val root=context.noBackupFilesDir.canonicalFile
         require(folder.canonicalPath.startsWith(root.path+File.separator))
@@ -110,6 +122,7 @@ internal class VoicePackStore(private val context: Context) {
             val current=SpeechController.state.value
             check(!(current.backend==pack.backend && (current.bookId!=null || current.preparing || current.previewing))) { "Stop this voice before installing its files." }
             val drained=CompletableDeferred<Unit>();LocalVoiceWorker.executor.execute { drained.complete(Unit) };drained.await()
+            VoiceModelUse.reserve(context,setOf(pack.version)).use {
             val backup=File(folder,"previous");deleteTree(backup)
             File(staging,".ready").writeText(pack.version)
             withContext(NonCancellable) { synchronized(this@VoicePackStore) {
@@ -121,7 +134,9 @@ internal class VoicePackStore(private val context: Context) {
                 }
                 update(VoicePackState(pack.id,"Ready",pack.bytes,"Available offline"))
             } }
+            runCatching { storage.recordVerified(pack) }
             deleteTree(backup)
+            }
         } finally { deleteTree(staging) }
     }
     internal suspend fun verify(folder: File, pack: VoicePack): Boolean {

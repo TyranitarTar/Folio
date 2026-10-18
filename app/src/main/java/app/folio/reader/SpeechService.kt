@@ -1,5 +1,7 @@
 package app.folio.reader
 
+import kotlinx.coroutines.ensureActive
+
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -45,7 +47,7 @@ data class SpeechVoice(val name: String, val label: String)
 data class SpeechSettings(val voice: String = "", val rate: Float = 1f, val backend: String = "android", val aiVoice: Int = 21,
     val supertonicVoice: Int = 0, val supertonicLanguage: String = "en",
     val navigationUnit: String = "sentence", val sentencePauseMillis: Int = 0, val paragraphPauseMillis: Int = 0,
-    val picoVoice: Int = 0) {
+    val picoVoice: Int = 0, val picoThreads: Int = 0) {
     val isLocal: Boolean get() = backend in setOf("kokoro", "supertonic", "pico")
     val stretchesPlayback: Boolean get() = backend in setOf("supertonic", "pico")
     val localVoice: Int get() = when(backend) { "supertonic" -> supertonicVoice; "pico" -> picoVoice; else -> aiVoice }
@@ -54,12 +56,13 @@ data class SpeechSettings(val voice: String = "", val rate: Float = 1f, val back
     val synthesisRate: Float get() = if (stretchesPlayback) 1f else rate
     val playbackRate: Float get() = if (stretchesPlayback) rate else 1f
     fun sameSource(other: SpeechSettings) = backend == other.backend &&
-        (backend != "android" || voice == other.voice) && localVoiceIdentity == other.localVoiceIdentity && synthesisRate == other.synthesisRate
-    fun audioKey(text: String): String = AiListeningStore.key(text, localVoice, synthesisRate, backend, if(backend=="pico") "da" else supertonicLanguage)
+        (backend != "android" || voice == other.voice) && (backend != "pico" || picoThreads == other.picoThreads) && localVoiceIdentity == other.localVoiceIdentity && synthesisRate == other.synthesisRate
+    fun audioKey(text: String): String = AiListeningStore.key(text, localVoice, synthesisRate, backend, if(backend=="pico") "da" else supertonicLanguage, picoThreads)
     fun save(context: Context) = context.getSharedPreferences("speech", Context.MODE_PRIVATE).edit()
         .putString("voice", voice).putFloat("rate", rate.coerceIn(.5f, 3f))
         .putString("backend", backend).putInt("aiVoice", aiVoice)
         .putInt("picoVoice", picoVoice)
+        .putInt("picoThreads", picoThreads.coerceIn(0,8))
         .putInt("supertonicVoice", supertonicVoice).putString("supertonicLanguage", supertonicLanguage)
         .putString("navigationUnit", navigationUnit).putInt("sentencePauseMillis", sentencePauseMillis.coerceIn(0,5000))
         .putInt("paragraphPauseMillis", paragraphPauseMillis.coerceIn(0,5000)).apply()
@@ -72,7 +75,7 @@ data class SpeechSettings(val voice: String = "", val rate: Float = 1f, val back
                 it.getString("supertonicLanguage", "en").takeIf { language -> language == "en" || language == "da" } ?: "en",
                 it.getString("navigationUnit", "sentence").takeIf { unit -> unit in setOf("line","sentence","paragraph","chapter") } ?: "sentence",
                 it.getInt("sentencePauseMillis", 0).coerceIn(0,5000), it.getInt("paragraphPauseMillis", 0).coerceIn(0,5000),
-                it.getInt("picoVoice", 0).takeIf { id -> id in 0..4 } ?: 0)
+                it.getInt("picoVoice", 0).takeIf { id -> id in 0..4 } ?: 0, it.getInt("picoThreads",0).coerceIn(0,8))
         }
     }
 }
@@ -100,7 +103,11 @@ object SpeechController {
         context.getSharedPreferences("speech", Context.MODE_PRIVATE).edit().putBoolean("follow", true).apply()
     }
     private fun intent(context: Context, action: String) = Intent(context, SpeechService::class.java).setAction(action)
+    private fun benchmarkBusy(): Boolean = PicoBenchmarks.state.value.running.also { busy ->
+        if(busy) mutable.value=mutable.value.copy(error="Finish or cancel the Pico benchmark before starting speech.")
+    }
     fun start(context: Context, bookId: String, from: Locator? = null) {
+        if(benchmarkBusy()) return
         val i = intent(context, SpeechService.START).putExtra("book", bookId).putExtra("from", from?.toJSON()?.toString()).putExtra("request", requests.incrementAndGet())
         runCatching { ContextCompat.startForegroundService(context, i) }.onFailure {
             val selected=SpeechSettings.load(context)
@@ -124,10 +131,17 @@ object SpeechController {
         if (mutable.value.bookId != null) context.startService(intent(context, SpeechService.SLEEP).putExtra("minutes", minutes).putExtra("endChapter", endChapter))
     }
     fun clearSleep(context: Context) = command(context, SpeechService.CLEAR_SLEEP)
+    fun prepareChapter(context: Context, bookId: String) {
+        if(benchmarkBusy()) return
+        runCatching { ContextCompat.startForegroundService(context,intent(context,SpeechService.PREPARE_CHAPTER).putExtra("book",bookId)) }
+            .onFailure { mutable.value=mutable.value.copy(preparing=false,preparationStage="error",error="Chapter preparation could not start. Open the reader and try again.") }
+    }
     fun preview(context: Context, settings: SpeechSettings) {
+        if(benchmarkBusy()) return
         val request=intent(context, SpeechService.PREVIEW).putExtra("backend", settings.backend)
             .putExtra("voice", settings.voice).putExtra("rate", settings.rate).putExtra("aiVoice", settings.aiVoice)
             .putExtra("picoVoice", settings.picoVoice)
+            .putExtra("picoThreads", settings.picoThreads)
             .putExtra("supertonicVoice", settings.supertonicVoice).putExtra("language", settings.supertonicLanguage)
             .putExtra("request", requests.incrementAndGet())
         runCatching { ContextCompat.startForegroundService(context,request) }.onFailure {
@@ -148,6 +162,7 @@ object SpeechController {
         if (mutable.value.bookId != null) command(context, SpeechService.SETTINGS)
     }
     private fun command(context: Context, action: String) {
+        if(action==SpeechService.RESUME && benchmarkBusy()) return
         if (mutable.value.bookId != null) runCatching { context.startService(intent(context, action)) }
     }
 }
@@ -192,6 +207,8 @@ class SpeechService : Service() {
     private var aiEngine: LocalSpeechEngine? = null
     private var aiPlayer: AiAudioPlayer? = null
     private var aiJob: Job? = null
+    private var preparationJob: Job? = null
+    private var preparationRevision = 0L
     private lateinit var aiStore: AiListeningStore
     private var aiPoint: AiListeningPoint? = null
     private var aiKey: String? = null
@@ -247,7 +264,20 @@ class SpeechService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if(PicoBenchmarks.state.value.running && intent?.action !in setOf(STOP,PAUSE,CANCEL_PREVIEW)) {
+            startForeground(NOTIFICATION,notification())
+            SpeechController.mutable.value=state().copy(error="Finish or cancel the Pico benchmark before starting speech.")
+            stopSelf();return START_NOT_STICKY
+        }
         when (intent?.action) {
+            PREPARE_CHAPTER -> {
+                startForeground(NOTIFICATION,notification())
+                val id=intent.getStringExtra("book")
+                if(id!=null) {
+                    if(state().bookId==id && text!=null) prepareChapterAhead()
+                    else startBook(id,null,autoPlay=false,prepareAhead=true)
+                } else stopSelf()
+            }
             START -> {
                 // A foreground-service request must publish its notification before parsing a book or initializing TTS.
                 startForeground(NOTIFICATION, notification())
@@ -273,7 +303,7 @@ class SpeechService : Service() {
                 startForeground(NOTIFICATION, notification())
                 val selected = settings.copy(backend = intent.getStringExtra("backend") ?: "android", voice = intent.getStringExtra("voice").orEmpty(),
                     rate = intent.getFloatExtra("rate",1f).takeIf { it.isFinite() }?.coerceIn(.5f,3f) ?: 1f,
-                    aiVoice = intent.getIntExtra("aiVoice",21), picoVoice = intent.getIntExtra("picoVoice",0).coerceIn(0,4), supertonicVoice = intent.getIntExtra("supertonicVoice",0),
+                    aiVoice = intent.getIntExtra("aiVoice",21), picoVoice = intent.getIntExtra("picoVoice",0).coerceIn(0,4), picoThreads = intent.getIntExtra("picoThreads",settings.picoThreads).coerceIn(0,8), supertonicVoice = intent.getIntExtra("supertonicVoice",0),
                     supertonicLanguage = intent.getStringExtra("language") ?: "en")
                 preview(selected, intent.getLongExtra("request",0))
             }
@@ -286,7 +316,7 @@ class SpeechService : Service() {
     }
 
     private fun state() = SpeechController.mutable.value
-    private fun startBook(bookId: String, from: Locator?, autoPlay: Boolean = true, acceptedRequest: Long = 0) {
+    private fun startBook(bookId: String, from: Locator?, autoPlay: Boolean = true, acceptedRequest: Long = 0, prepareAhead: Boolean = false) {
         cancelPreview()
         configureSleep(0,false)
         val request = ++generation
@@ -328,7 +358,7 @@ class SpeechService : Service() {
                 session.setMetadata(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE, book.title)
                     .putString(MediaMetadata.METADATA_KEY_ARTIST, book.author).build())
                 SpeechController.mutable.value = state().copy(preparing = false, error = null)
-                if (playRequested) resume() else { rememberCursor(mandatory=true); publishPlayback() }
+                if(prepareAhead) prepareChapterAhead() else if (playRequested) resume() else { rememberCursor(mandatory=true); publishPlayback() }
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (error: Throwable) {
                 if (request == generation) fail(error.message ?: "This book could not be read aloud.")
@@ -399,6 +429,8 @@ class SpeechService : Service() {
         return true
     }
     private suspend fun resume() {
+        if(PicoBenchmarks.state.value.running) { fail("Finish or cancel the Pico benchmark before starting speech.");return }
+        if(preparationJob!=null) pause()
         idleRelease?.cancel(); idleRelease = null
         cancelPreview()
         if(sleepTimer.disarmExpired(android.os.SystemClock.elapsedRealtime())) {
@@ -551,10 +583,11 @@ class SpeechService : Service() {
     }).also { aiPlayer = it }
 
     private fun localEngine(selected: SpeechSettings): LocalSpeechEngine {
-        aiEngine?.takeIf { it.backend == selected.backend }?.let { return it }
+        val wantedThreads=if(selected.picoThreads==0) Runtime.getRuntime().availableProcessors().coerceIn(1,4) else selected.picoThreads
+        aiEngine?.takeIf { it.backend == selected.backend && (it !is PicoEngine || it.inferenceThreads == wantedThreads) }?.let { return it }
         // Release is queued before the new engine initializes on the same native worker.
         aiEngine?.close()
-        return createLocalSpeechEngine(applicationContext, selected.backend).also { aiEngine = it }
+        return createLocalSpeechEngine(applicationContext, selected.backend, selected.picoThreads).also { aiEngine = it }
     }
 
     private fun speakAi(message: String, id: String, position: ReadingCursor) {
@@ -624,17 +657,7 @@ class SpeechService : Service() {
     }
     private fun passageWords(position: ReadingCursor, bounded: Boolean): List<ReadingWord> {
         val book = text ?: return emptyList()
-        val sentence = book.sentence(position) ?: return emptyList()
-        val chapterEnd=SpeechNavigation.nextChapter(book,position)?.takeIf { it.sectionIndex==position.sectionIndex }?.wordIndex
-        val endWord=minOf(sentence.endWord,chapterEnd ?: sentence.endWord)
-        val remaining = book.sections[position.sectionIndex].words.subList(position.wordIndex, endWord)
-        val limit = if (bounded && settings.backend=="pico") 160 else if (bounded) 320 else TextToSpeech.getMaxSpeechInputLength()
-        var characters = 0; var end = 0
-        for (word in remaining) {
-            if (end > 0 && characters + word.text.length + 1 > limit) break
-            characters += word.text.length + 1; end++
-        }
-        return remaining.take(end)
+        return SpeechPassages.words(book,position,settings,bounded)
     }
     /** Keep a bounded ordered queue. Only AudioTrack callbacks advance the listening cursor. */
     private fun fillAudioBuffer() {
@@ -718,7 +741,57 @@ class SpeechService : Service() {
         }
         return gate.accepts(ticket) && playRequested
     }
+    private fun prepareChapterAhead() {
+        val book=text ?: return
+        val start=cursor ?: return
+        pause();idleRelease?.cancel();idleRelease=null
+        val selected=SpeechSettings.load(this)
+        if(selected.backend!="pico") { fail("Choose Plapre Pico before preparing chapter audio.");return }
+        if(PicoBenchmarks.state.value.running) { fail("Finish or cancel the Pico benchmark first.");return }
+        settings=selected
+        val ticket=++preparationRevision
+        val chapter=SpeechNavigation.chapterIndex(book,start)
+        SpeechController.mutable.value=state().copy(preparing=true,playing=false,error=null,preparationStage="chapter",preparation="Preparing chapter audio…")
+        publishPlayback()
+        preparationJob=scope.launch {
+            var bytes=0L;var seconds=0.0;var count=0;var limited=false
+            try {
+                var scan:ReadingCursor?=start
+                val engine=localEngine(selected)
+                while(scan!=null && SpeechNavigation.chapterIndex(book,scan)==chapter) {
+                    kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                    if(bytes>=48L*1024*1024-2L*1024*1024) { limited=true;break }
+                    wakeLock.acquire(10*60*1000L)
+                    val words=SpeechPassages.words(book,scan,selected)
+                    if(words.isEmpty()) break
+                    val message=words.joinToString(" "){it.text};val key=selected.audioKey(message)
+                    val clip=withContext(Dispatchers.IO){aiStore.loadClip(key)} ?: engine.generate(message,selected).also {
+                        withContext(Dispatchers.IO){aiStore.saveClip(key,it)}
+                    }
+                    bytes+=clip.samples.size.toLong()*4;seconds+=clip.samples.size.toDouble()/clip.sampleRate;count++
+                    if(ticket!=preparationRevision) return@launch
+                    SpeechController.mutable.value=state().copy(preparation="Preparing chapter · $count passages · ${String.format(java.util.Locale.ENGLISH,"%.1f",seconds/60)} min ready")
+                    publishPlayback()
+                    val last=book.cursor(scan.sectionIndex,scan.wordIndex+words.lastIndex) ?: break
+                    scan=book.next(last)
+                }
+                if(ticket==preparationRevision) {
+                    SpeechController.mutable.value=state().copy(preparing=false,playing=false,preparationStage="prepared",preparation=
+                        "Prepared $count passages (${String.format(java.util.Locale.ENGLISH,"%.1f",seconds/60)} min). ${if(limited) "Preparation cache limit reached. " else ""}Resume when ready.")
+                    publishPlayback()
+                }
+            } catch(cancelled:kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch(error:Throwable) { if(ticket==preparationRevision) fail("Chapter audio could not be prepared. ${error.message.orEmpty()}") }
+            finally {
+                if(ticket==preparationRevision) {
+                    if(wakeLock.isHeld) wakeLock.release()
+                    aiEngine?.close();aiEngine=null;preparationJob=null
+                }
+            }
+        }
+    }
     private fun pause() {
+        preparationRevision++;preparationJob?.cancel();preparationJob=null
         cancelPreview()
         transitionJob?.cancel(); transitionJob=null
         playRequested = false
@@ -972,6 +1045,7 @@ class SpeechService : Service() {
         const val CLEAR_SLEEP = "folio.speech.CLEAR_SLEEP"
         const val PREVIEW = "folio.speech.PREVIEW"
         const val CANCEL_PREVIEW = "folio.speech.CANCEL_PREVIEW"
+        const val PREPARE_CHAPTER = "folio.speech.PREPARE_CHAPTER"
         private const val CHANNEL = "narration"
         private const val NOTIFICATION = 410
         private const val MAX_BUFFER_PASSAGES = 32

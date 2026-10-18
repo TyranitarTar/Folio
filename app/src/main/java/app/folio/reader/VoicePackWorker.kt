@@ -60,11 +60,15 @@ class VoicePackCancelReceiver: BroadcastReceiver() {
 }
 
 class VoicePackWorker(context: Context,params: WorkerParameters): CoroutineWorker(context,params) {
-    companion object { private val transfers=Mutex() }
+    companion object {
+        private val transfers=Mutex()
+        // Cancellation marks WorkManager state before a blocked HTTP read necessarily closes.
+        internal suspend fun <T> exclusiveTransfers(action:suspend ()->T):T=transfers.withLock { action() }
+    }
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) { transfers.withLock {
         val store=(applicationContext as FolioApp).voicePacks
         val pack=store.catalog.firstOrNull { it.id==inputData.getString("pack") && it.version==inputData.getString("version") } ?: return@withContext Result.failure()
-        if(store.state(pack.id).phase in setOf("Cancelled","Ready"))return@withContext Result.success()
+        if(store.state(pack.id).phase in setOf("Cancelled","Ready","Cleaning"))return@withContext Result.success()
         try {
             if(store.state(pack.id).retryAt>System.currentTimeMillis())return@withContext Result.retry()
             setForeground(notification(pack,"Downloading voice data"))
