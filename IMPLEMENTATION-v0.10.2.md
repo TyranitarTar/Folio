@@ -94,6 +94,13 @@ acceptance tasks unless explicitly measured in the release evidence. Plapre 3, R
 and the reading cat game remain future work.
 
 Validation evidence is recorded separately in the release validation JSON and review.
+Eight distinct physical S10 checks cover native Pico, threads/groups, cold generation
+overlap, prepared-cache resumption and filesystem cleanup. Five emulator checks cover
+Kokoro, Supertonic, updater transitions, samples and storage controls. The phone's
+secure lock blocked its storage UI case; that case was verified on the unlocked
+emulator instead. The Windows symlink unit case skipped, and physical Android
+exercised the linked-path rejection. The benchmark UI also cancelled on backgrounding.
+
 The existing full public 0.9.0 → 0.10.1 update was exercised on the populated emulator:
 the app downloaded and verified the APK, Android installed it, and exact library rows,
 annotation, saved reading state and existing speech/appearance preferences survived.

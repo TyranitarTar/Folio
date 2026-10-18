@@ -44,7 +44,7 @@ assert all(item==('app.folio.reader.VoiceStorageTest','symlinkCannotEscapePrivat
 lint=ET.parse(root/'app/build/reports/lint-results-debug.xml').getroot()
 assert not any(i.get('severity') in ('Error','Fatal') for i in lint)
 device=tools/'results/v0102/s10'
-for suite,count in [('native',4),('threads',1),('continuity',1),('prepare',1),('storage',2)]:
+for suite,count in [('native',4),('threads',1),('continuity',1),('prepare',1),('storage-native',1)]:
     text=(device/(suite+'.log')).read_text(encoding='utf-8-sig')
     assert re.search(rf'OK \({count} tests?\)',text) and 'FAILURES!!!' not in text,suite
     assert text.count('INSTRUMENTATION_STATUS_CODE: 0')==count and 'INSTRUMENTATION_STATUS_CODE: -4' not in text,suite
@@ -67,14 +67,15 @@ report=dict(version='0.10.2',versionCode=14,apkBytes=apk.stat().st_size,sha256=d
     physicalDevice=benchmark['device'],picoThreadBenchmark=benchmark,
     benchmarkEnvironment=json.loads((device/'threads-environment.json').read_text()),
     continuity={k:v for k,v in continuity.items() if k!='events'},prepareAhead=prepared,
-    androidS10Checks=9,linkedPathSafety='Also exercised on real Android; Windows host symlink case may skip',
+    androidS10Checks=8,linkedPathSafety='Exercised on physical S10; Windows host symlink case may skip',
     priorFullPublicUpgrade=prior,pending=['Flip7 measurements','Bluetooth routes','unplugged battery life','human Danish listening acceptance'],
     verifiedAtUtc=datetime.datetime.now(datetime.timezone.utc).isoformat())
-for name,count in [('v0102-emulator-regressions.log',3),('v0102-kokoro-regression.log',1)]:
+for name,count in [('v0102-emulator-regressions.log',3),('v0102-kokoro-regression.log',1),('v0102-storage-ui-emulator.log',1)]:
     log=(root/'audit'/name).read_text(encoding='utf-8-sig')
     assert re.search(rf'OK \({count} tests?\)',log) and log.count('INSTRUMENTATION_STATUS_CODE: 0')==count
     assert 'FAILURES!!!' not in log and 'INSTRUMENTATION_STATUS_CODE: -4' not in log
-report['androidEmulatorRegressionChecks']=4
+report['androidEmulatorRegressionChecks']=5
+report['physicalStorageUi']='Blocked by the S10 secure lock screen; the UI case passed on the unlocked emulator. Physical filesystem safety passed separately. No lock bypass attempted.'
 cancel=ET.parse(root/'audit/v0102-benchmark-cancelled.xml')
 assert any(n.get('text')=='Benchmark cancelled.' for n in cancel.iter('node'))
 report['foregroundBenchmarkBackgroundCancellation']='Verified through emulator UI: background, wait for STOP, reopen and observe Benchmark cancelled.'

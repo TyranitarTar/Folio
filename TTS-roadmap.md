@@ -19,6 +19,11 @@ but can still exhaust the buffer during longer sessions, particularly at 1.5× /
 - Continue evaluating Plapre 3 and Røst v3 as optional future packs using the shared
   bounded producer/player and saved source positions. Keep English Kokoro available.
 - The reading-streak cat game remains a separate planned feature.
+- Profiling follow-up: compare a low thread count for autoregressive decoding with
+  a higher count for HiFT, and measure shared/idle thread-pool overhead before changing
+  the runtime. S10 measurements show sampling is negligible; raising every stage to
+  eight threads increases CPU use while making generation slower. Test these changes
+  on Flip7 before adopting them for Pico or heavier Danish models.
 
 See [0.10.2 implementation](IMPLEMENTATION-v0.10.2.md) and
 [voice storage](IMPLEMENTATION-v0.10.2-storage.md). Version-specific entries below
