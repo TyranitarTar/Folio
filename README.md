@@ -1,6 +1,12 @@
 # Folio
 Folio is a vibe-coded Android reader with Danish and English TTS.
 
+Version **0.12.0** adds the optional **Cat Café** with Miso, three animated treat
+interactions, six complete Danish story chapters and a separate in-app test mode.
+Earn treats through active reading/listening and spend them to open his story.
+Includes reduced motion, resumable scenes, a separate café backup and the new
+cat-and-book icon. See [Miso's implementation](IMPLEMENTATION-v0.12.md).
+
 Version **0.11.0** adds experimental Plapre 3 Danish narration as an optional FP32 voice pack, independent voice/CPU choices and a Plapre 3 performance test. It uses the existing background audio queue, listening checkpoints and preparation ahead. The Library home also shows an Audiobooks coming-later section; audiobook playback and a joint UI cleanup remain future todos. See [implementation and verification scope](IMPLEMENTATION-v0.11.md).
 
 An original Android app for reading local EPUB books. Kotlin and Jetpack Compose provide the library and controls; Readium Kotlin Toolkit 3.1.2 renders EPUB content. The Windows Icecream executable and its code or artwork were not used.

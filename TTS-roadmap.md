@@ -1,5 +1,26 @@
 # Folio: page navigation and speech implementation record
 
+## Future voice research
+
+- Explore Danish TTS models with a smaller download, installed footprint and memory
+  requirement than Plapre Pico. Danish support and usable pronunciation are required.
+- Explore larger English models for a possible quality upgrade beyond Kokoro.
+  Compare quality, pack size in GB, memory and sustained generation on target phones.
+- Research only for a future release; keep the current voice packs and playback pipeline.
+
+## Cat Café · next todos
+
+Cute cat interactions, short story moments and one-off tricks/surprises for
+treats. Encourage giving treats freely, with no hoarding bonuses; review adoption
+costs so enjoying interactions does not delay meeting cats. See the
+[Café interaction todo list](design/cat-cafe/TODO.md).
+
+Each cat should have a complete original story in Danish, with character-focused
+segments inspired by Persona 5 and Love and Deepspace. Twitch-style treat
+redemptions play short animations and build per-cat story progress through
+completed redemptions, cumulative treats given and interaction milestones.
+Unlocks reward participation and spending, not hoarding; scenes remain replayable.
+
 
 
 ## 0.11: Plapre 3 implementation
@@ -40,6 +61,9 @@ model. See [implementation and verification scope](IMPLEMENTATION-v0.11.md).
 - Røst v3, dependency-aware shared acoustic storage and Folio Cat Café remain future
 
   work. The cat game includes durable reading/listening rewards and gentle streaks.
+  A reviewable [Cat Café design kit](design/cat-cafe/v1/README.md) now defines the
+  theme, six cats, twelve decorations, optional navigation and a transactional
+  reward ledger. Review the design before implementing the game.
 
 
 

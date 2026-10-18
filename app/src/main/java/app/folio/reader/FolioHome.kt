@@ -63,6 +63,9 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
             }
         }
         val books by model.books.collectAsStateWithLifecycle()
+        val cafe = (context.applicationContext as FolioApp).cafe
+        val cafeProfiles by cafe.profiles.collectAsStateWithLifecycle()
+        LaunchedEffect(cafe) { runCatching { cafe.load() } }
         val busy by model.busy.collectAsStateWithLifecycle()
         val loading by model.loading.collectAsStateWithLifecycle()
         val notice by model.notice.collectAsStateWithLifecycle()
@@ -152,8 +155,9 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
                 })
             },
             bottomBar = { NavigationBar {
-                listOf("Library" to Icons.Outlined.CollectionsBookmark, "History" to Icons.Outlined.History,
-                    "Browse" to Icons.Outlined.TravelExplore, "More" to Icons.Outlined.MoreHoriz).forEach { (name, icon) ->
+                (listOf("Library" to Icons.Outlined.CollectionsBookmark, "History" to Icons.Outlined.History) +
+                    (if(cafeProfiles.normal.enabled || tab == "Café") listOf("Café" to Icons.Outlined.Pets) else emptyList()) +
+                    listOf("Browse" to Icons.Outlined.TravelExplore, "More" to Icons.Outlined.MoreHoriz)).forEach { (name, icon) ->
                     NavigationBarItem(tab == name, { tab = name; selected = emptySet(); query = ""; searching = false },
                         icon = { Icon(icon, null) }, label = { Text(name) })
                 }
@@ -202,7 +206,9 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
                         }
                     }
                     tab == "Browse" -> SourceBrowser(open, { importBooks() }, { model.sample(open) })
+                    tab == "Café" -> CafeScreen()
                     else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+                        HomeAction("Cat Café", "Miso’s Danish story, treat interactions and test mode", Icons.Outlined.Pets, { tab = "Café" })
                         HomeAction("Reader settings", "Typography, page turns and tap zones", Icons.Outlined.MenuBook, { readerSettings = true })
                         HomeAction("Speech settings", "Offline voices and playback speed", Icons.Outlined.RecordVoiceOver, { speechSettings = true })
                         HomeAction("Voice packs", "Listen to samples and download offline voices", Icons.Outlined.Download, { voicePacks = true })

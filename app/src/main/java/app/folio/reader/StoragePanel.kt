@@ -50,6 +50,7 @@ private fun megabytes(bytes: Long) = "%.1f MB".format(java.util.Locale.ROOT, byt
             Text("Storage and recovery", style = MaterialTheme.typography.headlineSmall)
             Text("Library and annotations: ${megabytes(usage.books)}\nVoices and partial downloads: ${megabytes(usage.models)}\nGenerated audio, samples, statistics and page cache: ${megabytes(usage.cache)}")
             Text("Offline voices are optional downloads in More → Voice packs. Backups omit voice models and generated audio.", style = MaterialTheme.typography.bodySmall)
+            Text("Cat Café uses its own export and replace-on-restore backup in More → Cat Café → settings. Book backups do not include café or test progress.", style = MaterialTheme.typography.bodySmall)
             recovery?.let {
                 Text(it, color = MaterialTheme.colorScheme.error)
                 TextButton(onClick = { model.storageOperation({ model.store.dismissRecovery(); "Recovery notice dismissed. Preserved files remain available." }) }) { Text("Dismiss recovery notice") }

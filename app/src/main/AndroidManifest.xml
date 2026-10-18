@@ -9,7 +9,7 @@
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <queries><intent><action android:name="android.intent.action.TTS_SERVICE"/></intent></queries>
-    <application android:name=".FolioApp" android:label="Folio" android:icon="@drawable/ic_folio"
+    <application android:name=".FolioApp" android:label="Folio" android:icon="@mipmap/ic_folio_cat" android:roundIcon="@mipmap/ic_folio_cat_round"
         android:allowBackup="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules" android:supportsRtl="true" android:theme="@style/Theme.Folio">
         <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.updates" android:exported="false" android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/update_paths"/>

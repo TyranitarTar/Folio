@@ -216,7 +216,11 @@ class ReaderActivity : FragmentActivity() {
     private var preferencesJob: Job? = null
     private var speechFollowJob: Job? = null
     private lateinit var awake: ReaderAwakeController
+    private val cafeReading get() = (application as FolioApp).cafeReading
+    private var cafeJob: Job? = null
+    private var cafeLastInput = android.os.SystemClock.elapsedRealtime()
     private fun readerInteraction() {
+        cafeLastInput = android.os.SystemClock.elapsedRealtime()
         if(!::awake.isInitialized) return
         awake.interact();model.lastReaderInteraction=awake.session.lastInput
     }
@@ -244,8 +248,22 @@ class ReaderActivity : FragmentActivity() {
             }
         }
     }.onPreviewKeyEvent { readerInteraction();false }
-    override fun onResume() { super.onResume();if(::awake.isInitialized) awake.foreground(true) }
-    override fun onPause() { if(::awake.isInitialized) awake.foreground(false);super.onPause() }
+    override fun onResume() {
+        super.onResume(); if(::awake.isInitialized) awake.foreground(true)
+        cafeLastInput = android.os.SystemClock.elapsedRealtime()
+        cafeJob?.cancel()
+        cafeJob = lifecycleScope.launch {
+            while (true) {
+                val attentive = guided?.running?.value == true || android.os.SystemClock.elapsedRealtime() - cafeLastInput < 120_000
+                cafeReading.reader(hasWindowFocus() && navigator != null && sheet == null && !controls && attentive)
+                delay(1000)
+            }
+        }
+    }
+    override fun onPause() {
+        cafeJob?.cancel(); cafeReading.reader(false)
+        if(::awake.isInitialized) awake.foreground(false); super.onPause()
+    }
 
     internal fun isRtlNavigation() = model.navigation.direction == "RTL" || (model.navigation.direction == "Book" &&
         model.publication.value?.metadata?.readingProgression == org.readium.r2.shared.publication.ReadingProgression.RTL)

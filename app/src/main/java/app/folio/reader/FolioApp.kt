@@ -8,4 +8,6 @@ class FolioApp : Application() {
     val bookDownloads by lazy { BookDownloads(this) }
     internal val voicePacks by lazy { VoicePackStore(this) }
     internal val voiceSamples by lazy { VoiceSamplePlayer(this) }
+    internal val cafe by lazy { CafeStore(this) }
+    internal val cafeReading by lazy { CafeReadingRewards(cafe) }
 }

@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+  <group android:pivotX="54" android:pivotY="54" android:scaleX="0.75" android:scaleY="0.75">
+    <path android:fillColor="#D8A373" android:pathData="M49 35C37 28 21 36 20 50c-2 14 9 24 22 22l9-10c-13 6-22 0-22-10 0-9 10-13 17-8z"/>
+    <path android:fillColor="#E8BE94" android:pathData="M46 42V25q0-3 3-1l10 8q7-2 13 0l9-8q3-2 3 1v19c0 12-9 19-19 19S46 55 46 42"/>
+    <path android:fillColor="#BC805E" android:pathData="m49 28 1 12 8-5zm32 0-9 7 8 5z"/>
+    <path android:fillColor="#F4D7B5" android:pathData="M53 48q12-7 24 0-1 13-12 13T53 48"/>
+    <path android:fillColor="#00000000" android:pathData="M53 45q3 4 6 0m12 0q3 4 6 0m-15 7 3 2 3-2m-3 2v3" android:strokeColor="#244C41" android:strokeWidth="2.3" android:strokeLineCap="round"/>
+    <path android:fillColor="#F8F3E7" android:pathData="M24 63q16-6 30 3 14-9 30-3v23q-16-5-30 4-14-9-30-4z"/>
+    <path android:fillColor="#DCD9C9" android:pathData="M54 66v24q3-2 5-3V64z"/>
+    <path android:fillColor="#00000000" android:pathData="M31 69q8-2 16 2m-16 5q8-2 16 2m17-7q6-4 13-2m-13 9q6-4 13-2" android:strokeColor="#B6BDAA" android:strokeWidth="1.6" android:strokeLineCap="round"/>
+    <path android:fillColor="#C98664" android:pathData="M70 64q4-1 7-1v15l-3.5-3-3.5 3z"/>
+    <path android:fillColor="#E8BE94" android:pathData="M35 61q3-2 6 1l2 6q-5 3-9-1zm41-1q3-1 5 2l1 5q-4 3-8 0z"/>
+  </group>
+</vector>

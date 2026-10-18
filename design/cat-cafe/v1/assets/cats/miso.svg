@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Miso the cat">
+<ellipse cx="65" cy="108" rx="45" ry="7" fill="#244C41" opacity=".08"/>
+<path d="M39 100C17 101 17 72 29 68" fill="none" stroke="#D8A373" stroke-width="12" stroke-linecap="round"/>
+<path d="M37 102c-8-25 0-57 26-58 27 0 38 31 30 58z" fill="#D8A373"/>
+<path d="M38 43V21q0-3 3-1l15 12q9-3 18 0l15-12q3-2 3 1v26c0 20-12 31-27 31S38 65 38 43" fill="#D8A373"/>
+<path d="m42 25 1 16 10-6zm46 0-11 10 10 6z" fill="#AF7048"/>
+<path d="M49 56q16-7 33 0-2 18-16 18T49 56" fill="#F4D7B5"/>
+<g stroke="#374A3B" stroke-width="2.6" stroke-linecap="round" fill="none"><path d="M47 48q4 5 8 0m21 0q4 5 8 0m-22 9 3 2 3-2m-3 2v3"/></g>
+<path d="m59 34 3 7m7-7-3 7m-22 45 7 3m34-3-7 3" fill="none" stroke="#AF7048" stroke-width="3.5" stroke-linecap="round"/>
+<path d="M51 95v10m28-10v10" stroke="#F4D7B5" stroke-width="10" stroke-linecap="round"/>
+</svg>

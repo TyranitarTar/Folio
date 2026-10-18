@@ -32,8 +32,13 @@ for name in (".gitignore", "README.md", "TTS-roadmap.md", "build.gradle.kts", "a
 files.append(root / "verify_upgrade_v010.py")
 for name in ("IMPLEMENTATION-v0.10.1.md", "DESIGN-v0.10.1-speech-continuity-and-storage.md", "validate_release_v0101.py",
              "IMPLEMENTATION-v0.10.2.md", "IMPLEMENTATION-v0.10.2-storage.md", "validate_release_v0102.py", "verify_upgrade_v0102.py",
-             "IMPLEMENTATION-v0.11.md", "validate_release_v011.py", "verify_upgrade_v011.py"):
+             "IMPLEMENTATION-v0.11.md", "validate_release_v011.py", "verify_upgrade_v011.py",
+             "IMPLEMENTATION-v0.12.md", "validate_release_v012.py"):
     if (root / name).is_file(): files.append(root / name)
+for name in ("MISO-FIRST-CAT.md", "TODO.md"):
+    files.append(root / "design/cat-cafe" / name)
+for name in ("CAT-CAFE-GDD.md", "DESIGN-SYSTEM.md", "assets/folio-cat-book.svg", "assets/folio-cat-book-monochrome.svg", "assets/cats/miso.svg"):
+    files.append(root / "design/cat-cafe/v1" / name)
 archive = output / f"Folio-source-{version}.zip"
 with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
     for path in sorted(set(files)):

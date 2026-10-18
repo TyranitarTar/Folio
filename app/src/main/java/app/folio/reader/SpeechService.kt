@@ -381,10 +381,11 @@ class SpeechService : Service() {
         if (!result) { tts?.shutdown(); tts = null; initialized = null; return false }
         tts?.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
         tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) { scope.launch { if (gate.accepts(utteranceId)) { SpeechController.mutable.value = state().copy(playing=true,preparing=false,preparationStage="playing"); rememberCursor(); publishPlayback() } } }
+            override fun onStart(utteranceId: String?) { scope.launch { if (gate.accepts(utteranceId)) { (application as FolioApp).cafeReading.systemSpeech(true); SpeechController.mutable.value = state().copy(playing=true,preparing=false,preparationStage="playing"); rememberCursor(); publishPlayback() } } }
             override fun onRangeStart(utteranceId: String?, start: Int, end: Int, frame: Int) {
                 scope.launch {
                     if (!gate.accepts(utteranceId)) return@launch
+                    (application as FolioApp).cafeReading.systemSpeech(true)
                     var low = 0; var high = currentWordEnds.size
                     while (low < high) {
                         val middle = (low + high) ushr 1
@@ -536,6 +537,7 @@ class SpeechService : Service() {
         SpeechCheckpointCoordinator.save(this, session, point, checkpoint, mandatory, ::persistenceError)
     }
     private fun finishPassage() {
+        (application as FolioApp).cafeReading.stopSpeech()
         val here=cursor ?: return
         val last=text?.cursor(here.sectionIndex,currentStartWord+currentWords.lastIndex) ?: return
         val next=text?.next(last)
@@ -576,6 +578,7 @@ class SpeechService : Service() {
         }
         override fun onPosition(utteranceId: String, playedSamples: Int, sampleRate: Int, totalSamples: Int) {
             if (!gate.accepts(utteranceId)) return
+            if (playedSamples > aiOffset) (application as FolioApp).cafeReading.spoken()
             aiOffset = playedSamples
             aiClip?.let { pcmBudget.updateActive(it, aiOffset) }
             val now = android.os.SystemClock.elapsedRealtime()
@@ -797,6 +800,7 @@ class SpeechService : Service() {
         }
     }
     private fun pause() {
+        (application as FolioApp).cafeReading.stopSpeech()
         preparationRevision++;preparationJob?.cancel();preparationJob=null
         cancelPreview()
         transitionJob?.cancel(); transitionJob=null
@@ -988,6 +992,7 @@ class SpeechService : Service() {
         }
     }
     private fun fail(message: String) {
+        (application as FolioApp).cafeReading.stopSpeech()
         pause()
         SpeechController.mutable.value = state().copy(preparing = false, error = message, playing = false, preparationStage="error")
         publishPlayback()
@@ -1017,6 +1022,7 @@ class SpeechService : Service() {
             .setStyle(Notification.MediaStyle().setMediaSession(session.sessionToken).setShowActionsInCompactView(0, 1, 2)).build()
     }
     override fun onDestroy() {
+        (application as FolioApp).cafeReading.stopSpeech()
         destroyed = true
         pause()
         generation++; loading?.cancel(); gate.invalidate()

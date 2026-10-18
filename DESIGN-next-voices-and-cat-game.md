@@ -1,5 +1,7 @@
 # Folio: next voices and a reading cat game
 
+**18 October 2026 update:** Pico and optional Plapre 3 are now implemented in released Folio versions. The original research below is historical. Cat Café now has a dedicated [full design document](design/cat-cafe/v1/CAT-CAFE-GDD.md), [visual template](design/cat-cafe/v1/index.html) and [design system/icon kit](design/cat-cafe/v1/README.md). These are design proposals; the game and new theme are not in the released APK.
+
 Original evaluation, 14 October 2026; priorities updated 16 October 2026. The user has selected Plapre Pico as the next implementation, with evaluation first. Plapre 3, Røst v3 Chatterbox and the cat game are deferred todos. See [Pico feasibility and delivery plan](DESIGN-plapre-pico.md). This document does not claim those features are already in the APK.
 
 ## Benchmark basis
