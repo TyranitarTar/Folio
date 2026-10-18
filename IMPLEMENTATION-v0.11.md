@@ -1,8 +1,14 @@
 # Folio 0.11: Plapre 3
 
-Implementation in progress, 18 October 2026. Release only after the waveform,
-Android playback, recovery and regression checks complete. Physical Flip7
-throughput and human Danish listening acceptance must be recorded separately.
+Implemented 18 October 2026. Reference and native Android waveform, cancellation,
+ordered 1.5x playback, checkpoint recovery and silent preparation checks passed.
+All 16 selected Android cases passed: nine new-model/native/service/download
+cases and seven existing-engine/updater/storage regressions. The local build
+passed 158 JVM tests with one Windows symlink skip; lint has no errors and 41
+warnings. GitHub CI passed the same application source. The release review and
+validation JSON record the full public upgrade result after publication and
+separate functional acceptance from speed measurements.
+Physical Flip7 throughput and human Danish listening acceptance remain unmeasured.
 
 ## Engine and optional pack
 
@@ -74,6 +80,10 @@ Røst v3 and Folio Cat Café remain future tasks.
   `b111239d3b099cfafcb54b3471a8e9e9ba71ae8b`.
 - `tools/plapre3/export_lm.py`, `validate_lm.py`, `samples.py`, `make_pack.py`.
 
-Record final archive/APK sizes, hashes, test counts, recognizer observations and
-physical-device limits in the release review. ASR is a diagnostic, not a substitute
-for Danish listening or a guarantee that a stochastic voice never repeats a word.
+The signed APK is 62,274,848 bytes; the optional pack downloads 1,729,532,424 bytes
+and expands to 1,873,812,863 bytes. All five short sample transcriptions match the
+reference text with the local recognizer. Harder number/dialogue diagnostics show
+recognition or pronunciation issues. ASR is a diagnostic, not Danish listening
+acceptance or a guarantee that a stochastic voice never repeats a word. The
+release review and machine-readable validation record test counts and measured
+limits. No physical-device measurement is inferred from emulator results.

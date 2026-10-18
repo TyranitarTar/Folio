@@ -25,3 +25,9 @@ time-limit exhaustion must fail without advancing the listening cursor.
 The optional pack is self-contained and hosted on Folio's GitHub releases. Models
 remain outside the APK and source archive. The large model requires a 64-bit
 process. Host/emulator timings are not a Flip7 performance result.
+
+Published pack versions are immutable. A change to conversion, weights, padding,
+tokenizer or voice projections must receive a new pack version and release tag,
+with updated signed catalog identities. Never replace the published v1 archive
+while retaining its URL or version. This protects resumed downloads, installed
+ownership manifests and audio source checkpoints.
