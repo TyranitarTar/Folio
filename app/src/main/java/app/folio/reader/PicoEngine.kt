@@ -15,17 +15,21 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 internal object PicoNative {
     init { System.loadLibrary("onnxruntime"); System.loadLibrary("folio_pico") }
     external fun open(folder: String, threads: Int): Long
+    external fun openPlapre3(folder: String, threads: Int): Long
     external fun generate(handle: Long, prompt: IntArray, prefix: FloatArray, speaker: FloatArray, eos: Int, audioStart: Int, seed: Int, cancellation: AtomicLong, expected: Long): FloatArray
     external fun cancel(handle: Long)
     external fun close(handle: Long)
     external fun profile(handle: Long): LongArray
 }
 
-internal class PicoEngine(context: Context, requestedThreads: Int = 0) : LocalSpeechEngine {
+/** Shared Kanade/HiFT pipeline; the larger model keeps its own pinned files and cache identity. */
+internal class PicoEngine(context: Context, requestedThreads: Int = 0, private val plapre3: Boolean = false) : LocalSpeechEngine {
     val inferenceThreads = if (requestedThreads == 0) Runtime.getRuntime().availableProcessors().coerceIn(1,4) else requestedThreads.also { require(it in 1..8) }
     @Volatile var lastProfile: LongArray = LongArray(7); private set
     private var modelLease: java.io.Closeable? = null
-    override val backend = "pico"
+    override val backend = if(plapre3) "plapre3" else "pico"
+    private val modelVersion get() = if(plapre3) Plapre3Model.VERSION else VERSION
+    private val label get() = if(plapre3) "Plapre 3" else "Pico"
     private val app = context.applicationContext
     private val closed = AtomicBoolean()
     private val generation = AtomicLong()
@@ -37,11 +41,13 @@ internal class PicoEngine(context: Context, requestedThreads: Int = 0) : LocalSp
 
     override suspend fun prepare() {
         if (prepared) return
-        synchronized(this) { check(!closed.get()) { "Pico engine is closed." }; if (modelLease == null) modelLease = VoiceModelUse.acquire(app, VERSION) }
-        val files = VerifiedSpeechAssets.prepare(app, "pico", VERSION, PicoPackIdentity.files, closed::get)
+        if(plapre3) check(android.os.Process.is64Bit()) { "Plapre 3 needs 64-bit Android. Pico remains available on this device." }
+        synchronized(this) { check(!closed.get()) { "$label engine is closed." }; if (modelLease == null) modelLease = VoiceModelUse.acquire(app, modelVersion) }
+        val files = VerifiedSpeechAssets.prepare(app, backend, modelVersion, if(plapre3) Plapre3PackIdentity.files else PicoPackIdentity.files, closed::get)
         onWorker {
             if (native == 0L) {
                 val tokens = PicoTokenizer(File(files, "tokenizer.json").readText())
+                check(!plapre3 || tokens.audioEnd==21223) { "Plapre 3 tokenizer does not match this app." }
                 val metadata = JSONArray(File(files, "voices.json").readText())
                 val loaded = (0 until metadata.length()).map { i ->
                     val voice = metadata.getJSONObject(i)
@@ -50,27 +56,27 @@ internal class PicoEngine(context: Context, requestedThreads: Int = 0) : LocalSp
                         require(values.length() == count)
                         FloatArray(count) { n -> values.getDouble(n).toFloat().also { require(it.isFinite()) } }
                     }
-                    array("prefix", 576) to array("embedding", 128)
+                    array("prefix", if(plapre3)960 else 576) to array("embedding", 128)
                 }
                 require(loaded.size == voiceNames.size)
-                val handle = PicoNative.open(files.absolutePath, inferenceThreads)
+                val handle = if(plapre3) PicoNative.openPlapre3(files.absolutePath,inferenceThreads) else PicoNative.open(files.absolutePath, inferenceThreads)
                 if (closed.get()) { PicoNative.close(handle); throw CancellationException("Pico preparation cancelled") }
                 tokenizer = tokens; voices = loaded; native = handle; ready = true
             }
         }
     }
     override suspend fun generate(text: String, settings: SpeechSettings): AiAudioClip {
-        require(text.isNotBlank() && text.length <= 400) { "Choose a shorter passage for Pico." }
-        require(settings.picoVoice in voiceNames.indices) { "Choose an installed Danish Pico voice." }
+        require(text.isNotBlank() && text.length <= 400) { "Choose a shorter passage for $label." }
+        require(settings.backend==backend && settings.localVoice in voiceNames.indices) { "Choose an installed Danish $label voice." }
         val request = generation.get()
         prepare(); currentCoroutineContext().ensureActive()
         val normalized = normalize(text)
         return onWorker {
             if (request != generation.get()) throw CancellationException("Pico generation cancelled")
             val tokens = requireNotNull(tokenizer)
-            val voice = voices[settings.picoVoice]
+            val voice = voices[settings.localVoice]
             val started = System.nanoTime()
-            SpeechDiagnostics.record("pico.synthesis.start")
+            SpeechDiagnostics.record("$backend.synthesis.start")
             val raw = try { PicoNative.generate(native, tokens.prompt(normalized), voice.first, voice.second, tokens.eos, tokens.audioStart, 42, generation, request) }
                 catch (error: Exception) { if (request != generation.get() || closed.get()) throw CancellationException("Pico generation cancelled"); throw error }
             lastProfile = PicoNative.profile(native)
@@ -79,7 +85,7 @@ internal class PicoEngine(context: Context, requestedThreads: Int = 0) : LocalSp
             val samples = PicoPadding.trim(raw, 24000).samples
             SpeechPcm.validate(samples, 24000, normalize = false)
             val clip = AiAudioClip(samples, 24000, (System.nanoTime() - started) / 1_000_000, SpeechPcm.digest(samples, 24000))
-            SpeechDiagnostics.record("pico.synthesis.end", clip.digest.orEmpty(), samples.size, 24000, raw.size)
+            SpeechDiagnostics.record("$backend.synthesis.end", clip.digest.orEmpty(), samples.size, 24000, raw.size)
             clip
         }
     }

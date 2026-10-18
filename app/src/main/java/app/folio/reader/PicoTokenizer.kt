@@ -23,6 +23,7 @@ internal class PicoTokenizer(raw: String) {
     }
     val eos = special.getValue("<eos>")
     val audioStart = special.getValue("<audio_0>")
+    val audioEnd = special["</audio>"]
     private val byteCharacters = Array(256) { "" }.also { table ->
         val visible = ((33..126).toList() + (161..172).toList() + (174..255).toList()).toSet()
         var extra = 256
@@ -33,6 +34,7 @@ internal class PicoTokenizer(raw: String) {
         require(data.getJSONObject("pre_tokenizer").getString("type") == "ByteLevel")
         require(!data.getJSONObject("pre_tokenizer").getBoolean("add_prefix_space"))
         require(eos == 0 && audioStart == 8002 && special.getValue("<audio_12799>") == 20801)
+        require(audioEnd==null || audioEnd==21223)
     }
     fun encode(text: String): IntArray {
         val normalized = Normalizer.normalize(text, Normalizer.Form.NFC)

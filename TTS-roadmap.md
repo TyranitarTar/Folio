@@ -1,5 +1,25 @@
 # Folio: page navigation and speech implementation record
 
+## 0.11: selected implementation
+
+Updated 18 October 2026. Implement Plapre 3 as an optional FP32 Danish pack while
+keeping Pico, Kokoro and Supertonic. Reuse the checkpointed producer/player,
+background preparation, downloads and samples. Give Plapre 3 its own saved voice
+and thread choices and run the existing on-device benchmark against either Plapre
+model. See [implementation and verification scope](IMPLEMENTATION-v0.11.md).
+
+- Complete waveform/reference checks, Android generation/cancellation, queued
+  playback, source-position recovery, preparation-ahead and existing-engine tests.
+- Measure Flip7 sustained speed and memory when the device is available. A larger
+  model fitting into memory does not establish continuous 1.5x or 2x narration.
+- Audiobooks: show a coming-later section on the home screen in 0.11. Future todo:
+  design local audiobook import, chapter metadata, saved listening positions,
+  background/media controls and library integration; then implement playback.
+- Future todo: review and clean up the UI together with the user. Do not redesign
+  the app unilaterally as part of this voice release.
+- Røst v3, dependency-aware shared acoustic storage and Folio Cat Café remain future
+  work. The cat game includes durable reading/listening rewards and gentle streaks.
+
 ## 0.10.2 and device priorities
 
 Updated 18 October 2026. The user accepts Pico's remaining Galaxy S10 limitations;

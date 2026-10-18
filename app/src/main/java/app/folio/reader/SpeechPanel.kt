@@ -41,7 +41,7 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
     val pack=app.voicePacks.forBackend(settings.backend)
     val localReady=!settings.isLocal || pack?.let { packStates[it.id]?.phase=="Ready" }==true
     val localVoices = when (settings.backend) {
-        "pico" -> PicoEngine.voiceNames.mapIndexed { i, label -> SpeechVoice(i.toString(), label) }
+        "pico", "plapre3" -> PicoEngine.voiceNames.mapIndexed { i, label -> SpeechVoice(i.toString(), label) }
         "supertonic" -> SupertonicEngine.voices.map { SpeechVoice(it.id.toString(), it.label) }
         "kokoro" -> KokoroEngine.voices.map { SpeechVoice(it.id.toString(), it.label) }
         else -> emptyList()
@@ -68,6 +68,9 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
         Text("Offline speech", style = MaterialTheme.typography.titleSmall)
         Text(if (settingsOnly) "Choose an offline voice and speed. Open a book to start listening." else "Listening has its own saved position. Browsing the book does not move it.", style = MaterialTheme.typography.bodyMedium)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected=settings.backend=="plapre3",onClick={
+                settings=settings.copy(backend="plapre3");SpeechController.settings(context,settings)
+            },label={Text("Plapre 3 · Dansk")})
             FilterChip(selected = settings.backend == "pico", onClick = {
                 settings = settings.copy(backend = "pico"); SpeechController.settings(context, settings)
             }, label = { Text("Plapre Pico · Dansk") })
@@ -88,6 +91,7 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
         if (settings.backend == "kokoro") Text("Kokoro speaks entirely on your device after its voice pack is installed. Model loading may take a little longer on the first start.",
             style = MaterialTheme.typography.bodySmall)
         if (settings.backend == "pico") Text("Experimental Danish narration, entirely on your device. Preparing the voice can take longer on first use. Higher playback speeds may need more buffering.", style = MaterialTheme.typography.bodySmall)
+        if(settings.backend=="plapre3") Text("Experimental Danish narration with a larger FP32 model. Requires 64-bit Android. Loading and generation can take longer; prepare chapter audio ahead if playback catches up.",style=MaterialTheme.typography.bodySmall)
         if (settings.backend == "supertonic") {
             Text("Supertonic speaks English and Danish offline after its voice pack is installed.", style = MaterialTheme.typography.bodySmall)
             Text("Language", style = MaterialTheme.typography.titleSmall)
@@ -102,17 +106,17 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
         if (thisBook && state.preparing) LinearProgressIndicator(Modifier.fillMaxWidth())
         if (thisBook && state.preparing) Text(state.preparation, style = MaterialTheme.typography.bodySmall)
         if(thisBook && state.preparationStage=="prepared") Text(state.preparation,style=MaterialTheme.typography.bodySmall)
-        if(settings.backend=="pico") {
-            Text("Pico inference threads",style=MaterialTheme.typography.titleSmall)
+        if(settings.isPlapre) {
+            Text("${settings.engineLabel} inference threads",style=MaterialTheme.typography.titleSmall)
             FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                 listOf(0,1,2,4,6,8).forEach { threads ->
-                    FilterChip(settings.picoThreads==threads,{
-                        settings=settings.copy(picoThreads=threads);SpeechController.settings(context,settings)
+                    FilterChip(settings.inferenceThreads==threads,{
+                        settings=if(settings.backend=="plapre3")settings.copy(plapre3Threads=threads) else settings.copy(picoThreads=threads);SpeechController.settings(context,settings)
                     },label={Text(if(threads==0)"Auto (up to 4)" else "$threads")})
                 }
             }
             Text("More threads may increase heat or be slower. Use the performance test to compare on this device.",style=MaterialTheme.typography.bodySmall)
-            OutlinedButton(onClick={diagnosticsOpen=true}) { Text("Pico performance test") }
+            OutlinedButton(onClick={diagnosticsOpen=true}) { Text("${if(settings.backend=="plapre3")"Plapre 3" else "Pico"} performance test") }
             if(!settingsOnly) OutlinedButton(onClick={SpeechController.prepareChapter(context,bookId)},enabled=localReady && !state.preparing) { Text("Prepare chapter ahead") }
             if(!settingsOnly) Text("Prepare from the listening position while paused, up to about 8 minutes of audio. Books and listening progress stay in place; resume manually.",style=MaterialTheme.typography.bodySmall)
         }
@@ -154,7 +158,8 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
             DropdownMenu(expanded = voiceMenu, onDismissRequest = { voiceMenu = false }) {
                 if (settings.isLocal) localVoices.forEach { voice ->
                     DropdownMenuItem(text = { Text(voice.label) }, onClick = {
-                        settings = if (settings.backend == "pico") settings.copy(picoVoice = voice.name.toInt())
+                        settings = if(settings.backend=="plapre3")settings.copy(plapre3Voice=voice.name.toInt())
+                            else if (settings.backend == "pico") settings.copy(picoVoice = voice.name.toInt())
                             else if (settings.backend == "supertonic") settings.copy(supertonicVoice = voice.name.toInt())
                             else settings.copy(aiVoice = voice.name.toInt())
                         SpeechController.settings(context, settings); voiceMenu = false
@@ -223,5 +228,5 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
             style = MaterialTheme.typography.bodySmall)
     }
     if(packsOpen)VoicePacksPanel(initialBackend=settings.backend,close={packsOpen=false})
-    if(diagnosticsOpen)PicoDiagnosticsPanel(close={diagnosticsOpen=false})
+    if(diagnosticsOpen)PicoDiagnosticsPanel(backend=settings.backend,close={diagnosticsOpen=false})
 }

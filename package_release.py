@@ -31,7 +31,8 @@ for name in (".gitignore", "README.md", "TTS-roadmap.md", "build.gradle.kts", "a
         files.append(path)
 files.append(root / "verify_upgrade_v010.py")
 for name in ("IMPLEMENTATION-v0.10.1.md", "DESIGN-v0.10.1-speech-continuity-and-storage.md", "validate_release_v0101.py",
-             "IMPLEMENTATION-v0.10.2.md", "IMPLEMENTATION-v0.10.2-storage.md", "validate_release_v0102.py", "verify_upgrade_v0102.py"):
+             "IMPLEMENTATION-v0.10.2.md", "IMPLEMENTATION-v0.10.2-storage.md", "validate_release_v0102.py", "verify_upgrade_v0102.py",
+             "IMPLEMENTATION-v0.11.md", "validate_release_v011.py", "verify_upgrade_v011.py"):
     if (root / name).is_file(): files.append(root / name)
 archive = output / f"Folio-source-{version}.zip"
 with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
@@ -44,6 +45,9 @@ with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
     for path in sorted(list(pico_tools.glob("*.py")) + list((pico_tools / "licenses").glob("*.txt")) +
                        [pico_tools / "requirements.txt", pico_tools / "README.md", pico_tools / ".gitignore"]):
         if path.is_file(): bundle.write(path, Path("Folio/pico-tools") / path.relative_to(pico_tools))
+    plapre3_tools=root.parent/"tools/plapre3"
+    for path in sorted(list(plapre3_tools.glob("*.py"))+[plapre3_tools/"README.md",plapre3_tools/".gitignore",plapre3_tools/"upstream-manifest.json",plapre3_tools/"reference-source.json"]):
+        if path.is_file():bundle.write(path,Path("Folio/plapre3-tools")/path.relative_to(plapre3_tools))
 print(f"Packaged {apk.name} ({apk.stat().st_size:,} bytes), SHA-256 {digest}")
 print(f"Source: {archive.name}, {len(set(files))} files")
 native = output / f"Folio-native-source-{version}.zip"

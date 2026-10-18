@@ -70,6 +70,9 @@ internal class VoicePackStore(private val context: Context) {
     }
     fun enqueue(id: String) {
         val pack=pack(id);val old=state(id)
+        if(pack.backend=="plapre3" && !android.os.Process.is64Bit()) {
+            update(old.copy(phase="Failed",message="Plapre 3 needs 64-bit Android."),force=true);return
+        }
         if(old.busy || old.phase=="Ready")return
         update(old.copy(phase="Queued",message="Waiting for a connection"),force=true)
         val request=OneTimeWorkRequestBuilder<VoicePackWorker>().setInputData(workDataOf("pack" to id,"version" to pack.version))

@@ -173,6 +173,15 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
                         ScrollableTabRow((listOf("All books") + prefs.shelves).indexOf(shelf).coerceAtLeast(0), edgePadding = 12.dp) {
                             (listOf("All books") + prefs.shelves).forEach { label -> Tab(shelf == label, { shelf = label }, text = { Text(label) }) }
                         }
+                        OutlinedCard(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=8.dp)) {
+                            Row(Modifier.padding(12.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                                Icon(Icons.Outlined.Headphones,null)
+                                Column {
+                                    Text("Audiobooks",style=MaterialTheme.typography.titleSmall)
+                                    Text("Coming later · your audiobook library",style=MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
                         if (prefs.status != "All" || prefs.annotated) Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             AssistChip(onClick = { settings = true }, label = { Text(listOfNotNull(prefs.status.takeIf { it != "All" }, "Annotated".takeIf { prefs.annotated }).joinToString(" · ")) })
                             TextButton(onClick = { update(prefs.copy(status = "All", annotated = false)) }) { Text("Clear filters") }

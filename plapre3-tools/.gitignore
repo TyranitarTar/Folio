@@ -1,0 +1,9 @@
+artifacts/
+export/
+results/
+reference-deps/
+reference/
+venv/
+__pycache__/
+*.log
+*.partial

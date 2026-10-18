@@ -51,6 +51,32 @@ internal object VoicePackHttp {
     }
 }
 
+/** Remaining download + staging, using Long throughout for multi-GB packs. */
+internal object VoicePackInstallSpace {
+    fun additionalBytes(pack:VoicePack,folder:File):Long {
+        val complete=File(folder,"archive.zip")
+        val retained=if(complete.isFile && complete.length()==pack.bytes)pack.bytes else {
+            val partial=File(folder,"archive.part")
+            val identity=runCatching {
+                val raw=File(folder,"transfer.json").inputStream().use { input ->
+                    val buffer=ByteArray(16385);var size=0
+                    while(size<buffer.size) {
+                        val n=input.read(buffer,size,buffer.size-size)
+                        if(n<0)break
+                        size+=n
+                    }
+                    require(size<=16384)
+                    String(buffer,0,size,Charsets.UTF_8)
+                }
+                BoundedJson.check(raw,8,100)
+                JSONObject(raw).let{it.optString("url")==pack.url && it.optString("sha256")==pack.sha256}
+            }.getOrDefault(false)
+            if(identity && partial.isFile && partial.length() in 0..pack.bytes)partial.length() else 0L
+        }
+        return pack.bytes-retained+pack.expandedBytes+32L*1024*1024
+    }
+}
+
 class VoicePackCancelReceiver: BroadcastReceiver() {
     override fun onReceive(context: Context,intent: Intent) {
         val id=intent.getStringExtra("pack") ?: return
@@ -73,7 +99,8 @@ class VoicePackWorker(context: Context,params: WorkerParameters): CoroutineWorke
             if(store.state(pack.id).retryAt>System.currentTimeMillis())return@withContext Result.retry()
             setForeground(notification(pack,"Downloading voice data"))
             val folder=store.transferFolder(pack)
-            require(folder.usableSpace>pack.bytes+pack.expandedBytes+32L*1024*1024) { "Free at least ${(pack.bytes+pack.expandedBytes+32L*1024*1024)/1_000_000} MB to download and install this pack." }
+            val requiredSpace=VoicePackInstallSpace.additionalBytes(pack,folder)
+            require(folder.usableSpace>=requiredSpace) { "Free at least ${(requiredSpace+999_999)/1_000_000} MB to download and install this pack." }
             val archive=download(pack,folder) { count ->store.update(VoicePackState(pack.id,"Downloading",count,"Downloading voice data")) }
             currentCoroutineContext().ensureActive()
             if(store.state(pack.id).phase=="Cancelled")return@withContext Result.success()

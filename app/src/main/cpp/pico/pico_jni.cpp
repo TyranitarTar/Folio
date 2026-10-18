@@ -18,10 +18,11 @@
 #include <vector>
 
 namespace {
-constexpr size_t hidden = 576, vocabulary = 20802, cache_count = 60;
 std::mutex engines_mutex;
 std::atomic<jlong> next_id{1};
 struct Engine {
+    const bool plapre3;
+    const size_t hidden, vocabulary, cache_count, kv_heads;
     Ort::Env environment{ORT_LOGGING_LEVEL_WARNING, "Folio Pico"};
     Ort::SessionOptions options;
     Ort::RunOptions run_options;
@@ -32,11 +33,15 @@ struct Engine {
     std::atomic<bool> cancelled{false};
     std::mutex profile_mutex;
     std::array<jlong,7> last_profile{}; // prefill, decode, sampling, Kanade, HiFT, total ns; code count.
-    Engine(const std::string& folder, int threads) {
+    Engine(const std::string& folder, int threads, bool larger=false)
+        : plapre3(larger),hidden(larger?960:576),vocabulary(larger?21224:20802),
+          cache_count(larger?64:60),kv_heads(larger?5:3) {
         options.SetIntraOpNumThreads(threads);
         options.SetInterOpNumThreads(1);
         options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-        language = std::make_unique<Ort::Session>(environment, (folder+"/pico.onnx").c_str(), options);
+        // Independent idle pools must not busy-spin while another synthesis stage runs.
+        if(plapre3) options.AddConfigEntry("session.intra_op.allow_spinning","0");
+        language = std::make_unique<Ort::Session>(environment, (folder+(plapre3?"/plapre3.onnx":"/pico.onnx")).c_str(), options);
         kanade = std::make_unique<Ort::Session>(environment, (folder+"/kanade.onnx").c_str(), options);
         hift = std::make_unique<Ort::Session>(environment, (folder+"/hift.onnx").c_str(), options);
         std::ifstream file(folder+"/embeddings.bin", std::ios::binary|std::ios::ate);
@@ -45,11 +50,11 @@ struct Engine {
         embeddings.resize(vocabulary*hidden);
         file.seekg(0); file.read(reinterpret_cast<char*>(embeddings.data()), embeddings.size()*sizeof(float));
         if (!file) throw std::runtime_error("Pico embedding table could not be read.");
-        if (language->GetInputCount()!=63 || language->GetOutputCount()!=61)
+        if (language->GetInputCount()!=cache_count+3 || language->GetOutputCount()!=cache_count+1)
             throw std::runtime_error("Pico model signature does not match this app.");
         Ort::AllocatorWithDefaultOptions allocator;
-        for(size_t i=0;i<63;i++) input_names.emplace_back(language->GetInputNameAllocated(i,allocator).get());
-        for(size_t i=0;i<61;i++) output_names.emplace_back(language->GetOutputNameAllocated(i,allocator).get());
+        for(size_t i=0;i<cache_count+3;i++) input_names.emplace_back(language->GetInputNameAllocated(i,allocator).get());
+        for(size_t i=0;i<cache_count+1;i++) output_names.emplace_back(language->GetOutputNameAllocated(i,allocator).get());
         for(auto& name:input_names) inputs.push_back(name.c_str());
         for(auto& name:output_names) outputs.push_back(name.c_str());
     }
@@ -67,32 +72,46 @@ struct Engine {
         std::array<jlong,7> timing{};
         auto memory=Ort::MemoryInfo::CreateCpu(OrtArenaAllocator,OrtMemTypeDefault);
         std::vector<Ort::Value> cache;
-        std::array<int64_t,4> empty_shape{1,3,0,64}; float dummy=0;
+        std::array<int64_t,4> empty_shape{1,static_cast<int64_t>(kv_heads),0,64}; float dummy=0;
         for(size_t i=0;i<cache_count;i++) cache.push_back(Ort::Value::CreateTensor<float>(memory,&dummy,0,empty_shape.data(),4));
         int64_t position=0;
-        auto step=[&](float* embedding) {
+        auto step=[&](float* embedding, size_t sequence=1) {
             check();
-            std::array<int64_t,3> embed_shape{1,1,576};
-            std::array<int64_t,2> mask_shape{1,position+1};
-            std::array<int64_t,1> pos_shape{1};
-            std::vector<int64_t> mask(static_cast<size_t>(position+1),1);
+            std::array<int64_t,3> embed_shape{1,static_cast<int64_t>(sequence),static_cast<int64_t>(hidden)};
+            std::array<int64_t,2> mask_shape{1,position+static_cast<int64_t>(sequence)};
+            std::array<int64_t,1> pos_shape{static_cast<int64_t>(sequence)};
+            std::vector<int64_t> mask(static_cast<size_t>(position)+sequence,1),positions(sequence);
+            std::iota(positions.begin(),positions.end(),position);
             std::vector<Ort::Value> values;
-            values.reserve(63);
-            values.push_back(Ort::Value::CreateTensor<float>(memory,embedding,hidden,embed_shape.data(),3));
+            values.reserve(cache_count+3);
+            values.push_back(Ort::Value::CreateTensor<float>(memory,embedding,hidden*sequence,embed_shape.data(),3));
             values.push_back(Ort::Value::CreateTensor<int64_t>(memory,mask.data(),mask.size(),mask_shape.data(),2));
-            values.push_back(Ort::Value::CreateTensor<int64_t>(memory,&position,1,pos_shape.data(),1));
+            values.push_back(Ort::Value::CreateTensor<int64_t>(memory,positions.data(),positions.size(),pos_shape.data(),1));
             for(auto& value:cache) values.push_back(std::move(value));
             auto result=language->Run(run_options,inputs.data(),values.data(),values.size(),outputs.data(),outputs.size());
-            std::vector<float> logits(result[0].GetTensorData<float>(),result[0].GetTensorData<float>()+vocabulary);
+            const float* last=result[0].GetTensorData<float>()+(sequence-1)*vocabulary;
+            std::vector<float> logits(last,last+vocabulary);
             cache.clear();
             for(size_t i=1;i<result.size();i++) cache.push_back(std::move(result[i]));
-            position++;
+            position+=static_cast<int64_t>(sequence);
             return logits;
         };
-        auto logits=step(prefix.data());
+        std::vector<float> logits;
+        if(plapre3) {
+            // A whole-prompt prefill avoids one native inference call per text token.
+            std::vector<float> prefill(prefix);
+            for(auto token:prompt) {
+                if(token<0 || static_cast<size_t>(token)>=vocabulary) throw std::runtime_error("Invalid Plapre 3 prompt token.");
+                auto* begin=embeddings.data()+static_cast<size_t>(token)*hidden;
+                prefill.insert(prefill.end(),begin,begin+hidden);
+            }
+            logits=step(prefill.data(),prompt.size()+1);
+        } else {
+        logits=step(prefix.data());
         for(auto token:prompt) {
             if(token<0 || static_cast<size_t>(token)>=vocabulary) throw std::runtime_error("Invalid Pico prompt token.");
             logits=step(embeddings.data()+static_cast<size_t>(token)*hidden);
+        }
         }
         timing[0]=nanos(beginning);
         std::mt19937 random(seed);
@@ -119,7 +138,7 @@ struct Engine {
             std::discrete_distribution<size_t> sample(probabilities.begin(),probabilities.end());
             int token=static_cast<int>(indices[sample(random)]);
             timing[2]+=nanos(sampling_started);
-            if(token==eos) {stopped=true;break;}
+            if(token==eos || (plapre3 && token==21223)) {stopped=true;break;}
             if(token<audio_start || token>=audio_start+12800) throw std::runtime_error("Pico returned an invalid audio token.");
             codes.push_back(token-audio_start);
             logits=step(embeddings.data()+static_cast<size_t>(token)*hidden);
@@ -182,17 +201,29 @@ extern "C" JNIEXPORT jlong JNICALL Java_app_folio_reader_PicoNative_open(JNIEnv*
         std::lock_guard<std::mutex> lock(engines_mutex); engines[id]=engine; return id;
     } catch(const std::exception& e) {error(env,e);return 0;}
 }
+extern "C" JNIEXPORT jlong JNICALL Java_app_folio_reader_PicoNative_openPlapre3(JNIEnv* env,jobject,jstring folder,jint threads) {
+    try {
+        if(sizeof(void*)!=8) throw std::runtime_error("Plapre 3 needs a 64-bit Android device.");
+        if(threads<1 || threads>8) throw std::runtime_error("Unsupported Plapre 3 thread count.");
+        const char* raw=env->GetStringUTFChars(folder,nullptr);
+        std::string path(raw);env->ReleaseStringUTFChars(folder,raw);
+        auto engine=std::make_shared<Engine>(path,threads,true);
+        auto id=next_id.fetch_add(1);
+        std::lock_guard<std::mutex> lock(engines_mutex);engines[id]=engine;return id;
+    } catch(const std::exception& e) {error(env,e);return 0;}
+}
 extern "C" JNIEXPORT jfloatArray JNICALL Java_app_folio_reader_PicoNative_generate(JNIEnv* env,jobject,jlong id,jintArray prompt,jfloatArray prefix,jfloatArray speaker,jint eos,jint audio_start,jint seed,jobject cancellation,jlong expected) {
     try {
-        if(env->GetArrayLength(prefix)!=576 || env->GetArrayLength(speaker)!=128 || env->GetArrayLength(prompt)>512 || eos<0 || eos>=8002 || audio_start!=8002)
+        auto engine=get(id);
+        if(static_cast<size_t>(env->GetArrayLength(prefix))!=engine->hidden || env->GetArrayLength(speaker)!=128 || env->GetArrayLength(prompt)>512 || eos!=0 || audio_start!=8002)
             throw std::runtime_error("Pico input configuration is invalid.");
-        std::vector<int> tokens(env->GetArrayLength(prompt)); std::vector<float> projected(576),voice(128);
+        std::vector<int> tokens(env->GetArrayLength(prompt)); std::vector<float> projected(engine->hidden),voice(128);
         env->GetIntArrayRegion(prompt,0,tokens.size(),tokens.data());
-        env->GetFloatArrayRegion(prefix,0,576,projected.data()); env->GetFloatArrayRegion(speaker,0,128,voice.data());
+        env->GetFloatArrayRegion(prefix,0,engine->hidden,projected.data()); env->GetFloatArrayRegion(speaker,0,128,voice.data());
         auto counter_class=env->GetObjectClass(cancellation);
         auto counter_get=env->GetMethodID(counter_class,"get","()J");
         if(!counter_get) throw std::runtime_error("Pico cancellation counter is unavailable.");
-        auto audio=get(id)->generate(tokens,projected,voice,eos,audio_start,static_cast<uint32_t>(seed),
+        auto audio=engine->generate(tokens,projected,voice,eos,audio_start,static_cast<uint32_t>(seed),
             [&] {return env->CallLongMethod(cancellation,counter_get)!=expected;});
         auto result=env->NewFloatArray(audio.size());
         if(result) env->SetFloatArrayRegion(result,0,audio.size(),audio.data());

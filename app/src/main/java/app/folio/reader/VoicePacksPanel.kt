@@ -61,6 +61,7 @@ private data class VoiceCleanupRequest(val kind:VoiceCleanup,val entries:List<Vo
                 refresh={storageRefresh++},clean={kind->cleanup=VoiceCleanupRequest(kind,inventory?.reclaimable(kind).orEmpty())},cancel={cleanupJob?.cancel();storageMessage="Cleanup cancelled. Refreshing remaining files."}) }
             items(store.catalog.sortedBy { if(it.backend==initialBackend)0 else 1 },key={it.id}) { pack ->
                 val state=states.getValue(pack.id)
+                val compatible=pack.backend!="plapre3" || android.os.Process.is64Bit()
                 var language by rememberSaveable(pack.id) { mutableStateOf(pack.languages.first()) }
                 var voiceId by rememberSaveable(pack.id) { mutableStateOf(pack.voices.first { it.language==language }.id) }
                 var menu by remember { mutableStateOf(false) }
@@ -70,6 +71,7 @@ private data class VoiceCleanupRequest(val kind:VoiceCleanup,val entries:List<Vo
                 ElevatedCard(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
                     Text(pack.label,style=MaterialTheme.typography.titleLarge)
                     Text("${pack.bytes/1_000_000} MB download · ${pack.expandedBytes/1_000_000} MB installed",style=MaterialTheme.typography.bodySmall)
+                    if(pack.backend=="plapre3")Text(if(compatible)"Large FP32 model. Try a voice sample first; preparing audio ahead can reduce buffering." else "Plapre 3 needs 64-bit Android. Samples and the other packs remain available.",style=MaterialTheme.typography.bodySmall)
                     Text(state.phase,style=MaterialTheme.typography.labelLarge)
                     if(state.message.isNotBlank())Text(state.message,style=MaterialTheme.typography.bodySmall)
                     if(state.busy) {
@@ -100,6 +102,7 @@ private data class VoiceCleanupRequest(val kind:VoiceCleanup,val entries:List<Vo
                     if(state.phase=="Ready") {
                         val selected=SpeechSettings.load(context).copy(backend=pack.backend,aiVoice=if(pack.backend=="kokoro")voice.id.toInt() else SpeechSettings.load(context).aiVoice,
                             picoVoice=if(pack.backend=="pico")voice.id.toInt() else SpeechSettings.load(context).picoVoice,
+                            plapre3Voice=if(pack.backend=="plapre3")voice.id.toInt() else SpeechSettings.load(context).plapre3Voice,
                             supertonicVoice=if(pack.backend=="supertonic")voice.id.toInt() else SpeechSettings.load(context).supertonicVoice,supertonicLanguage=language)
                         TextButton(onClick={ samples.stop();if(speech.previewing)SpeechController.cancelPreview(context) else SpeechController.preview(context,selected) }) {
                             Text(if(speech.previewing)"Stop local preview" else "Local preview · ${selected.rate}×")
@@ -111,7 +114,7 @@ private data class VoiceCleanupRequest(val kind:VoiceCleanup,val entries:List<Vo
                             state.phase=="Ready" -> TextButton(onClick={remove=pack}) { Icon(Icons.Outlined.Delete,null);Text("Remove pack") }
                             state.phase in setOf("Queued","Downloading","Verifying","Installing") -> TextButton(onClick={scope.launch(Dispatchers.IO){store.cancelDownload(pack.id)}}) { Text("Cancel download") }
                             state.busy -> Unit
-                            else -> Button(onClick={download=pack}) { Icon(Icons.Outlined.Download,null);Text(if(state.phase=="Cancelled")"Resume download" else if(state.phase=="Failed")"Retry download" else "Download pack") }
+                            else -> Button(onClick={download=pack},enabled=compatible) { Icon(Icons.Outlined.Download,null);Text(if(state.phase=="Cancelled")"Resume download" else if(state.phase=="Failed")"Retry download" else "Download pack") }
                         }
                     }
                     Text(pack.license,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)

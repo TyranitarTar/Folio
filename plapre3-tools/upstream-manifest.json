@@ -1,0 +1,120 @@
+{
+  "_id": "6accb73a285b7e7c4dced658",
+  "id": "syvai/plapre-3",
+  "private": false,
+  "pipeline_tag": "text-to-speech",
+  "library_name": "transformers",
+  "tags": [
+    "transformers",
+    "safetensors",
+    "llama",
+    "text-generation",
+    "text-to-speech",
+    "da",
+    "base_model:syvai/plapre-nano-v2",
+    "base_model:finetune:syvai/plapre-nano-v2",
+    "license:cc-by-4.0",
+    "text-generation-inference",
+    "endpoints_compatible",
+    "region:us"
+  ],
+  "downloads": 239,
+  "likes": 1,
+  "modelId": "syvai/plapre-3",
+  "author": "syvai",
+  "sha": "5300281a08c692a5ad18c9f00a4a47aa3dff9148",
+  "lastModified": "2026-10-12T13:19:36.000Z",
+  "gated": false,
+  "disabled": false,
+  "model-index": null,
+  "config": {
+    "architectures": [
+      "LlamaForCausalLM"
+    ],
+    "model_type": "llama",
+    "tokenizer_config": {
+      "eos_token": "<eos>",
+      "pad_token": "<eos>"
+    }
+  },
+  "cardData": {
+    "language": [
+      "da"
+    ],
+    "license": "cc-by-4.0",
+    "library_name": "transformers",
+    "pipeline_tag": "text-to-speech",
+    "base_model": "syvai/plapre-nano-v2"
+  },
+  "transformersInfo": {
+    "auto_model": "AutoModelForCausalLM",
+    "pipeline_tag": "text-generation",
+    "processor": "AutoTokenizer"
+  },
+  "siblings": [
+    {
+      "rfilename": ".gitattributes",
+      "blobId": "a6344aac8c09253b3b630fb776ae94478aa0275b",
+      "size": 1519
+    },
+    {
+      "rfilename": "README.md",
+      "blobId": "6ea36c67a261c8836ac258e944387adb62261f94",
+      "size": 9457
+    },
+    {
+      "rfilename": "config.json",
+      "blobId": "aa533d57948c9636d3116cf4426c2c7fb1d4face",
+      "size": 939
+    },
+    {
+      "rfilename": "generation_config.json",
+      "blobId": "485929d08528d19d0e44231e7a74f7c763b2ea14",
+      "size": 132
+    },
+    {
+      "rfilename": "model.safetensors",
+      "blobId": "085fefcfdd0f25e2d6726f0705a8c1373ab38848",
+      "size": 1340073504,
+      "lfs": {
+        "sha256": "354b38b9ecccc36bc547eff57341a94cee5038b526e10e51f1f67feadfa7aab0",
+        "size": 1340073504,
+        "pointerSize": 135
+      }
+    },
+    {
+      "rfilename": "speaker_proj.pt",
+      "blobId": "145feda6cdfc5aa13893e296152ab06ee8f8f9f2",
+      "size": 497357,
+      "lfs": {
+        "sha256": "61750ec7783fa48bbe9f6b6600e4687696df02bd6ab6800b6289392abedc96f7",
+        "size": 497357,
+        "pointerSize": 131
+      }
+    },
+    {
+      "rfilename": "special_tokens_map.json",
+      "blobId": "3f6e311f2ba34589869c425c4b709c2531ce271b",
+      "size": 60338
+    },
+    {
+      "rfilename": "tokenizer.json",
+      "blobId": "e51afd928c31ab0c5efa18457fcf4f65ca5f0629",
+      "size": 3040467
+    },
+    {
+      "rfilename": "tokenizer_config.json",
+      "blobId": "405aa353bd16413fc60ca977954bd45a6e328b69",
+      "size": 2359728
+    }
+  ],
+  "spaces": [],
+  "createdAt": "2026-10-12T10:32:26.000Z",
+  "safetensors": {
+    "parameters": {
+      "F32": 335010240
+    },
+    "total": 335010240
+  },
+  "usedStorage": 1340570861
+}

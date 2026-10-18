@@ -18,10 +18,11 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import org.json.JSONObject
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable internal fun PicoDiagnosticsPanel(close:()->Unit) {
+@Composable internal fun PicoDiagnosticsPanel(backend:String="pico",close:()->Unit) {
     val context=LocalContext.current
     val state by PicoBenchmarks.state.collectAsStateWithLifecycle()
     val lifecycle=LocalLifecycleOwner.current
+    val label=if(backend=="plapre3")"Plapre 3" else "Pico"
     DisposableEffect(state.running) {
         val window=(context as? Activity)?.window
         val alreadyOn=((window?.attributes?.flags ?: 0) and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)!=0
@@ -35,15 +36,15 @@ import org.json.JSONObject
     }
     ModalBottomSheet(onDismissRequest={ if(state.running)PicoBenchmarks.cancel();close() },sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            Text("Pico performance test",style=MaterialTheme.typography.headlineSmall)
+            Text("$label performance test",style=MaterialTheme.typography.headlineSmall)
             Text("Compares 1, 2, 4, 6 and 8 inference threads, then groups of 20, 30 and 35 words. This can take several minutes. Stop narration first; keep this screen open. It does not read your book or move your position.")
             if(state.running) LinearProgressIndicator(Modifier.fillMaxWidth())
-            if(state.message.isNotBlank())Text(state.message)
+            if(state.backend==backend && state.message.isNotBlank())Text(state.message)
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                Button(onClick={PicoBenchmarks.start(context)},enabled=!state.running) { Text("Run benchmark") }
+                Button(onClick={PicoBenchmarks.start(context,backend)},enabled=!state.running) { Text("Run benchmark") }
                 if(state.running)OutlinedButton(onClick={PicoBenchmarks.cancel()}) { Text("Cancel") }
             }
-            state.report?.let { report ->
+            state.report?.takeIf { state.backend==backend }?.let { report ->
                 val trials=remember(report){JSONObject(report).getJSONArray("trials")}
                 Text("Thread count · generation time · real-time factor",style=MaterialTheme.typography.titleSmall)
                 listOf(1,2,4,6,8).forEach { count ->
@@ -52,7 +53,7 @@ import org.json.JSONObject
                         items.map{it.getDouble("wallMillis")}.average()/1000,items.map{it.getDouble("rtf")}.average()))
                 }
                 Text("A real-time factor below 1 keeps up at 1× playback; below 0.67 is needed at 1.5×. Results vary with heat, battery and the passage.",style=MaterialTheme.typography.bodySmall)
-                OutlinedButton(onClick={ context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,report),"Share Pico report")) }) { Text("Share diagnostics report") }
+                OutlinedButton(onClick={ context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,report),"Share $label report")) }) { Text("Share diagnostics report") }
             }
         }
     }

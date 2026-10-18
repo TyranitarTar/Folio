@@ -2595,6 +2595,115 @@
         }
       ],
       "license": "Plapre Pico: syv.ai, CC-BY-4.0. Kanade: MIT. HiFT: Apache-2.0. Experimental Folio ONNX conversion; source attribution included in the pack."
+    },
+    {
+      "id": "plapre3",
+      "backend": "plapre3",
+      "label": "Plapre 3 · Dansk (experimental FP32)",
+      "version": "plapre3-fp32-5300281a-r10k-kanade961f20bf-hift-v1",
+      "runtime": "plapre3-fp32-onnx-v1",
+      "languages": [
+        "da"
+      ],
+      "url": "https://github.com/TyranitarTar/Folio/releases/download/voice-packs-plapre3-v1/Folio-Voice-Plapre3-FP32-v1.zip",
+      "bytes": 1729532424,
+      "sha256": "69894b163f8277ff00464b57048cc11f45ba9953e1a0e66e02db6d4870814c48",
+      "expandedBytes": 1873812863,
+      "files": [
+        {
+          "name": "embeddings.bin",
+          "bytes": 81500160,
+          "sha256": "ec6688a8fb3bd2eb1a2d4ba7d47bbd38ab3b2fcce09c6393d31eccf582c0b3be"
+        },
+        {
+          "name": "hift.onnx",
+          "bytes": 83419196,
+          "sha256": "711af380b6eedac5cb832cccbd464054ac77d8bd383dc3bc25f97f59a4370ebb"
+        },
+        {
+          "name": "kanade.onnx",
+          "bytes": 365520009,
+          "sha256": "6e68d9876e2f5d38eabf91214da6393c2429ea3b6fb4d994c41af62053c87fcb"
+        },
+        {
+          "name": "NOTICE.txt",
+          "bytes": 32999,
+          "sha256": "6a4085f20f81db324d19d174cd6bd3ae63d92dc971b791048ef457d929a4527c"
+        },
+        {
+          "name": "plapre3.onnx",
+          "bytes": 151209,
+          "sha256": "87c631f6ee3586be8bd24e3dd7afcfd761708df1c664fdb17bfb8be9db818f5a"
+        },
+        {
+          "name": "plapre3.onnx.data",
+          "bytes": 1340040960,
+          "sha256": "a3b20f7d2d79b088079ae1437c7b449d606efd1f2f68233fb19627066f36c034"
+        },
+        {
+          "name": "tokenizer.json",
+          "bytes": 3040467,
+          "sha256": "2b1399fb999861fb4dd61c84d87d7c161944898c874c344660078bc4a28cdeb5"
+        },
+        {
+          "name": "voices.json",
+          "bytes": 107863,
+          "sha256": "2b8e31e23ff20b66977487c6615b2ae0fa7de43b813562cdf0af35afcf4d303d"
+        }
+      ],
+      "voices": [
+        {
+          "id": "0",
+          "label": "Ida",
+          "language": "da",
+          "sample": {
+            "url": "https://github.com/TyranitarTar/Folio/releases/download/voice-packs-plapre3-v1/Plapre3-da-ida.wav",
+            "bytes": 211244,
+            "sha256": "f8462748ed96a69b3b917d0d3eaf36ebdc1673910906fc2198cb146a29766ad9"
+          }
+        },
+        {
+          "id": "1",
+          "label": "Tor",
+          "language": "da",
+          "sample": {
+            "url": "https://github.com/TyranitarTar/Folio/releases/download/voice-packs-plapre3-v1/Plapre3-da-tor.wav",
+            "bytes": 205484,
+            "sha256": "9dc99c4c43e12350883a2b6673bee85e0181e8df45d8c1fcc53b096007266cbc"
+          }
+        },
+        {
+          "id": "2",
+          "label": "Liv",
+          "language": "da",
+          "sample": {
+            "url": "https://github.com/TyranitarTar/Folio/releases/download/voice-packs-plapre3-v1/Plapre3-da-liv.wav",
+            "bytes": 199724,
+            "sha256": "03b5e659ffd63fd941722b782360776d2c60852f8de4210e1c2ae02fb637c1f4"
+          }
+        },
+        {
+          "id": "3",
+          "label": "Ask",
+          "language": "da",
+          "sample": {
+            "url": "https://github.com/TyranitarTar/Folio/releases/download/voice-packs-plapre3-v1/Plapre3-da-ask.wav",
+            "bytes": 196844,
+            "sha256": "5e6b877cbb042f679f092888f6ba3a4653ae104b51b58749b35913023cbe7cb3"
+          }
+        },
+        {
+          "id": "4",
+          "label": "Kaj",
+          "language": "da",
+          "sample": {
+            "url": "https://github.com/TyranitarTar/Folio/releases/download/voice-packs-plapre3-v1/Plapre3-da-kaj.wav",
+            "bytes": 184364,
+            "sha256": "2aa4542d2b37d67fa695f875089393b1089381bc4d603ec8a3541cd1d9397809"
+          }
+        }
+      ],
+      "license": "Plapre 3: syv.ai, CC-BY-4.0. Kanade: MIT. HiFT: Apache-2.0. FP32 Folio ONNX conversion; attribution and complete licenses in pack. 64-bit Android required."
     }
   ]
 }

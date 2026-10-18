@@ -32,11 +32,11 @@ internal data class OwnedVoiceVersion(val id:String,val backend:String,val versi
         fun from(j:JSONObject):OwnedVoiceVersion {
             val version=j.getString("version");require(VoiceModelUse.validVersion(version))
             val id=j.getString("id");require(id.matches(Regex("[a-z0-9-]{1,48}")))
-            val backend=j.getString("backend");require(backend in setOf("kokoro","supertonic","pico"))
+            val backend=j.getString("backend");require(backend in setOf("kokoro","supertonic","pico","plapre3"))
             val url=VoicePackCatalog.url(j.getString("url"));val hash=j.getString("sha256");require(hash.matches(Regex("[a-f0-9]{64}")))
             val fs=j.getJSONArray("files");require(fs.length() in 1..5000)
             val files=(0 until fs.length()).map { val f=fs.getJSONObject(it);val name=f.getString("name");VoicePackCatalog.safeName(name)
-                val bytes=f.getLong("bytes");val sha=f.getString("sha256");require(bytes in 0..768L*1024*1024&&sha.matches(Regex("[a-f0-9]{64}")));SpeechModelFile(name,bytes,sha) }
+                val bytes=f.getLong("bytes");val sha=f.getString("sha256");require(bytes in 0..(if(backend=="plapre3")2L*1024*1024*1024 else 768L*1024*1024)&&sha.matches(Regex("[a-f0-9]{64}")));SpeechModelFile(name,bytes,sha) }
             require(files.map { it.name }.distinct().size==files.size)
             val cs=j.getJSONArray("components");require(cs.length() in 1..32)
             val components=(0 until cs.length()).map { cs.getString(it).also { v->require(VoiceModelUse.validVersion(v)) } }.toSet()+version

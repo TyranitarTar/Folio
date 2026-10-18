@@ -9,7 +9,7 @@ internal object SpeechPassages {
         val chapterEnd = SpeechNavigation.nextChapter(book,position)?.takeIf { it.sectionIndex==position.sectionIndex }?.wordIndex
         val endWord = minOf(sentence.endWord,chapterEnd ?: sentence.endWord)
         val remaining = book.sections[position.sectionIndex].words.subList(position.wordIndex,endWord)
-        val limit = if(bounded && settings.backend=="pico") 160 else if(bounded) 320 else TextToSpeech.getMaxSpeechInputLength()
+        val limit = if(bounded && settings.isPlapre) 160 else if(bounded) 320 else TextToSpeech.getMaxSpeechInputLength()
         var characters=0;var end=0
         for(word in remaining) {
             if(end>0 && characters+word.text.length+1>limit) break

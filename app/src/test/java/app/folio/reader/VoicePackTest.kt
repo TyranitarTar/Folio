@@ -38,7 +38,7 @@ class VoicePackTest {
     }
     @Test fun signedCatalogRejectsTraversalExternalHostsDuplicateIdentitiesAndOversizedSamples() {
         val raw=app.assets.open("voice-packs.json").bufferedReader().use { it.readText() }
-        assertEquals(setOf("supertonic", "kokoro", "pico"),VoicePackCatalog.parse(raw).map { it.backend }.toSet())
+        assertEquals(setOf("supertonic", "kokoro", "pico", "plapre3"),VoicePackCatalog.parse(raw).map { it.backend }.toSet())
         fun rejects(change:(JSONObject)->Unit) {
             val json=JSONObject(raw);change(json)
             assertTrue(runCatching { VoicePackCatalog.parse(json.toString()) }.isFailure)

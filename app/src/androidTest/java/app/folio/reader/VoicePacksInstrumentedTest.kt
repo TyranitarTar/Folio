@@ -61,6 +61,7 @@ class VoicePacksInstrumentedTest {
     /** Explicit real network acceptance; skipped from an ordinary offline test run. */
     @Test fun actualPublicPacksCancelResumeVerifyInstallAndSynthesize()=runBlocking {
         org.junit.Assume.assumeTrue(InstrumentationRegistry.getArguments().getString("downloadVoicePacks")=="true")
+        assertTrue(app.packageName.endsWith(".debug"))
         SpeechController.stop(app);waitFor { !SpeechController.serviceRunning };app.voicePacks.existingCheck.join()
         val report=JSONArray()
         ActivityScenario.launch<MainActivity>(Intent(app,MainActivity::class.java)).use {
@@ -78,14 +79,15 @@ class VoicePacksInstrumentedTest {
                 delay(1200);assertEquals("Cancelled",app.voicePacks.state(pack.id).phase)
                 val partial=File(app.voicePacks.transferFolder(pack),"archive.part").length()
                 assertTrue(partial>0);app.voicePacks.enqueue(pack.id)
-                waitFor(360000){app.voicePacks.state(pack.id).phase in setOf("Ready","Failed")}
+                waitFor(if(pack.backend=="plapre3")900000 else 360000){app.voicePacks.state(pack.id).phase in setOf("Ready","Failed")}
                 val state=app.voicePacks.state(pack.id);assertEquals(state.message,"Ready",state.phase)
                 assertTrue(app.voicePacks.verify(app.voicePacks.directory(pack),pack))
                 val engine=createLocalSpeechEngine(app,pack.backend)
                 try {
-                    val clip=engine.generate(if(pack.backend=="pico") "Denne stemme virker uden internet." else "This downloaded voice works offline.",SpeechSettings(backend=pack.backend))
+                    val clip=engine.generate(if(pack.backend in setOf("pico","plapre3")) "Denne stemme virker uden internet." else "This downloaded voice works offline.",SpeechSettings(backend=pack.backend))
                     assertTrue(clip.samples.size>clip.sampleRate)
                     report.put(JSONObject().put("pack",pack.id).put("resumedPartialBytes",partial).put("filesVerified",pack.files.size)
+                        .put("archiveBytes",pack.bytes).put("expandedBytes",pack.expandedBytes)
                         .put("nativeSamples",clip.samples.size).put("digest",clip.digest))
                 } finally { engine.close() }
                 File(app.filesDir,"v9-voice-download-validation.json").writeText(report.toString(2))

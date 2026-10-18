@@ -171,6 +171,7 @@ class AiListeningStore(context: Context) {
         // Keep existing text keys; legacy PCM is health-checked and migrated rather than invalidating positions.
         fun key(text: String, voice: Int, rate: Float, backend: String = "kokoro", language: String = "en", picoThreads: Int = 0): String {
             val identity = when (backend) {
+                "plapre3" -> "${Plapre3Model.VERSION}/normalization-v1/native-ort1.28.2/prefill-v1/spin0/sampling-t07-p095-k50-seed42/${PicoPadding.IDENTITY}/threads-$picoThreads/da"
                 "pico" -> "${PicoEngine.VERSION}/normalization-v1/native-ort1.28.2/sampling-t07-p095-k50-seed42/${PicoPadding.IDENTITY}/${if(picoThreads==0) "" else "threads-$picoThreads/"}$language"
                 "kokoro" -> "kokoro-v1.0-fp32/sherpa-v1.13.8"
                 "supertonic" -> "supertonic-3-int8/cca5a0e6c96e1d2c720986bf7e75fcc81dee3ae4/sherpa-v1.13.8/steps8/seed42/$language"

@@ -47,35 +47,39 @@ data class SpeechVoice(val name: String, val label: String)
 data class SpeechSettings(val voice: String = "", val rate: Float = 1f, val backend: String = "android", val aiVoice: Int = 21,
     val supertonicVoice: Int = 0, val supertonicLanguage: String = "en",
     val navigationUnit: String = "sentence", val sentencePauseMillis: Int = 0, val paragraphPauseMillis: Int = 0,
-    val picoVoice: Int = 0, val picoThreads: Int = 0) {
-    val isLocal: Boolean get() = backend in setOf("kokoro", "supertonic", "pico")
-    val stretchesPlayback: Boolean get() = backend in setOf("supertonic", "pico")
-    val localVoice: Int get() = when(backend) { "supertonic" -> supertonicVoice; "pico" -> picoVoice; else -> aiVoice }
-    val localVoiceIdentity: String get() = when(backend) { "supertonic" -> "supertonic:$supertonicLanguage:$supertonicVoice"; "pico" -> "pico:da:$picoVoice"; else -> "kokoro:$aiVoice" }
-    val engineLabel: String get() = when(backend) { "pico" -> "Plapre Pico"; "supertonic" -> "Supertonic 3"; "kokoro" -> "Kokoro"; else -> "Android speech" }
+    val picoVoice: Int = 0, val picoThreads: Int = 0, val plapre3Voice: Int = 0, val plapre3Threads: Int = 0) {
+    val isPlapre: Boolean get() = backend in setOf("pico","plapre3")
+    val inferenceThreads: Int get() = if(backend=="plapre3")plapre3Threads else picoThreads
+    val isLocal: Boolean get() = backend in setOf("kokoro", "supertonic", "pico", "plapre3")
+    val stretchesPlayback: Boolean get() = backend in setOf("supertonic", "pico", "plapre3")
+    val localVoice: Int get() = when(backend) { "plapre3" -> plapre3Voice; "supertonic" -> supertonicVoice; "pico" -> picoVoice; else -> aiVoice }
+    val localVoiceIdentity: String get() = when(backend) { "plapre3" -> "plapre3:da:$plapre3Voice"; "supertonic" -> "supertonic:$supertonicLanguage:$supertonicVoice"; "pico" -> "pico:da:$picoVoice"; else -> "kokoro:$aiVoice" }
+    val engineLabel: String get() = when(backend) { "plapre3" -> "Plapre 3"; "pico" -> "Plapre Pico"; "supertonic" -> "Supertonic 3"; "kokoro" -> "Kokoro"; else -> "Android speech" }
     val synthesisRate: Float get() = if (stretchesPlayback) 1f else rate
     val playbackRate: Float get() = if (stretchesPlayback) rate else 1f
     fun sameSource(other: SpeechSettings) = backend == other.backend &&
-        (backend != "android" || voice == other.voice) && (backend != "pico" || picoThreads == other.picoThreads) && localVoiceIdentity == other.localVoiceIdentity && synthesisRate == other.synthesisRate
-    fun audioKey(text: String): String = AiListeningStore.key(text, localVoice, synthesisRate, backend, if(backend=="pico") "da" else supertonicLanguage, picoThreads)
+        (backend != "android" || voice == other.voice) && (!isPlapre || inferenceThreads == other.inferenceThreads) && localVoiceIdentity == other.localVoiceIdentity && synthesisRate == other.synthesisRate
+    fun audioKey(text: String): String = AiListeningStore.key(text, localVoice, synthesisRate, backend, if(isPlapre) "da" else supertonicLanguage, inferenceThreads)
     fun save(context: Context) = context.getSharedPreferences("speech", Context.MODE_PRIVATE).edit()
         .putString("voice", voice).putFloat("rate", rate.coerceIn(.5f, 3f))
         .putString("backend", backend).putInt("aiVoice", aiVoice)
         .putInt("picoVoice", picoVoice)
         .putInt("picoThreads", picoThreads.coerceIn(0,8))
+        .putInt("plapre3Voice", plapre3Voice.coerceIn(0,4)).putInt("plapre3Threads",plapre3Threads.coerceIn(0,8))
         .putInt("supertonicVoice", supertonicVoice).putString("supertonicLanguage", supertonicLanguage)
         .putString("navigationUnit", navigationUnit).putInt("sentencePauseMillis", sentencePauseMillis.coerceIn(0,5000))
         .putInt("paragraphPauseMillis", paragraphPauseMillis.coerceIn(0,5000)).apply()
     companion object {
         fun load(context: Context): SpeechSettings = context.getSharedPreferences("speech", Context.MODE_PRIVATE).let {
             SpeechSettings(it.getString("voice", "").orEmpty(), it.getFloat("rate", 1f).takeIf { value -> value.isFinite() }?.coerceIn(.5f,3f) ?: 1f,
-                it.getString("backend", "android").takeIf { value -> value in setOf("android", "kokoro", "supertonic", "pico") } ?: "android",
+                it.getString("backend", "android").takeIf { value -> value in setOf("android", "kokoro", "supertonic", "pico", "plapre3") } ?: "android",
                 it.getInt("aiVoice", 21).takeIf { id -> id == 21 || id == 3 } ?: 21,
                 it.getInt("supertonicVoice", 0).takeIf { id -> id in 0..9 } ?: 0,
                 it.getString("supertonicLanguage", "en").takeIf { language -> language == "en" || language == "da" } ?: "en",
                 it.getString("navigationUnit", "sentence").takeIf { unit -> unit in setOf("line","sentence","paragraph","chapter") } ?: "sentence",
                 it.getInt("sentencePauseMillis", 0).coerceIn(0,5000), it.getInt("paragraphPauseMillis", 0).coerceIn(0,5000),
-                it.getInt("picoVoice", 0).takeIf { id -> id in 0..4 } ?: 0, it.getInt("picoThreads",0).coerceIn(0,8))
+                it.getInt("picoVoice", 0).takeIf { id -> id in 0..4 } ?: 0, it.getInt("picoThreads",0).coerceIn(0,8),
+                it.getInt("plapre3Voice",0).coerceIn(0,4),it.getInt("plapre3Threads",0).coerceIn(0,8))
         }
     }
 }
@@ -104,7 +108,7 @@ object SpeechController {
     }
     private fun intent(context: Context, action: String) = Intent(context, SpeechService::class.java).setAction(action)
     private fun benchmarkBusy(): Boolean = PicoBenchmarks.state.value.running.also { busy ->
-        if(busy) mutable.value=mutable.value.copy(error="Finish or cancel the Pico benchmark before starting speech.")
+        if(busy) mutable.value=mutable.value.copy(error="Finish or cancel the voice benchmark before starting speech.")
     }
     fun start(context: Context, bookId: String, from: Locator? = null) {
         if(benchmarkBusy()) return
@@ -142,6 +146,7 @@ object SpeechController {
             .putExtra("voice", settings.voice).putExtra("rate", settings.rate).putExtra("aiVoice", settings.aiVoice)
             .putExtra("picoVoice", settings.picoVoice)
             .putExtra("picoThreads", settings.picoThreads)
+            .putExtra("plapre3Voice",settings.plapre3Voice).putExtra("plapre3Threads",settings.plapre3Threads)
             .putExtra("supertonicVoice", settings.supertonicVoice).putExtra("language", settings.supertonicLanguage)
             .putExtra("request", requests.incrementAndGet())
         runCatching { ContextCompat.startForegroundService(context,request) }.onFailure {
@@ -266,7 +271,7 @@ class SpeechService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if(PicoBenchmarks.state.value.running && intent?.action !in setOf(STOP,PAUSE,CANCEL_PREVIEW)) {
             startForeground(NOTIFICATION,notification())
-            SpeechController.mutable.value=state().copy(error="Finish or cancel the Pico benchmark before starting speech.")
+            SpeechController.mutable.value=state().copy(error="Finish or cancel the voice benchmark before starting speech.")
             stopSelf();return START_NOT_STICKY
         }
         when (intent?.action) {
@@ -304,6 +309,7 @@ class SpeechService : Service() {
                 val selected = settings.copy(backend = intent.getStringExtra("backend") ?: "android", voice = intent.getStringExtra("voice").orEmpty(),
                     rate = intent.getFloatExtra("rate",1f).takeIf { it.isFinite() }?.coerceIn(.5f,3f) ?: 1f,
                     aiVoice = intent.getIntExtra("aiVoice",21), picoVoice = intent.getIntExtra("picoVoice",0).coerceIn(0,4), picoThreads = intent.getIntExtra("picoThreads",settings.picoThreads).coerceIn(0,8), supertonicVoice = intent.getIntExtra("supertonicVoice",0),
+                    plapre3Voice=intent.getIntExtra("plapre3Voice",0).coerceIn(0,4),plapre3Threads=intent.getIntExtra("plapre3Threads",settings.plapre3Threads).coerceIn(0,8),
                     supertonicLanguage = intent.getStringExtra("language") ?: "en")
                 preview(selected, intent.getLongExtra("request",0))
             }
@@ -429,7 +435,7 @@ class SpeechService : Service() {
         return true
     }
     private suspend fun resume() {
-        if(PicoBenchmarks.state.value.running) { fail("Finish or cancel the Pico benchmark before starting speech.");return }
+        if(PicoBenchmarks.state.value.running) { fail("Finish or cancel the voice benchmark before starting speech.");return }
         if(preparationJob!=null) pause()
         idleRelease?.cancel(); idleRelease = null
         cancelPreview()
@@ -583,11 +589,11 @@ class SpeechService : Service() {
     }).also { aiPlayer = it }
 
     private fun localEngine(selected: SpeechSettings): LocalSpeechEngine {
-        val wantedThreads=if(selected.picoThreads==0) Runtime.getRuntime().availableProcessors().coerceIn(1,4) else selected.picoThreads
+        val wantedThreads=if(selected.inferenceThreads==0) Runtime.getRuntime().availableProcessors().coerceIn(1,4) else selected.inferenceThreads
         aiEngine?.takeIf { it.backend == selected.backend && (it !is PicoEngine || it.inferenceThreads == wantedThreads) }?.let { return it }
         // Release is queued before the new engine initializes on the same native worker.
         aiEngine?.close()
-        return createLocalSpeechEngine(applicationContext, selected.backend, selected.picoThreads).also { aiEngine = it }
+        return createLocalSpeechEngine(applicationContext, selected.backend, selected.inferenceThreads).also { aiEngine = it }
     }
 
     private fun speakAi(message: String, id: String, position: ReadingCursor) {
@@ -746,8 +752,8 @@ class SpeechService : Service() {
         val start=cursor ?: return
         pause();idleRelease?.cancel();idleRelease=null
         val selected=SpeechSettings.load(this)
-        if(selected.backend!="pico") { fail("Choose Plapre Pico before preparing chapter audio.");return }
-        if(PicoBenchmarks.state.value.running) { fail("Finish or cancel the Pico benchmark first.");return }
+        if(!selected.isPlapre) { fail("Choose Plapre Pico or Plapre 3 before preparing chapter audio.");return }
+        if(PicoBenchmarks.state.value.running) { fail("Finish or cancel the voice benchmark first.");return }
         settings=selected
         val ticket=++preparationRevision
         val chapter=SpeechNavigation.chapterIndex(book,start)
@@ -916,7 +922,7 @@ class SpeechService : Service() {
         pause(); idleRelease?.cancel(); idleRelease=null
         generation++; loading?.cancel(); loading=null
         val ticket=++previewGeneration
-        val phrase=if(selected.backend=="pico" || (selected.backend=="supertonic" && selected.supertonicLanguage=="da"))
+        val phrase=if(selected.isPlapre || (selected.backend=="supertonic" && selected.supertonicLanguage=="da"))
             "Regnen er holdt op. Hun lukker bogen, tager sin jakke og går stille ud i den klare morgen."
         else "The rain has stopped. She closes the book, puts on her coat, and walks quietly into the clear morning."
         SpeechController.mutable.value=state().copy(previewing=true,preparing=true,playing=false,error=null,backend=selected.backend,
