@@ -35,8 +35,10 @@ for name in ("IMPLEMENTATION-v0.10.1.md", "DESIGN-v0.10.1-speech-continuity-and-
              "IMPLEMENTATION-v0.11.md", "validate_release_v011.py", "verify_upgrade_v011.py",
              "IMPLEMENTATION-v0.12.md", "validate_release_v012.py"):
     if (root / name).is_file(): files.append(root / name)
-for name in ("MISO-FIRST-CAT.md", "TODO.md"):
+for name in ("MISO-FIRST-CAT.md", "MISO-STORY-DANISH.md", "TODO.md"):
     files.append(root / "design/cat-cafe" / name)
+for name in ("FEASIBILITY.md", "model-metadata-2026-10-19.json"):
+    files.append(root / "design/desktop-audiobooks" / name)
 for name in ("CAT-CAFE-GDD.md", "DESIGN-SYSTEM.md", "assets/folio-cat-book.svg", "assets/folio-cat-book-monochrome.svg", "assets/cats/miso.svg"):
     files.append(root / "design/cat-cafe/v1" / name)
 archive = output / f"Folio-source-{version}.zip"

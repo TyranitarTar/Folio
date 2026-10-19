@@ -2,6 +2,12 @@
 
 ## Future voice research
 
+- Evaluate desktop-generated Danish/English narrated books: EPUB 3 Media Overlays,
+  optional companion packs, Røst 3 CPU baseline on the Ryzen 5800X, and English
+  Chatterbox Turbo first. RX 5700 XT acceleration remains unverified and outside
+  AMD's official support list. See [feasibility, sizes and milestones](design/desktop-audiobooks/FEASIBILITY.md).
+- Before recorded-audio support ships, revise audio-aware import/backup limits,
+  implement synchronized playback/resume, and protect existing book annotations.
 - Explore Danish TTS models with a smaller download, installed footprint and memory
   requirement than Plapre Pico. Danish support and usable pronunciation are required.
 - Explore larger English models for a possible quality upgrade beyond Kokoro.
@@ -9,6 +15,11 @@
 - Research only for a future release; keep the current voice packs and playback pipeline.
 
 ## Cat Café · next todos
+
+0.12.0 implements Miso's first playable slice: six Danish chapters, three animated
+redemptions, reading rewards and a separate test café. See the
+[implemented café](IMPLEMENTATION-v0.12.md). Further cats and richer interactions
+remain expansion work.
 
 Cute cat interactions, short story moments and one-off tricks/surprises for
 treats. Encourage giving treats freely, with no hoarding bonuses; review adoption
@@ -58,12 +69,13 @@ model. See [implementation and verification scope](IMPLEMENTATION-v0.11.md).
 
   the app unilaterally as part of this voice release.
 
-- Røst v3, dependency-aware shared acoustic storage and Folio Cat Café remain future
+- Røst v3, dependency-aware shared acoustic storage and further café expansion remain future
 
   work. The cat game includes durable reading/listening rewards and gentle streaks.
   A reviewable [Cat Café design kit](design/cat-cafe/v1/README.md) now defines the
   theme, six cats, twelve decorations, optional navigation and a transactional
-  reward ledger. Review the design before implementing the game.
+  reward ledger. Miso's first playable slice is implemented in 0.12.0; the broader
+  multi-cat design remains future work.
 
 
 

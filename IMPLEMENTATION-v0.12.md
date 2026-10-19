@@ -94,6 +94,20 @@ The new cat-and-book icon includes adaptive, round and monochrome resources.
 Artwork and story are original. Café scenes are silent and never request audio
 focus or alter an EPUB/guided/listening bookmark.
 
+Acceptance: 169 JVM cases (168 passed, one existing Windows symlink skip), no lint
+errors, and all three café emulator cases passed. These exercise actual foreground
+reading rewards, free animation replay, the final chapter, story resume after
+recreation, test-counter presets/reset and exact normal-save isolation. The
+[full Danish script](design/cat-cafe/MISO-STORY-DANISH.md) is exported from the app.
+Screenshots were inspected for the room, interaction and story player.
+
+All seven existing speech/storage/update regression cases passed: four speech
+cases before the tool-session interruption and the remaining three update/storage
+cases after resuming. Source CI passed for implementation commit
+`f643abf70221ec57c00ebc10c162abf2a123ec24` (run 39162168097). Final evidence/docs
+updates do not change the app implementation or the signed APK. Physical phones
+were not tested for this release.
+
 This is the first playable slice, using simple vector poses and authored motion.
 Additional cats, varied tricks, décor, longer story animation and gentle streak
 presentation remain future work. Tune prices, story pacing, art and portrait motion
@@ -102,3 +116,6 @@ after actual play. Joint reader UI cleanup and audiobooks are still separate tod
 Future voice research: smaller Danish downloads than Plapre Pico, and larger
 English models that may improve on Kokoro. Compare quality, GB download/install
 size, memory and sustained phone speed before choosing or implementing anything.
+The new [desktop narrated-book assessment](design/desktop-audiobooks/FEASIBILITY.md)
+also covers Røst 3, the RX 5700 XT, English alternatives and EPUB Media Overlays.
+It is design/research only, outside the 0.12 runtime changes.

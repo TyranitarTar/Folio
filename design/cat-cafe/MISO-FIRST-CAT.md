@@ -2,7 +2,8 @@
 
 18 October 2026. This proposal now has a playable 0.12.0 Android implementation.
 See [implemented rules, rewards and test mode](../../IMPLEMENTATION-v0.12.md).
-The full six-chapter script is in `CafeStory.kt`; the opening sample below records
+Read the [full Danish script](MISO-STORY-DANISH.md), also embedded in `CafeStory.kt`.
+The opening sample below records
 the original story direction. Other cats remain future expansion.
 
 ## Selected presentation scope

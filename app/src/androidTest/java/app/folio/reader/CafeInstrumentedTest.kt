@@ -57,11 +57,8 @@ class CafeInstrumentedTest {
         File(app.filesDir, "v012-clicks.txt").appendText("$text: $point\n")
         device.click(point.centerX(), point.centerY()); Thread.sleep(400); device.waitForIdle()
     }
-    private fun top() { repeat(14) { device.swipe(device.displayWidth / 2, device.displayHeight / 3, device.displayWidth / 2, device.displayHeight * 3 / 4, 10) } }
-    private fun tools() {
-        top(); val control = device.wait(Until.findObject(By.desc("Caféindstillinger og testtilstand")), 5000)
-        assertNotNull(control); control.click(); device.waitForIdle()
-    }
+    private fun top() { repeat(14) { device.swipe(device.displayWidth / 2, device.displayHeight / 3, device.displayWidth / 2, device.displayHeight * 3 / 4, 25) }; Thread.sleep(500); device.waitForIdle() }
+    private fun tools() { click("Indstillinger, sikkerhedskopi og testtilstand") }
     private fun enterTest() {
         click("More"); click("Cat Café"); click("Prøv alt i testcaféen")
         assertTrue(device.wait(Until.hasObject(By.text("TESTCAFÉ")), 5000))

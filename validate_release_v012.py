@@ -23,7 +23,12 @@ with zipfile.ZipFile(apk) as now, zipfile.ZipFile(output / 'Folio-0.11.0.apk') a
     assert all(now.read(n) == old.read(n) for n in natives), 'Unexpected speech native change'
     assert now.read('assets/voice-packs.json') == old.read('assets/voice-packs.json')
     assert not any(n.endswith(('.onnx', '.safetensors', '.gguf', '/embeddings.bin')) for n in now.namelist())
-    assert any('ic_folio_cat' in n for n in now.namelist())
+resources = (audit / 'v012-apk-resources.log').read_text(encoding='utf-8-sig')
+manifest = (audit / 'v012-apk-manifest.log').read_text(encoding='utf-8-sig')
+for name, attribute in [('ic_folio_cat', 'icon'), ('ic_folio_cat_round', 'roundIcon')]:
+    # Release optimization shortens ZIP filenames; check compiled resource identities.
+    match = re.search(r'spec resource (0x[0-9a-f]+) app.folio.reader:mipmap/' + name + r':', resources)
+    assert match and re.search(r'android:' + attribute + r'\(.*?\)=@' + match.group(1), manifest)
 results = [ET.parse(path).getroot() for path in (root / 'app/build/test-results/testDebugUnitTest').glob('TEST-*.xml')]
 unit = {key: sum(int(result.get(key, 0)) for result in results) for key in ('tests', 'failures', 'errors', 'skipped')}
 assert unit['tests'] >= 169 and unit['failures'] == unit['errors'] == 0
@@ -35,6 +40,14 @@ assert not any(issue.get('severity') in ('Error', 'Fatal') for issue in lint)
 emulator = (audit / 'v012-cafe-emulator.log').read_text(encoding='utf-8')
 assert 'OK (3 tests)' in emulator and emulator.count('INSTRUMENTATION_STATUS_CODE: 0') == 3
 assert 'FAILURES!!!' not in emulator and 'shortMsg=' not in emulator
+speech = (root.parent / 'tools/plapre3/results/android/v012-regression/regressions.log').read_text(encoding='utf-8-sig')
+remaining = (audit / 'v012-final-regressions.log').read_text(encoding='utf-8-sig')
+completed = lambda text: re.findall(r'INSTRUMENTATION_STATUS: test=([^\r\n]+)\r?\nINSTRUMENTATION_STATUS_CODE: 0', text)
+assert len(completed(speech)) == 4 and 'FAILURES!!!' not in speech
+assert 'OK (3 tests)' in remaining and len(completed(remaining)) == 3 and 'shortMsg=' not in remaining
+assert len(set(completed(speech) + completed(remaining))) == 7
+ci = json.loads((audit / 'v012-ci-result.json').read_text(encoding='utf-8-sig'))
+assert ci['conclusion'] == 'success' and ci['headSha'] == 'f643abf70221ec57c00ebc10c162abf2a123ec24'
 with zipfile.ZipFile(output / 'Folio-source-0.12.0.zip') as source:
     names = source.namelist()
     for filename in ('CafeStore.kt', 'CafeReadingRewards.kt', 'CafeStory.kt', 'CafeScreen.kt', 'CafeArtwork.kt'):
@@ -45,7 +58,9 @@ with zipfile.ZipFile(output / 'Folio-source-0.12.0.zip') as source:
 report = dict(version='0.12.0', versionCode=16, apkBytes=apk.stat().st_size, apkSha256=digest,
               speechNativeFilesIdenticalTo011=len(natives), voiceCatalogUnchanged=True,
               unit=unit, lintErrors=0, lintWarnings=sum(issue.get('severity') == 'Warning' for issue in lint),
-              cafeEmulatorTests=3, passed=True, physicalPhoneTested=False,
+              cafeEmulatorTests=3, existingRegressionCases=7, sourceCiPassed=True,
+              regressionNote='Four speech cases completed before the tool-session interruption; three update/storage cases passed after resuming.',
+              passed=True, physicalPhoneTested=False,
               verifiedAt=datetime.datetime.now(datetime.timezone.utc).isoformat())
 (output / 'Folio-0.12.0-validation.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
 print(json.dumps(report, indent=2))
