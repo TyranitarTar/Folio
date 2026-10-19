@@ -19,6 +19,8 @@ target = args.output.resolve() if args.output else HERE / 'models' / args.engine
 target.mkdir(parents=True, exist_ok=True)
 selected = [item for item in record['files'] if item['name'] in ('ve.safetensors', 's3gen_meanflow.safetensors', 't3_turbo_v1.safetensors', 'conds.pt')
             or item['name'].endswith(('.json', '.txt'))]
+assert all(isinstance(item.get('sha256'), str) and len(item['sha256']) == 64
+           and all(char in '0123456789abcdef' for char in item['sha256']) for item in selected), 'Incomplete model checksum catalog'
 
 def checksum(path):
     result = hashlib.sha256()

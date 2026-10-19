@@ -21,11 +21,13 @@ class HomeInstrumentedTest {
     private val device = UiDevice.getInstance(instrumentation)
     private fun click(text: String) {
         // The expanded More screen can put settings below the initial viewport.
-        for (attempt in 0 until 8) {
-            val target = device.findObject(By.text(text))
-            if (target != null && target.visibleBounds.height() > 0) break
-            device.swipe(device.displayWidth / 2, device.displayHeight * 3 / 4, device.displayWidth / 2, device.displayHeight / 3, 45)
-            device.waitForIdle()
+        if (text == "Dark") {
+            for (attempt in 0 until 8) {
+                val bounds = device.findObject(By.text(text))?.visibleBounds
+                if (bounds != null && bounds.height() > 24 && bounds.top > 190 && bounds.bottom < device.displayHeight - 260) break
+                device.swipe(device.displayWidth / 2, device.displayHeight * 3 / 4, device.displayWidth / 2, device.displayHeight / 3, 45)
+                device.waitForIdle()
+            }
         }
         repeat(3) { attempt ->
             device.waitForIdle()

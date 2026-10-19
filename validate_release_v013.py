@@ -37,7 +37,7 @@ assert 'OK (6 tests)' in audio and len(completed(audio)) == 6 and 'FAILURES!!!' 
 baseline = (audit / 'v013-baseline-regressions.log').read_text(encoding='utf-8-sig')
 storage = (audit / 'v013-ui-regression-retry.log').read_text(encoding='utf-8-sig')
 assert completed(storage) == ['voicePackUiShowsStorageTotalsAndExplicitCleanupActions']
-home = (audit / 'v013-home-final.log').read_text(encoding='utf-8-sig')
+home = (audit / 'v013-home-theme-final.log').read_text(encoding='utf-8-sig')
 assert 'OK (1 test)' in home and len(completed(home)) == 1 and 'FAILURES!!!' not in home
 assert len(set(completed(baseline) + completed(storage) + completed(home))) == 9 and 'shortMsg=' not in baseline
 desktop = (audit / 'v013-narration-tests.log').read_text(encoding='utf-8-sig')
