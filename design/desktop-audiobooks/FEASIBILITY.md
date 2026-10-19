@@ -14,7 +14,7 @@ same desktop engine. Keep Kokoro for immediate English reading on the phone.
 Use **EPUB 3 Media Overlays** for the portable book: XHTML, images, compressed
 chapter audio and SMIL cues in one EPUB. The standard already maps text fragments
 to timed audio clips. It avoids inventing another ebook container. Readers without
-overlay playback can still display the text. [W3C specification](https://www.w3.org/TR/epub-33/overlays/)
+overlay playback can still display the text. [W3C specification](https://www.w3.org/TR/epub-33/#sec-media-overlays)
 
 Also design an optional narration companion pack bound to the original EPUB's
 SHA-256. It can attach audio to an existing Folio book without rewriting its text
