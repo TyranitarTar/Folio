@@ -20,6 +20,8 @@ jobs:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
           log-accepted-android-sdk-licenses: false
       - uses: gradle/actions/setup-gradle@v4
+      - name: Desktop narration format and resume tests
+        run: python3 -m unittest discover -s tools/narration -p 'test_*.py' -v
       - name: Restore checksum-pinned speech dependencies
         run: |
           python3 bootstrap_ai.py

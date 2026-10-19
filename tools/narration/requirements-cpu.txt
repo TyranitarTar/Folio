@@ -1,0 +1,9 @@
+# Install CPU PyTorch first, as shown in README.md, so pip selects its official
+# CPU wheels instead of a CUDA-enabled or unrelated wheel.
+# The official PyPI wheel is chatterbox-tts 0.1.7; SHA-256:
+# 83782500e3ad4e7c919132e9d7eb8755f29f57c5bde5ec48c655ca23a4eb113c
+chatterbox-tts==0.1.7
+
+# Optional fallback if system FFmpeg is not on PATH.
+imageio-ffmpeg==0.6.0
+

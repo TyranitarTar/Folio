@@ -215,6 +215,7 @@ class ReaderActivity : FragmentActivity() {
     private var viewport = ""
     private var preferencesJob: Job? = null
     private var speechFollowJob: Job? = null
+    private var recordedFollowJob: Job? = null
     private lateinit var awake: ReaderAwakeController
     private val cafeReading get() = (application as FolioApp).cafeReading
     private var cafeJob: Job? = null
@@ -261,13 +262,14 @@ class ReaderActivity : FragmentActivity() {
         }
     }
     override fun onPause() {
+        guided?.pause()
         cafeJob?.cancel(); cafeReading.reader(false)
         if(::awake.isInitialized) awake.foreground(false); super.onPause()
     }
 
     internal fun isRtlNavigation() = model.navigation.direction == "RTL" || (model.navigation.direction == "Book" &&
         model.publication.value?.metadata?.readingProgression == org.readium.r2.shared.publication.ReadingProgression.RTL)
-    private fun manualNavigation() { preferencesJob?.cancel(); preferencesJob = null; guided?.clear(); if (SpeechController.state.value.bookId == model.bookId) SpeechController.pause(this) }
+    private fun manualNavigation() { if (AudiobookController.state.value.bookId == model.bookId) AudiobookController.pause(this); preferencesJob?.cancel(); preferencesJob = null; guided?.clear(); if (SpeechController.state.value.bookId == model.bookId) SpeechController.pause(this) }
     private fun turn(forward: Boolean) {
         manualNavigation()
         if (forward) navigator?.goForward(model.navigation.animate) else navigator?.goBackward(model.navigation.animate)
@@ -284,6 +286,19 @@ class ReaderActivity : FragmentActivity() {
         }
         if (name == "speech" || name == "guided") lifecycleScope.launch {
             speechStart = navigator?.visibleReadingAnchor() ?: model.location.value
+        }
+    }
+    private fun listenRecorded(anchor: Locator?) {
+        lifecycleScope.launch {
+            val store = (application as FolioApp).audiobooks
+            try {
+                store.load()
+                val audio = RecordedNarration.preferred(store.books.value, model.bookId, AudiobookController.state.value.takeIf { it.playing || it.loading }?.id)
+                val target = audio?.let { RecordedNarration.find(it, anchor) }
+                if (audio == null || target == null) { model.notice.value = "This passage has no recording yet."; return@launch }
+                guided?.clear(); sheet = null; controls = false
+                AudiobookController.start(this@ReaderActivity, audio.id, target.track, target.positionMs)
+            } catch (error: Exception) { model.notice.value = error.message ?: "The recording could not start." }
         }
     }
     private var readerSeekJob: Job? = null
@@ -343,7 +358,7 @@ class ReaderActivity : FragmentActivity() {
     override fun onStart() { super.onStart(); counter?.setForeground(true) }
     override fun onStop() { counter?.setForeground(false); guided?.pause(); model.saveOnLeave(); super.onStop() }
     override fun onDestroy() {
-        guided?.pause(); if(::awake.isInitialized) awake.close(); counter?.close(); preferencesJob?.cancel(); speechFollowJob?.cancel(); readerSeekJob?.cancel()
+        guided?.pause(); if(::awake.isInitialized) awake.close(); counter?.close(); preferencesJob?.cancel(); speechFollowJob?.cancel(); recordedFollowJob?.cancel(); readerSeekJob?.cancel()
         // Detach both renderers before the Activity clears its publication-owning ViewModel.
         // Readium destroys child WebViews on detach, including prefetched resource views.
         if (!supportFragmentManager.isDestroyed) supportFragmentManager.beginTransaction().apply {
@@ -411,14 +426,17 @@ class ReaderActivity : FragmentActivity() {
             menu.add(0, 101, 0, "Highlight").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
             menu.add(0, 102, 1, "Add note").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
             menu.add(0, 103, 2, "Read from selection").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+            if ((application as FolioApp).audiobooks.books.value.any { it.bookId == model.bookId })
+                menu.add(0, 104, 3, "Listen from selection").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
             return true
         }
         override fun onPrepareActionMode(mode: ActionMode, menu: Menu) = false
         override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
-            if (item.itemId !in listOf(101, 102, 103)) return false
+            if (item.itemId !in listOf(101, 102, 103, 104)) return false
             lifecycleScope.launch {
                 navigator?.currentSelection()?.locator?.let { selected ->
-                    if (item.itemId == 103) { guided?.clear(); SpeechController.start(this@ReaderActivity, model.bookId, selected); sheet = null; controls = false }
+                    if (item.itemId == 104) listenRecorded(selected)
+                    else if (item.itemId == 103) { guided?.clear(); SpeechController.start(this@ReaderActivity, model.bookId, selected); sheet = null; controls = false }
                     else if (item.itemId == 102) { model.noteDraft = ""; notePosition = selected } else model.mark(selected, highlight = true)
                 }
                 mode.finish()
@@ -526,6 +544,35 @@ class ReaderActivity : FragmentActivity() {
                     }
             }
         }
+        recordedFollowJob = lifecycleScope.launch {
+            var seenRevision = AudiobookController.state.value.seekRevision
+            var openingFromRecording = intent.getBooleanExtra("recordedFollow", false)
+            intent.removeExtra("recordedFollow")
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                AudiobookController.state.distinctUntilChangedBy { listOf(it.id, it.bookId, it.playing, it.loading, it.cue, it.seekRevision) }.collectLatest { state ->
+                    val explicitSeek = state.seekRevision != seenRevision || openingFromRecording
+                    seenRevision = state.seekRevision
+                    val locator = state.cue?.let(RecordedNarration::locator)
+                    if (state.bookId != model.bookId || locator == null) {
+                        fragment.commitDecorations(emptyList(), "recorded-audio"); return@collectLatest
+                    }
+                    openingFromRecording = false
+                    if (state.playing || state.loading || explicitSeek) guided?.clear()
+                    if (state.playing || explicitSeek) {
+                        if (fragment.currentLocator.value.href.removeFragment() != locator.href.removeFragment()) {
+                            fragment.go(locator, false); delay(120)
+                        }
+                    }
+                    fragment.commitDecorations(listOf(Decoration("recorded-sentence", locator,
+                        Decoration.Style.Highlight(tint = android.graphics.Color.rgb(145, 182, 225)))), "recorded-audio")
+                    if (state.playing || explicitSeek) {
+                        delay(30)
+                        val visible = fragment.evaluateJavascript("(function(){let d=window.readium.getDecorations('recorded-audio').items[0];if(!d)return false;let r=d.range.getBoundingClientRect();return r.width>0&&r.left>=-2&&r.right<=innerWidth+2&&r.top>=-2&&r.bottom<=innerHeight+2;})()")
+                        if (visible != "true") fragment.go(locator, false)
+                    }
+                }
+            }
+        }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 fragment.currentLocator.collect {
@@ -554,7 +601,7 @@ class ReaderActivity : FragmentActivity() {
         return super.onKeyDown(keyCode, event)
     }
 
-    @OptIn(ExperimentalMaterial3Api::class)
+    @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
     @Composable
     private fun ReaderScreen() {
         val publication by model.publication.collectAsStateWithLifecycle()
@@ -568,6 +615,10 @@ class ReaderActivity : FragmentActivity() {
         val pageLabel by (counter?.label ?: remember { MutableStateFlow("Calculating pages…") }).collectAsStateWithLifecycle()
         val guiding by (guided?.running ?: remember { MutableStateFlow(false) }).collectAsStateWithLifecycle()
         val speech by SpeechController.state.collectAsStateWithLifecycle()
+        val audioStore = (application as FolioApp).audiobooks
+        val recordings by audioStore.books.collectAsStateWithLifecycle()
+        LaunchedEffect(audioStore) { runCatching { audioStore.load() } }
+        val recording = RecordedNarration.preferred(recordings, model.bookId)
         val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
             uri?.let { lifecycleScope.launch {
                 runCatching { model.store.exportNotes(model.bookId, it) }.onSuccess { model.notice.value = "Notes exported" }
@@ -628,14 +679,18 @@ class ReaderActivity : FragmentActivity() {
                         IconButton(onClick = { turn(false) }) { Icon(Icons.AutoMirrored.Outlined.NavigateBefore, "Previous page") }
                         IconButton(onClick = { turn(true) }) { Icon(Icons.AutoMirrored.Outlined.NavigateNext, "Next page") }
                     }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                         TextButton(onClick = { if (guiding) guided?.pause() else openSheet("guided") }) {
                             Icon(if (guiding) Icons.Outlined.Pause else Icons.Outlined.PlayArrow, null)
                             Text(if (guiding) "Pause guided reading" else "Guided reading")
                         }
+                        if (recording != null) IconButton(onClick = {
+                            lifecycleScope.launch { listenRecorded(navigator?.visibleReadingAnchor() ?: model.location.value) }
+                        }) { Icon(Icons.Outlined.Headphones, "Listen from here") }
                         TextButton(onClick = { openSheet("speech") }) { Icon(Icons.Outlined.RecordVoiceOver, null); Text("Read aloud") }
                     }
                 }
+                if (publication != null) RecordedPlaybackBar(model.bookId)
                 if (publication != null) ReaderPlaybackBar(model.bookId, guided,
                     navigate = { direction -> navigatePlayback(direction) },
                     pageStart = { seekVisiblePage() }, readVisible = { readVisibleText() },
@@ -669,6 +724,7 @@ class ReaderActivity : FragmentActivity() {
                 "guided" -> guided?.let { guide -> GuidedPanel(guide) { fromHere ->
                     lifecycleScope.launch {
                         SpeechController.pause(this@ReaderActivity)
+                        AudiobookController.pause(this@ReaderActivity)
                         val from = navigator?.visibleReadingAnchor() ?: model.location.value
                         sheet = null; controls = false
                         delay(350)
@@ -689,7 +745,7 @@ class ReaderActivity : FragmentActivity() {
                 }
                 "information" -> BookStatisticsPanel(model,counter,informationAnchor,
                     jump={ target -> manualNavigation();navigator?.go(target);sheet=null },
-                    pauseSpeech={ SpeechController.pause(this@ReaderActivity) })
+                    pauseSpeech={ SpeechController.pause(this@ReaderActivity); AudiobookController.pause(this@ReaderActivity) })
                 "search" -> SearchPanel(model) { result -> manualNavigation(); navigator?.go(result); sheet = null; model.cancelSearch() }
                 else -> OutlinePanel(publication!!, book, model, go = { link -> manualNavigation(); navigator?.go(link); sheet = null },
                     markGo = { mark -> manualNavigation(); mark.position()?.let { navigator?.go(it) }; sheet = null },

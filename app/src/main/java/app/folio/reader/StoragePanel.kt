@@ -62,6 +62,7 @@ private fun megabytes(bytes: Long) = "%.1f MB".format(java.util.Locale.ROOT, byt
             OutlinedButton(onClick = { model.storageOperation({ val count = model.store.recoverStoredBooks(); "Recovered $count additional stored books." }) { refresh++; changed() } }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Scan stored EPUBs for recovery") }
             HorizontalDivider()
             Text("Free storage", style = MaterialTheme.typography.titleMedium)
+            Text("Audiobook recordings and their listening bookmarks are separate from EPUB backups. Keep your original audio or .foliobook file; remove recordings from Audiobooks when no longer needed.", style = MaterialTheme.typography.bodySmall)
             Text("Stop narration before clearing its cache or repairing voices. Your saved passage is retained; audio will be regenerated.", style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = { model.storageOperation({ withContext(Dispatchers.IO) {
                 SpeechCheckpointCoordinator.exclusive(context) {

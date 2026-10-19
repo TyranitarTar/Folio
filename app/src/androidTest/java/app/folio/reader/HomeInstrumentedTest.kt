@@ -20,6 +20,13 @@ class HomeInstrumentedTest {
     private val app = instrumentation.targetContext.applicationContext as FolioApp
     private val device = UiDevice.getInstance(instrumentation)
     private fun click(text: String) {
+        // The expanded More screen can put settings below the initial viewport.
+        for (attempt in 0 until 8) {
+            val target = device.findObject(By.text(text))
+            if (target != null && target.visibleBounds.height() > 0) break
+            device.swipe(device.displayWidth / 2, device.displayHeight * 3 / 4, device.displayWidth / 2, device.displayHeight / 3, 45)
+            device.waitForIdle()
+        }
         repeat(3) { attempt ->
             device.waitForIdle()
             val item = device.wait(Until.findObject(By.text(text)), 15000)
@@ -33,7 +40,8 @@ class HomeInstrumentedTest {
     @Test fun libraryDetailsHistoryBrowseAndDisplayPreferencesSurviveRecreation() {
         HomePreferences().save(app)
         val book = runBlocking { app.library.importSample() }
-        runBlocking { app.library.update(book.id) { it.copy(lastRead = 1000, progress = .8) } }
+        // Keep this row visible even when other acceptance tests left newer books.
+        runBlocking { app.library.update(book.id) { it.copy(lastRead = System.currentTimeMillis(), progress = .8) } }
         ActivityScenario.launch<MainActivity>(Intent(app, MainActivity::class.java)).use { scenario ->
             assertTrue(device.wait(Until.hasObject(By.text("All books")), 15000))
             description("Library settings"); click("Display"); click("List")
@@ -45,13 +53,17 @@ class HomeInstrumentedTest {
             assertTrue(device.wait(Until.hasObject(By.text("Welcome")), 15000))
             assertTrue(device.wait(Until.hasObject(By.text("Resume reading")), 15000))
             device.takeScreenshot(File(app.filesDir, "home-v5-details.png"))
-            description("Back to library"); click("History")
+            description("Back to library"); click("More"); click("Reading history")
+            device.takeScreenshot(File(app.filesDir, "v013-history-navigation.png"))
+            device.dumpWindowHierarchy(File(app.filesDir, "v013-history-navigation.xml"))
             assertTrue(device.wait(Until.hasObject(By.text("The Quiet Hour")), 15000))
             click("Browse"); click("Local"); assertTrue(device.wait(Until.hasObject(By.text("Local EPUB files")), 15000))
             click("More"); assertTrue(device.wait(Until.hasObject(By.text("Reader settings")), 15000))
             click("Dark"); assertEquals("Dark", HomePreferences.load(app).theme)
-            scenario.recreate(); assertTrue(device.wait(Until.hasObject(By.text("Reader settings")), 15000))
-            click("Library")
+            // More retains its scroll position, with theme choices still in view.
+            scenario.recreate(); assertTrue(device.wait(Until.hasObject(By.text("Dark")), 15000))
+            assertEquals("Dark", HomePreferences.load(app).theme)
+            click("Books")
             device.takeScreenshot(File(app.filesDir, "home-v5-library.png"))
         }
     }

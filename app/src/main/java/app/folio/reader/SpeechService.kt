@@ -37,6 +37,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -112,6 +113,7 @@ object SpeechController {
     }
     fun start(context: Context, bookId: String, from: Locator? = null) {
         if(benchmarkBusy()) return
+        AudiobookController.stop(context)
         val i = intent(context, SpeechService.START).putExtra("book", bookId).putExtra("from", from?.toJSON()?.toString()).putExtra("request", requests.incrementAndGet())
         runCatching { ContextCompat.startForegroundService(context, i) }.onFailure {
             val selected=SpeechSettings.load(context)
@@ -142,6 +144,7 @@ object SpeechController {
     }
     fun preview(context: Context, settings: SpeechSettings) {
         if(benchmarkBusy()) return
+        AudiobookController.stop(context)
         val request=intent(context, SpeechService.PREVIEW).putExtra("backend", settings.backend)
             .putExtra("voice", settings.voice).putExtra("rate", settings.rate).putExtra("aiVoice", settings.aiVoice)
             .putExtra("picoVoice", settings.picoVoice)
@@ -155,7 +158,7 @@ object SpeechController {
     }
     fun cancelPreview(context: Context) { if (mutable.value.previewing) context.startService(intent(context, SpeechService.CANCEL_PREVIEW)) }
     fun pause(context: Context) = command(context, SpeechService.PAUSE)
-    fun resume(context: Context) = command(context, SpeechService.RESUME)
+    fun resume(context: Context) { AudiobookController.stop(context); command(context, SpeechService.RESUME) }
     fun previous(context: Context) = command(context, SpeechService.PREVIOUS)
     fun next(context: Context) = command(context, SpeechService.NEXT)
     @Volatile internal var serviceRunning=false
@@ -437,6 +440,7 @@ class SpeechService : Service() {
     }
     private suspend fun resume() {
         if(PicoBenchmarks.state.value.running) { fail("Finish or cancel the voice benchmark before starting speech.");return }
+        if (!stopRecordedPlayback()) { fail("The recording could not stop. Stop it in Audiobooks, then resume read aloud."); return }
         if(preparationJob!=null) pause()
         idleRelease?.cancel(); idleRelease = null
         cancelPreview()
@@ -922,6 +926,14 @@ class SpeechService : Service() {
             SpeechController.mutable.value=state().copy(previewing=false,preparing=false,playing=false,preparationStage="paused")
         }
     }
+    private suspend fun stopRecordedPlayback(): Boolean {
+        if (AudiobookController.state.value.id == null && !AudiobookController.serviceRunning) return true
+        AudiobookController.stop(this)
+        return kotlinx.coroutines.withTimeoutOrNull(3_000) {
+            AudiobookController.state.first { it.id == null }
+            true
+        } ?: false
+    }
     private fun preview(selected: SpeechSettings, request: Long) {
         pause(); idleRelease?.cancel(); idleRelease=null
         generation++; loading?.cancel(); loading=null
@@ -935,6 +947,7 @@ class SpeechService : Service() {
         previewJob=scope.launch {
             val owner=Any(); previewOwner=owner
             try {
+                check(stopRecordedPlayback()) { "The recording could not stop. Stop it in Audiobooks first." }
                 if (!focusHeld) focusHeld=audio.requestAudioFocus(focus)==AudioManager.AUDIOFOCUS_REQUEST_GRANTED
                 check(focusHeld) { "Another app is using audio. Pause it, then try preview." }
                 wakeLock.acquire(120_000)

@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.text.HtmlCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -32,6 +33,8 @@ private data class BookInfo(val loading: Boolean = true, val description: String
 internal fun BookDetails(book: Book, store: LibraryStore, read: (Book) -> Unit, speech: (Book) -> Unit,
     go: (Locator) -> Unit, back: () -> Unit, shelf: () -> Unit, remove: () -> Unit, snackbar: SnackbarHostState) {
     val context = LocalContext.current
+    val recordings by (context.applicationContext as FolioApp).audiobooks.books.collectAsStateWithLifecycle()
+    val recording = RecordedNarration.preferred(recordings, book.id)
     val info by produceState(BookInfo(), book.id) {
         try {
             value = withContext(Dispatchers.IO) {
@@ -66,6 +69,7 @@ internal fun BookDetails(book: Book, store: LibraryStore, read: (Book) -> Unit, 
         Surface(shadowElevation = 4.dp) {
             Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(onClick = { read(book) }, Modifier.weight(1f)) { Icon(Icons.Outlined.PlayArrow, null); Text(if (book.lastRead > 0) "Resume reading" else "Read book") }
+                recording?.let { audio -> OutlinedButton(onClick = { openAudiobook(context, audio.id) }) { Icon(Icons.Outlined.Headphones, "Listen to recording") } }
                 OutlinedButton(onClick = { speech(book) }) { Icon(Icons.Outlined.RecordVoiceOver, "Read aloud") }
             }
         }
@@ -78,7 +82,7 @@ internal fun BookDetails(book: Book, store: LibraryStore, read: (Book) -> Unit, 
                         Text(book.title, style = MaterialTheme.typography.headlineSmall)
                         Text(book.author.ifBlank { "Unknown author" }, Modifier.padding(top = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.padding(vertical = 12.dp)) {
-                            Text("EPUB · Local", Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.labelLarge)
+                            Text(if (recording != null) "EPUB + narration · Local" else "EPUB · Local", Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.labelLarge)
                         }
                         Text(if (book.lastRead == 0L) "Unread" else "${(book.progress * 100).toInt()}% read", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                     }

@@ -1,5 +1,15 @@
 # Folio: page navigation and speech implementation record
 
+## 0.13 recorded narration
+
+Implemented separate Books/Audiobooks navigation, a local-file audiobook player,
+and linked `.foliobook` companion imports with unchanged EPUBs and sentence cues.
+Desktop Røst 3 generation is resumable and stays outside the APK. See
+[implementation and remaining limits](IMPLEMENTATION-v0.13.md). Standard EPUB
+Media Overlay interchange, embedded M4B chapters and portable audio-state backups
+remain future work. Benchmark longer desktop samples before promising full-book
+generation speed on the Ryzen 5800X; RX 5700 XT acceleration is still unverified.
+
 ## Future voice research
 
 - Evaluate desktop-generated Danish/English narrated books: EPUB 3 Media Overlays,

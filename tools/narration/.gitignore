@@ -1,0 +1,12 @@
+# User books, local model runtime, PCM chunks, generated audio, and exports stay private.
+.venv/
+cache/
+jobs/
+models/
+exports/
+*.foliobook
+*.preview.foliobook
+__pycache__/
+*.py[cod]
+
+voices/

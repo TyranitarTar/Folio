@@ -54,7 +54,21 @@ class VoiceStorageInstrumentedTest {
         ActivityScenario.launch<MainActivity>(Intent(app,MainActivity::class.java)).use {
             val device=UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
             assertTrue(device.wait(Until.hasObject(By.text("More")),10000));device.findObject(By.text("More")).click()
-            assertTrue(device.wait(Until.hasObject(By.text("Voice packs")),10000));device.findObject(By.text("Voice packs")).click()
+            device.waitForIdle()
+            // More now includes history and Café above voices. Text nodes may exist
+            // outside the scroll viewport; place the whole row before tapping it.
+            for(attempt in 0 until 8) {
+                if(device.hasObject(By.text("Voice storage"))) break
+                val target=device.findObject(By.text("Voice packs"))
+                val bounds=target?.visibleBounds
+                if(bounds != null && bounds.height() > 24 && bounds.top > 190 && bounds.bottom < device.displayHeight - 260) {
+                    target.click(); device.waitForIdle(); break
+                }
+                device.swipe(device.displayWidth/2,device.displayHeight*3/4,device.displayWidth/2,device.displayHeight/3,45)
+                device.waitForIdle()
+            }
+            device.takeScreenshot(File(app.filesDir,"v013-voice-storage.png"))
+            device.dumpWindowHierarchy(File(app.filesDir,"v013-voice-storage.xml"))
             assertTrue(device.wait(Until.hasObject(By.text("Voice storage")),15000))
             assertTrue(device.wait(Until.hasObject(By.textContains("Reclaimable")),30000))
             assertNotNull(device.findObject(By.text("Remove old versions")));assertNotNull(device.findObject(By.text("Discard downloads")))
