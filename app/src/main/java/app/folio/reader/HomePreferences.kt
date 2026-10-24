@@ -9,7 +9,7 @@ data class HomePreferences(val layout: String = "Comfortable", val columns: Int 
     val shelves: List<String> = emptyList()) {
     fun save(context: Context) = context.getSharedPreferences("home", Context.MODE_PRIVATE).edit()
         .putString("layout", layout).putInt("columns", columns.coerceIn(2, 6)).putString("sort", sort)
-        .putBoolean("descending", descending).putString("status", status).putBoolean("annotated", annotated)
+        .putBoolean("descending", descending).putString("status", status).putInt("statusSchema",2).putBoolean("annotated", annotated)
         .putBoolean("showProgress", showProgress).putString("theme", theme)
         .putString("shelves", JSONArray(shelves).toString()).apply()
     companion object {
@@ -21,7 +21,7 @@ data class HomePreferences(val layout: String = "Comfortable", val columns: Int 
             } }.getOrDefault(emptyList())
             return HomePreferences(choice("layout", "Comfortable", listOf("Comfortable", "Compact", "List")),
                 p.getInt("columns", 3).coerceIn(2, 6), choice("sort", "Last read", listOf("Last read", "Date added", "Title", "Author")),
-                p.getBoolean("descending", true), choice("status", "All", listOf("All", "Unread", "Reading", "Finished")),
+                p.getBoolean("descending", true), if(p.getInt("statusSchema",1)<2) when(p.getString("status","All")) { "Unread"->"New"; "Finished"->"Read"; else->choice("status","All",listOf("All","Reading")) } else choice("status","All",listOf("All","New","Unread","Read","Reading")),
                 p.getBoolean("annotated", false), p.getBoolean("showProgress", true),
                 choice("theme", "System", listOf("System", "Light", "Dark")), shelves)
         }
@@ -34,9 +34,10 @@ internal fun HomePreferences.visibleBooks(books: List<Book>, query: String, shel
             (shelf == "All books" || shelf in book.shelves) &&
             (!annotated || book.bookmarks.isNotEmpty() || book.highlights.isNotEmpty()) &&
             when (status) {
-                "Unread" -> book.lastRead == 0L
-                "Reading" -> book.lastRead > 0L && book.progress < .99
-                "Finished" -> book.progress >= .99
+                "New" -> book.lastRead == 0L && !book.isRead
+                "Unread", "Unfinished" -> !book.isRead
+                "Reading" -> book.lastRead > 0L && !book.isRead
+                "Read", "Finished" -> book.isRead
                 else -> true
             }
     }

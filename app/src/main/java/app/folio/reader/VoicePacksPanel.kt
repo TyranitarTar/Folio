@@ -49,6 +49,7 @@ private data class VoiceCleanupRequest(val kind:VoiceCleanup,val entries:List<Vo
         lifecycle.lifecycle.addObserver(observer)
         onDispose { lifecycle.lifecycle.removeObserver(observer);samples.stop();SpeechController.cancelPreview(context) }
     }
+    var storageOpen by rememberSaveable { mutableStateOf(false) }
     ModalBottomSheet(onDismissRequest=close,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) {
         LazyColumn(Modifier.fillMaxWidth().heightIn(max=720.dp),contentPadding=PaddingValues(start=20.dp,end=20.dp,bottom=32.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
             item {
@@ -57,11 +58,13 @@ private data class VoiceCleanupRequest(val kind:VoiceCleanup,val entries:List<Vo
                 Text("Samples use the actual voice at 1×. Listening to a sample pauses narration and keeps your place.",style=MaterialTheme.typography.bodySmall,modifier=Modifier.padding(top=6.dp))
                 error?.let { Text(it,color=MaterialTheme.colorScheme.error,modifier=Modifier.padding(top=8.dp)) }
             }
-            item { VoiceStorageCard(inventory,cleanupJob!=null,storageMessage,
+            item { TextButton(onClick={storageOpen=!storageOpen}) { Text("Voice storage · ${inventory?.let { voiceStorageSize(it.modelBytes) } ?: "checking…"}") } }
+            if(storageOpen) item { VoiceStorageCard(inventory,cleanupJob!=null,storageMessage,
                 refresh={storageRefresh++},clean={kind->cleanup=VoiceCleanupRequest(kind,inventory?.reclaimable(kind).orEmpty())},cancel={cleanupJob?.cancel();storageMessage="Cleanup cancelled. Refreshing remaining files."}) }
             items(store.catalog.sortedBy { if(it.backend==initialBackend)0 else 1 },key={it.id}) { pack ->
                 val state=states.getValue(pack.id)
                 val compatible=pack.backend!="plapre3" || android.os.Process.is64Bit()
+                var expanded by rememberSaveable(pack.id) { mutableStateOf(false) }
                 var language by rememberSaveable(pack.id) { mutableStateOf(pack.languages.first()) }
                 var voiceId by rememberSaveable(pack.id) { mutableStateOf(pack.voices.first { it.language==language }.id) }
                 var menu by remember { mutableStateOf(false) }
@@ -69,9 +72,17 @@ private data class VoiceCleanupRequest(val kind:VoiceCleanup,val entries:List<Vo
                 val voice=available.firstOrNull { it.id==voiceId } ?: available.first()
                 val key="${pack.id}:${language}:${voice.id}"
                 ElevatedCard(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-                    Text(pack.label,style=MaterialTheme.typography.titleLarge)
+                    Text(pack.label,style=MaterialTheme.typography.titleMedium)
+                    Text(when(pack.backend) {
+                        "pico" -> "Compact Danish · Z Flip7-class recommended; S10 may buffer"
+                        "plapre3" -> "Full-size FP32 Danish · very high demand; desktop rendering recommended"
+                        "kokoro" -> "Compact English · low device demand"
+                        else -> "Multilingual neural speech · moderate device demand"
+                    },style=MaterialTheme.typography.bodySmall)
+                    TextButton(onClick={expanded=!expanded}) { Text(if(expanded) "Less" else "Voice options & details") }
                     Text("${pack.bytes/1_000_000} MB download · ${pack.expandedBytes/1_000_000} MB installed",style=MaterialTheme.typography.bodySmall)
-                    if(pack.backend=="plapre3")Text(if(compatible)"Large FP32 model. Try a voice sample first; preparing audio ahead can reduce buffering." else "Plapre 3 needs 64-bit Android. Samples and the other packs remain available.",style=MaterialTheme.typography.bodySmall)
+                    if(expanded) Text("Quality varies by text and voice; compare the actual sample. Device tiers are guidance, not guaranteed real-time playback.",style=MaterialTheme.typography.bodySmall)
+                    if(pack.backend=="plapre3" && (!compatible || expanded))Text(if(compatible)"A sustained mobile narration rate has not been established. Galaxy S26-class performance is unverified." else "Needs 64-bit Android; samples remain available.",style=MaterialTheme.typography.bodySmall)
                     Text(state.phase,style=MaterialTheme.typography.labelLarge)
                     if(state.message.isNotBlank())Text(state.message,style=MaterialTheme.typography.bodySmall)
                     if(state.busy) {
@@ -81,12 +92,14 @@ private data class VoiceCleanupRequest(val kind:VoiceCleanup,val entries:List<Vo
                             Text("${state.bytes/1_000_000} / ${pack.bytes/1_000_000} MB",style=MaterialTheme.typography.bodySmall)
                         } else LinearProgressIndicator(Modifier.fillMaxWidth())
                     }
+                    if(expanded) {
                     if(pack.languages.size>1)FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                         pack.languages.forEach { code -> FilterChip(language==code,{samples.stop();SpeechController.cancelPreview(context);language=code},label={Text(if(code=="da")"Dansk" else "English")}) }
                     }
                     Box {
                         OutlinedButton(onClick={menu=true}) { Text(voice.label) }
                         DropdownMenu(menu,{menu=false}) { available.forEach { entry -> DropdownMenuItem(text={Text(entry.label)},onClick={samples.stop();SpeechController.cancelPreview(context);voiceId=entry.id;menu=false}) } }
+                    }
                     }
                     Row(horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
                         OutlinedButton(onClick={
@@ -99,25 +112,28 @@ private data class VoiceCleanupRequest(val kind:VoiceCleanup,val entries:List<Vo
                     }
                     if(voice.sample==null)Text("A preview sample is not available for this voice.",style=MaterialTheme.typography.bodySmall)
                     if(sampleState.key==key)sampleState.error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
-                    if(state.phase=="Ready") {
-                        val selected=SpeechSettings.load(context).copy(backend=pack.backend,aiVoice=if(pack.backend=="kokoro")voice.id.toInt() else SpeechSettings.load(context).aiVoice,
+                        val requestedSettings=SpeechSettings.load(context).copy(backend=pack.backend,aiVoice=if(pack.backend=="kokoro")voice.id.toInt() else SpeechSettings.load(context).aiVoice,
                             picoVoice=if(pack.backend=="pico")voice.id.toInt() else SpeechSettings.load(context).picoVoice,
                             plapre3Voice=if(pack.backend=="plapre3")voice.id.toInt() else SpeechSettings.load(context).plapre3Voice,
                             supertonicVoice=if(pack.backend=="supertonic")voice.id.toInt() else SpeechSettings.load(context).supertonicVoice,supertonicLanguage=language)
-                        TextButton(onClick={ samples.stop();if(speech.previewing)SpeechController.cancelPreview(context) else SpeechController.preview(context,selected) }) {
-                            Text(if(speech.previewing)"Stop local preview" else "Local preview · ${selected.rate}×")
+                    if(expanded && state.phase=="Ready") {
+                        TextButton(onClick={ samples.stop();if(speech.previewing)SpeechController.cancelPreview(context) else SpeechController.preview(context,requestedSettings) }) {
+                            Text(if(speech.previewing)"Stop local preview" else "Local preview · ${requestedSettings.rate}×")
                         }
                         if(speech.previewing)Text(if(speech.preparing)speech.preparation else "Playing local preview…",style=MaterialTheme.typography.bodySmall)
                     }
                     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                         when {
-                            state.phase=="Ready" -> TextButton(onClick={remove=pack}) { Icon(Icons.Outlined.Delete,null);Text("Remove pack") }
+                            state.phase=="Ready" -> {
+                                Button(onClick={samples.stop();SpeechController.settings(context,requestedSettings)}) { Text("Use voice") }
+                                TextButton(onClick={remove=pack}) { Icon(Icons.Outlined.Delete,null);Text("Remove") }
+                            }
                             state.phase in setOf("Queued","Downloading","Verifying","Installing") -> TextButton(onClick={scope.launch(Dispatchers.IO){store.cancelDownload(pack.id)}}) { Text("Cancel download") }
                             state.busy -> Unit
                             else -> Button(onClick={download=pack},enabled=compatible) { Icon(Icons.Outlined.Download,null);Text(if(state.phase=="Cancelled")"Resume download" else if(state.phase=="Failed")"Retry download" else "Download pack") }
                         }
                     }
-                    Text(pack.license,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    if(expanded)Text(pack.license,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 } }
             }
             item { Text("Android speech uses voices installed through Android settings. Other compatible voice packs can be added in future app updates.",style=MaterialTheme.typography.bodySmall) }

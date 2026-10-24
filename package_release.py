@@ -33,8 +33,13 @@ files.append(root / "verify_upgrade_v010.py")
 for name in ("IMPLEMENTATION-v0.10.1.md", "DESIGN-v0.10.1-speech-continuity-and-storage.md", "validate_release_v0101.py",
              "IMPLEMENTATION-v0.10.2.md", "IMPLEMENTATION-v0.10.2-storage.md", "validate_release_v0102.py", "verify_upgrade_v0102.py",
              "IMPLEMENTATION-v0.11.md", "validate_release_v011.py", "verify_upgrade_v011.py",
-             "IMPLEMENTATION-v0.12.md", "validate_release_v012.py", "IMPLEMENTATION-v0.13.md", "validate_release_v013.py"):
+             "IMPLEMENTATION-v0.12.md", "validate_release_v012.py", "IMPLEMENTATION-v0.13.md", "validate_release_v013.py",
+             "ROADMAP-0.13.1.md", "IMPLEMENTATION-v0.13.1-GPU.md"):
     if (root / name).is_file(): files.append(root / name)
+for name in ("ROADMAP-0.14.md", "DESIGN-0.14.md", "IMPLEMENTATION-v0.14.md", "validate_release_v014.py"):
+    if (root / name).is_file(): files.append(root / name)
+files.extend(p for p in (root / "design/icons-0.14").glob("*") if p.is_file() and p.suffix in (".svg", ".png", ".md"))
+files.append(root / "design/make_icons_014.py")
 for name in ("MISO-FIRST-CAT.md", "MISO-STORY-DANISH.md", "TODO.md"):
     files.append(root / "design/cat-cafe" / name)
 for name in ("FEASIBILITY.md", "model-metadata-2026-10-19.json", "FORMAT-v1.md"):
@@ -51,16 +56,16 @@ with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
     pico_tools = root.parent / "tools/pico"
     for path in sorted(list(pico_tools.glob("*.py")) + list((pico_tools / "licenses").glob("*.txt")) +
                        [pico_tools / "requirements.txt", pico_tools / "README.md", pico_tools / ".gitignore"]):
-        if path.is_file(): bundle.write(path, Path("Folio/pico-tools") / path.relative_to(pico_tools))
+        if path.is_file(): bundle.write(path, Path("Folio/tools/pico") / path.relative_to(pico_tools))
     plapre3_tools=root.parent/"tools/plapre3"
     for path in sorted(list(plapre3_tools.glob("*.py"))+[plapre3_tools/"README.md",plapre3_tools/".gitignore",plapre3_tools/"upstream-manifest.json",plapre3_tools/"reference-source.json"]):
-        if path.is_file():bundle.write(path,Path("Folio/plapre3-tools")/path.relative_to(plapre3_tools))
+        if path.is_file():bundle.write(path,Path("Folio/tools/plapre3")/path.relative_to(plapre3_tools))
     narration_tools = root.parent / "tools/narration"
     bundle.write(root.parent / "tools/__init__.py", "Folio/tools/__init__.py")
     # Deliberate top-level allowlist: never include user books, generated audio,
     # resumable jobs, cached models or the private Python environment.
     for path in sorted(list(narration_tools.glob("*.py")) + [narration_tools / name for name in
-                       ("README.md", ".gitignore", "requirements-cpu.txt", "model-snapshots.json")]):
+                       ("README.md", "DIRECTML.md", ".gitignore", "requirements-cpu.txt", "model-snapshots.json")]):
         if path.is_file(): bundle.write(path, Path("Folio/tools/narration") / path.name)
 print(f"Packaged {apk.name} ({apk.stat().st_size:,} bytes), SHA-256 {digest}")
 print(f"Source: {archive.name}, {len(set(files))} files")

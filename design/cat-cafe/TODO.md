@@ -4,6 +4,22 @@ The first Miso slice is implemented in 0.12.0. See
 [play, storage and test-mode details](../../IMPLEMENTATION-v0.12.md).
 The remaining multi-cat work below is future expansion.
 
+## Miso rework — user feedback, 20 October 2026
+
+- [ ] Rework Miso's presentation and writing. The user rejected the current
+  animations and plain, unexpressive text; the implementation does not deliver
+  the requested Persona-inspired visual-novel experience. Treat this as a
+  substantial redesign, not minor polish of the existing poses and dialogue.
+- [ ] Make a reviewable sample scene first: expressive portraits, intentional
+  staging, short character animations and meaningful Danish dialogue with a
+  clear scene purpose, personality, tension and payoff.
+- [ ] Rework treat animations into appealing, action-specific performances with
+  anticipation, timing and follow-through; avoid generic pose swaps.
+- [ ] Review the sample with the user before expanding the rewrite. Preserve
+  saves, earned treats, unlocked stories and the isolated test mode.
+- [ ] Future work only. The current 0.13.1 session focuses on desktop GPU
+  performance; do not start the café redesign during those tests.
+
 ## First playable cat: Miso
 
 - [x] Limit the first implementation to Miso: short redemption animations and

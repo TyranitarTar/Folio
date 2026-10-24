@@ -11,6 +11,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -41,9 +45,10 @@ fun GuidedPanel(guide: GuidedReading, start: (Boolean) -> Unit) {
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Guided reading", style = MaterialTheme.typography.headlineSmall)
         cursor?.locator?.text?.highlight?.let { Text("Saved word: $it", style = MaterialTheme.typography.bodySmall) }
-        Button(onClick = { start(false) }, enabled = ready && !storageFailed && number != null && number in range, modifier = Modifier.fillMaxWidth()) { Text("Resume guided reading") }
-        OutlinedButton(onClick = { start(true) }, enabled = ready && !storageFailed && number != null && number in range, modifier = Modifier.fillMaxWidth()) { Text("Start from here") }
-        Text("Keep the text in context with a moving window, word groups or a whole rendered line. Pages turn as you progress.")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { start(false) }, enabled = ready && !storageFailed && number != null && number in range, modifier = Modifier.weight(1f)) { Text("Resume") }
+            OutlinedButton(onClick = { start(true) }, enabled = ready && !storageFailed && number != null && number in range, modifier = Modifier.weight(1f)) { Text("Start from here") }
+        }
         ChoiceRow("Focus mode", listOf("Window", "Groups", "Line"), options.mode) {
             options = options.copy(mode = it); guide.setOptions(options)
         }
@@ -55,11 +60,7 @@ fun GuidedPanel(guide: GuidedReading, start: (Boolean) -> Unit) {
             Text("Words in focus · ${options.words}")
             Slider(options.words.toFloat(), { options = options.copy(words = it.roundToInt()); guide.setOptions(options) }, valueRange = 1f..8f, steps = 6)
         }
-        Text(when (options.mode) {
-            "Window" -> "The leading word advances one word at a time; the whole moving window stays uniformly marked."
-            "Groups" -> "Groups do not overlap. Four words at 200 WPM receive 1.2 seconds."
-            else -> "Uses the visible text layout. Reflow keeps your leading word."
-        }, style = MaterialTheme.typography.bodySmall)
+        GuidedFocusPreview(options)
         if (!ready) LinearProgressIndicator(Modifier.fillMaxWidth())
         message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
         if (storageFailed) OutlinedButton(onClick = { guide.retrySaving() }) { Text("Retry saving position") }
@@ -84,25 +85,37 @@ fun GuidedPanel(guide: GuidedReading, start: (Boolean) -> Unit) {
             Text("Extra time for long words (WPM)", Modifier.weight(1f))
             Switch(options.longWords, { options = options.copy(longWords = it); guide.setOptions(options) })
         }
-        ChoiceRow("Start countdown", listOf("Off", "3 sec", "5 sec"), if (options.countdown == 0) "Off" else "${options.countdown} sec") {
-            options = options.copy(countdown = it.substringBefore(' ').toIntOrNull() ?: 0); guide.setOptions(options)
-        }
-        ChoiceRow("Practice session", listOf("Off", "1 min", "3 min", "5 min"), if (options.practiceMinutes == 0) "Off" else "${options.practiceMinutes} min") {
-            options = options.copy(practiceMinutes = it.substringBefore(' ').toIntOrNull() ?: 0); guide.setOptions(options); guide.resetSession()
-        }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            Text("Increase target by 25 WPM each minute", Modifier.weight(1f))
-            Switch(options.gradualIncrease, { options = options.copy(gradualIncrease = it); guide.setOptions(options) })
-        }
         if (session.words > 0) {
             Text("${session.words} words · ${session.elapsedMillis / 1000} seconds · ${session.effectiveWpm} actual WPM")
             Text("How well did you understand the passage? This is your own reflection, not a comprehension test.", style = MaterialTheme.typography.bodySmall)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("Reread", "Mostly", "Clearly").forEach { answer -> FilterChip(reflection == answer, { reflection = answer }, label = { Text(answer) }) }
             }
-            TextButton(onClick = { guide.resetSession(); reflection = null }) { Text("New practice session") }
+            TextButton(onClick = { guide.resetSession(); reflection = null }) { Text("Reset session statistics") }
         }
-        Text("Pausing, rotating, changing typography or reopening preserves your word. Guided reading pauses when you leave the reader.", style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
+private fun GuidedFocusPreview(options: GuidedOptions) {
+    val context=androidx.compose.ui.platform.LocalContext.current
+    val animate=remember(context) { runCatching { android.provider.Settings.Global.getFloat(context.contentResolver,android.provider.Settings.Global.ANIMATOR_DURATION_SCALE,1f)>0f }.getOrDefault(true) }
+    val words = listOf("A", "quiet", "afternoon", "with", "a", "book", "and", "a", "sleeping", "cat.")
+    var step by remember(options.mode, options.words) { mutableIntStateOf(0) }
+    LaunchedEffect(options.mode, options.words, animate) {
+        if(!animate)return@LaunchedEffect
+        while (true) { kotlinx.coroutines.delay(850); step = (step + if (options.mode == "Groups") options.words else 1) % 6 }
+    }
+    val begin = if (options.mode == "Line") 0 else step
+    val end = if (options.mode == "Line") words.size else (begin + options.words).coerceAtMost(words.size)
+    val color = MaterialTheme.colorScheme.tertiaryContainer
+    val foreground = MaterialTheme.colorScheme.onTertiaryContainer
+    Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.medium) {
+        Text(buildAnnotatedString {
+            append(words.take(begin).joinToString(" ").let { if (it.isEmpty()) it else "$it " })
+            withStyle(SpanStyle(background = color, color = foreground)) { append(words.subList(begin, end).joinToString(" ")) }
+            if (end < words.size) append(" " + words.drop(end).joinToString(" "))
+        }, Modifier.padding(16.dp), style = MaterialTheme.typography.bodyLarge)
     }
 }
 

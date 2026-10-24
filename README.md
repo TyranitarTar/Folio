@@ -1,6 +1,17 @@
 # Folio
 Folio is a vibe-coded Android reader with Danish and English TTS.
 
+Version **0.14.0** uses the selected **Bookmark Cat (icon 2)** branding. Books and
+Audiobooks share All/New/Unread/Read filters and manual read status. Audiobooks
+has search/sort, a separate **+** import screen and saved library root folders
+with refresh/relinking and nested CD ordering. The permanent centre tab is Café.
+The reader adds rendered chapter page counts, Copy, online Danish dictionary
+lookup and full saved passages. Guided-reading, read-aloud, statistics and voice
+screens are more compact. Advanced narration settings control passage size,
+lookahead and startup buffering; diagnostics show phases/elapsed time and offer
+an audible live generation/playback trial alongside the labelled simulation.
+See [implementation and verification scope](IMPLEMENTATION-v0.14.md).
+
 Version **0.13.0** adds separate **Books** and **Audiobooks** tabs, a recorded-audio
 player with saved positions/bookmarks, chapter tracks, 0.5–3× speed, a sleep timer
 and background controls. Import audio files, an audiobook folder, or a narrated

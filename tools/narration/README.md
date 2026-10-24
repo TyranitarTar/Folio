@@ -6,6 +6,15 @@ cues against the original XHTML hrefs and existing fragment IDs. When no ID exis
 a structural CSS selector plus short before/after quote context and a document progression value.
 No audio is uploaded and no model is downloaded automatically.
 
+An optional [experimental desktop DirectML path](DIRECTML.md) accelerates Røst's
+token and acoustic networks on the tested Radeon RX 5700 XT, with CPU FFT/excitation;
+the earlier token-only GPU option also remains available.
+It uses a separate environment and job cache; ordinary CPU jobs are unchanged.
+
+The [Folio Studio Windows companion](../studio/README.md) adds a background queue,
+pause/resume and selectable Røst 3, Plapre Pico and Plapre 3 models. The small EXE
+reuses installed local runtimes and shares model components without copying them.
+
 Jobs, model runtime files, chunk WAVs, exports, and any source text extracted for a resumable job
 belong in private user storage. The default job root is the current user's app-data directory.
 The local `.gitignore` also excludes accidental in-repository runtime and output directories.

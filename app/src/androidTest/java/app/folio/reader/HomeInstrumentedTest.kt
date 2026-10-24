@@ -28,6 +28,9 @@ class HomeInstrumentedTest {
                 device.swipe(device.displayWidth / 2, device.displayHeight * 3 / 4, device.displayWidth / 2, device.displayHeight / 3, 45)
                 device.waitForIdle()
             }
+            // Accessibility idle can arrive before a Compose scroll's fling has settled.
+            // The first tap during that fling only stops scrolling.
+            android.os.SystemClock.sleep(700)
         }
         repeat(3) { attempt ->
             device.waitForIdle()
@@ -61,7 +64,11 @@ class HomeInstrumentedTest {
             assertTrue(device.wait(Until.hasObject(By.text("The Quiet Hour")), 15000))
             click("Browse"); click("Local"); assertTrue(device.wait(Until.hasObject(By.text("Local EPUB files")), 15000))
             click("More"); assertTrue(device.wait(Until.hasObject(By.text("Reader settings")), 15000))
-            click("Dark"); assertEquals("Dark", HomePreferences.load(app).theme)
+            click("Dark")
+            device.takeScreenshot(File(app.filesDir,"v014-theme-after-tap.png"))
+            device.dumpWindowHierarchy(File(app.filesDir,"v014-theme-after-tap.xml"))
+            runBlocking { withTimeout(5000) { while(HomePreferences.load(app).theme!="Dark")delay(50) } }
+            assertEquals("Dark", HomePreferences.load(app).theme)
             // More retains its scroll position, with theme choices still in view.
             scenario.recreate(); assertTrue(device.wait(Until.hasObject(By.text("Dark")), 15000))
             assertEquals("Dark", HomePreferences.load(app).theme)

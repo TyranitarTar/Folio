@@ -275,9 +275,7 @@ class ReaderActivity : FragmentActivity() {
         if (forward) navigator?.goForward(model.navigation.animate) else navigator?.goBackward(model.navigation.animate)
     }
     private fun openSheet(name: String) {
-        // Awake/key-only settings can be changed during guided reading; actual typography edits
-        // still pause through the separate preferences effect.
-        if(name!="settings") guided?.pause()
+        guided?.pause()
         sheet = name
         if (name == "guided") guided?.prepare()
         if(name=="information") lifecycleScope.launch {
@@ -423,19 +421,30 @@ class ReaderActivity : FragmentActivity() {
     private val selectionMenu = object : ActionMode.Callback {
         override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
             guided?.pause()
-            menu.add(0, 101, 0, "Highlight").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
-            menu.add(0, 102, 1, "Add note").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
-            menu.add(0, 103, 2, "Read from selection").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+            if(menu.findItem(android.R.id.copy)==null) menu.add(0, android.R.id.copy, 0, "Copy").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+            menu.add(0, 105, 1, "Danish dictionary (online)")
+            menu.add(0, 101, 2, "Highlight").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+            menu.add(0, 102, 3, "Add note").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+            menu.add(0, 103, 4, "Read from selection").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
             if ((application as FolioApp).audiobooks.books.value.any { it.bookId == model.bookId })
-                menu.add(0, 104, 3, "Listen from selection").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+                menu.add(0, 104, 5, "Listen from selection").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
             return true
         }
         override fun onPrepareActionMode(mode: ActionMode, menu: Menu) = false
         override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
-            if (item.itemId !in listOf(101, 102, 103, 104)) return false
+            if (item.itemId !in listOf(android.R.id.copy, 101, 102, 103, 104, 105)) return false
             lifecycleScope.launch {
                 navigator?.currentSelection()?.locator?.let { selected ->
-                    if (item.itemId == 104) listenRecorded(selected)
+                    if (item.itemId == android.R.id.copy) {
+                        val text=selected.text.highlight.orEmpty()
+                        if(text.isNotBlank()) (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                            .setPrimaryClip(android.content.ClipData.newPlainText("Book passage",text))
+                    } else if(item.itemId==105) {
+                        val word=selected.text.highlight.orEmpty().trim().take(200)
+                        if(word.isNotBlank()) runCatching { startActivity(Intent(Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://ordnet.dk/ddo/ordbog").buildUpon().appendQueryParameter("query",word).build())) }
+                            .onFailure { model.notice.value="No browser is available for dictionary lookup." }
+                    } else if (item.itemId == 104) listenRecorded(selected)
                     else if (item.itemId == 103) { guided?.clear(); SpeechController.start(this@ReaderActivity, model.bookId, selected); sheet = null; controls = false }
                     else if (item.itemId == 102) { model.noteDraft = ""; notePosition = selected } else model.mark(selected, highlight = true)
                 }
@@ -642,7 +651,7 @@ class ReaderActivity : FragmentActivity() {
         }
         LaunchedEffect(publication, model.navigation) {
             showZones = publication != null && model.navigation.overlay
-            if (showZones) { delay(3500); showZones = false }
+            if (showZones) { delay(1000); showZones = false }
         }
         BackHandler(enabled = sheet != null || !controls) {
             if (sheet != null) { sheet = null; model.cancelSearch() } else controls = true
@@ -684,9 +693,9 @@ class ReaderActivity : FragmentActivity() {
                             Icon(if (guiding) Icons.Outlined.Pause else Icons.Outlined.PlayArrow, null)
                             Text(if (guiding) "Pause guided reading" else "Guided reading")
                         }
-                        if (recording != null) IconButton(onClick = {
+                        if (recording != null) TextButton(modifier=Modifier.semantics { contentDescription="Listen from here" },onClick = {
                             lifecycleScope.launch { listenRecorded(navigator?.visibleReadingAnchor() ?: model.location.value) }
-                        }) { Icon(Icons.Outlined.Headphones, "Listen from here") }
+                        }) { Icon(Icons.Outlined.Headphones, null); Text("Listen") }
                         TextButton(onClick = { openSheet("speech") }) { Icon(Icons.Outlined.RecordVoiceOver, null); Text("Read aloud") }
                     }
                 }
@@ -842,7 +851,7 @@ private fun OutlinePanel(publication: Publication, book: Book?, model: ReaderMod
                 items(marks, key = { it.id }) { mark ->
                     Row(Modifier.fillMaxWidth().clickable { markGo(mark) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(mark.label, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                            Text(mark.quote)
                             if (mark.note.isNotBlank()) Text(mark.note, Modifier.padding(top = 6.dp), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         IconButton(onClick = { model.deleteMark(mark.id) }) { Icon(Icons.Outlined.DeleteOutline, "Remove mark") }

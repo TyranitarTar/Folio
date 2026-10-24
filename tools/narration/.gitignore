@@ -1,5 +1,7 @@
 # User books, local model runtime, PCM chunks, generated audio, and exports stay private.
 .venv/
+.venv-*/
+gpu-results/
 cache/
 jobs/
 models/

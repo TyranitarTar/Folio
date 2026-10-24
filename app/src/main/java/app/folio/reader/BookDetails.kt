@@ -23,6 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
 
@@ -33,6 +34,7 @@ private data class BookInfo(val loading: Boolean = true, val description: String
 internal fun BookDetails(book: Book, store: LibraryStore, read: (Book) -> Unit, speech: (Book) -> Unit,
     go: (Locator) -> Unit, back: () -> Unit, shelf: () -> Unit, remove: () -> Unit, snackbar: SnackbarHostState) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val recordings by (context.applicationContext as FolioApp).audiobooks.books.collectAsStateWithLifecycle()
     val recording = RecordedNarration.preferred(recordings, book.id)
     val info by produceState(BookInfo(), book.id) {
@@ -62,6 +64,10 @@ internal fun BookDetails(book: Book, store: LibraryStore, read: (Book) -> Unit, 
     }, actions = { Box {
         IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "Book menu") }
         DropdownMenu(menu, { menu = false }) {
+            DropdownMenuItem(text = { Text(if(book.isRead) "Mark unread" else "Mark read") }, onClick = { menu=false; scope.launch {
+                runCatching { store.update(book.id) { it.copy(readState=if(book.isRead) "Unread" else "Read") } }
+                    .onFailure { snackbar.showSnackbar("Reading status could not be saved.") }
+            } })
             DropdownMenuItem(text = { Text("Assign shelf") }, onClick = { menu = false; shelf() })
             DropdownMenuItem(text = { Text("Remove book") }, onClick = { menu = false; remove() })
         }
@@ -69,7 +75,7 @@ internal fun BookDetails(book: Book, store: LibraryStore, read: (Book) -> Unit, 
         Surface(shadowElevation = 4.dp) {
             Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(onClick = { read(book) }, Modifier.weight(1f)) { Icon(Icons.Outlined.PlayArrow, null); Text(if (book.lastRead > 0) "Resume reading" else "Read book") }
-                recording?.let { audio -> OutlinedButton(onClick = { openAudiobook(context, audio.id) }) { Icon(Icons.Outlined.Headphones, "Listen to recording") } }
+                recording?.let { audio -> OutlinedButton(onClick = { openAudiobook(context, audio.id) }) { Icon(Icons.Outlined.Headphones, null); Text("Listen") } }
                 OutlinedButton(onClick = { speech(book) }) { Icon(Icons.Outlined.RecordVoiceOver, "Read aloud") }
             }
         }
@@ -84,7 +90,7 @@ internal fun BookDetails(book: Book, store: LibraryStore, read: (Book) -> Unit, 
                         Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.padding(vertical = 12.dp)) {
                             Text(if (recording != null) "EPUB + narration · Local" else "EPUB · Local", Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.labelLarge)
                         }
-                        Text(if (book.lastRead == 0L) "Unread" else "${(book.progress * 100).toInt()}% read", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        Text(book.statusLabel, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                     }
                 }
                 if (book.shelves.isNotEmpty()) Text(book.shelves.joinToString(" · "), Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.labelLarge)
@@ -107,7 +113,7 @@ internal fun BookDetails(book: Book, store: LibraryStore, read: (Book) -> Unit, 
                 if (marks.isEmpty()) item { Text("Bookmarks, highlights and notes appear here. Long-press text in the reader to add a note.", Modifier.padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 items(marks, key = { it.id }) { mark ->
                     Column(Modifier.fillMaxWidth().clickable { mark.position()?.let(go) }.padding(16.dp)) {
-                        Text(mark.label, style = MaterialTheme.typography.bodyLarge)
+                        Text(mark.quote, style = MaterialTheme.typography.bodyLarge)
                         if (mark.note.isNotBlank()) Text(mark.note, Modifier.padding(top = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     HorizontalDivider()

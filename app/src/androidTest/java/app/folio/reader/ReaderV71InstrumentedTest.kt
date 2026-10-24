@@ -79,7 +79,7 @@ class ReaderV71InstrumentedTest {
             device.wait(Until.findObject(By.text("More")),15000).click()
             UiScrollable(UiSelector().scrollable(true)).scrollTextIntoView("Version history")
             device.wait(Until.findObject(By.text("Version history")),10000).click()
-            assertTrue(device.wait(Until.hasObject(By.text("Folio 0.7.1")),10000))
+            assertTrue(device.wait(Until.hasObject(By.text("Folio ${versionHistory.first().version}")),10000))
             device.takeScreenshot(File(app.filesDir,"v71-version-history.png"))
             device.pressBack()
             UiScrollable(UiSelector().scrollable(true)).scrollTextIntoView("App updates")

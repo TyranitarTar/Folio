@@ -31,7 +31,7 @@ class PageCounter(private val context: Context, private val id: String, private 
     private val boundaryPages = linkedMapOf<String,Int>()
     private var boundaryCache: AtomicFile? = null
     internal fun requestBoundaries(locators: List<Locator>) {
-        boundaryRequests=locators.distinctBy(::pageBoundaryKey).take(5000)
+        boundaryRequests=(chapterStarts+locators).distinctBy(::pageBoundaryKey).take(5000)
         // Reuse the already visible renderer; never restart a whole-book count/create a renderer.
         if(currentKey.isNotEmpty() && !fixed) verifyVisible()
     }
@@ -39,6 +39,9 @@ class PageCounter(private val context: Context, private val id: String, private 
     internal val measurements = MutableStateFlow<Map<String,PaginationMeasurement>>(emptyMap())
     private val retainEvidence=context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
     private val hrefs = publication.readingOrder.map { it.url().removeFragment().toString() }
+    private val chapterStarts=publication.tableOfContents.let { links ->
+        if(links.size==1 && links[0].children.isNotEmpty()) links[0].children else links
+    }.ifEmpty { publication.readingOrder }.mapNotNull { publication.locatorFromLink(it) }.distinctBy(::pageBoundaryKey)
     private val fixed = publication.metadata.presentation.layout == org.readium.r2.shared.publication.epub.EpubLayout.FIXED
     private var counts = IntArray(hrefs.size)
     private val layouts = object : LinkedHashMap<String, IntArray>(8, .75f, true) {
@@ -59,6 +62,7 @@ class PageCounter(private val context: Context, private val id: String, private 
     private var dirty = false
     private var changedAt = 0L
     private val viewport = PaginationViewport()
+    init { boundaryRequests=chapterStarts }
 
     internal fun countedPages(): IntArray = counts.copyOf()
     private fun workAllowed(): Boolean = foreground && !SpeechController.state.value.playing && !SpeechController.state.value.preparing
@@ -82,7 +86,9 @@ class PageCounter(private val context: Context, private val id: String, private 
         information.value=PageInformation(label.value,hrefs,counts.toList(),boundaryPages.toMap(),scroll)
         val index = hrefs.indexOf(localHref)
         if (index < 0) return
-        label.value = PaginationCounts.label(counts, index, localPage, scroll)
+        val bookLabel=PaginationCounts.label(counts, index, localPage, scroll)
+        val chapter=ChapterPagination.label(information.value,chapterStarts,localHref,localPage)
+        label.value = "Book: $bookLabel\n$chapter"
         information.value=information.value.copy(label=label.value)
     }
     fun recalculate(key: String, scrolling: Boolean) {
@@ -217,12 +223,20 @@ class PageCounter(private val context: Context, private val id: String, private 
         }
     }
     private suspend fun captureBoundaries(renderer: EpubNavigatorFragment,href: String,ticket: Long,pages: Int) {
-        val requests=boundaryRequests.filter { it.href.removeFragment().toString()==href && pageBoundaryKey(it) !in boundaryPages }.take(128)
+        val requests=boundaryRequests.filter { it.href.removeFragment().toString()==href &&
+            (it.locations.fragments.isNotEmpty() || it.locations["cssSelector"]!=null || !it.text.highlight.isNullOrBlank()) &&
+            (pageBoundaryKey(it) !in boundaryPages || beforeBoundaryKey(it) !in boundaryPages) }.take(128)
         if(requests.isEmpty())return
         val group="folio-statistics-boundaries"
         val script="""(function(){const result={},d=document.scrollingElement,vertical=getComputedStyle(document.documentElement).writingMode.startsWith('vertical'),span=${if(scroll) "innerHeight" else "Android.getViewportWidth()/devicePixelRatio"};if(!(span>0)||($scroll&&vertical))return result;
             const items=window.readium.getDecorations('$group').items;
-            for(const item of items){try{const rect=item.range.getBoundingClientRect();if(!(rect.width>0&&rect.height>0))continue;const offset=${if(scroll) "rect.top+d.scrollTop" else "Math.abs(rect.left+d.scrollLeft)"};result[item.decoration.id]=Math.max(0,Math.min($pages-1,Math.floor(offset/span+.001)));}catch(e){}}
+            function page(rect){const offset=${if(scroll) "rect.top+d.scrollTop" else "Math.abs(rect.left+d.scrollLeft)"};return Math.max(0,Math.min($pages-1,Math.floor(offset/span+.001)));}
+            for(const item of items){try{const rect=item.range.getBoundingClientRect();if(!(rect.width>0&&rect.height>0))continue;result[item.decoration.id]=page(rect);
+                const anchor=item.range.cloneRange();anchor.collapse(true);const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let node,last=null;
+                while(node=walker.nextNode()) {let end=node.textContent.length;const same=node===anchor.startContainer;if(same)end=anchor.startOffset;else if(anchor.comparePoint(node,0)>=0)break;
+                    const text=node.textContent.slice(0,end),match=/\S(?=\s*$)/.exec(text);if(match){const r=document.createRange();r.setStart(node,match.index);r.setEnd(node,match.index+1);const rr=r.getBoundingClientRect();if(rr.width>0&&rr.height>0)last=rr;}if(same)break;}
+                result[item.decoration.id+':before']=last?page(last):-1;
+            }catch(e){}}
             return result;})()"""
         var data: String?=null
         try {
@@ -230,7 +244,7 @@ class PageCounter(private val context: Context, private val id: String, private 
                 renderer.commitDecorations(requests.map { org.readium.r2.navigator.Decoration(pageBoundaryKey(it),it,GuidedBandStyle(0,true)) },group)
                 // Readium's supported decoration API exposes its verified DOM quote range.
                 // A failed anchor stays unknown; retain only what resolves within this small budget.
-                while(true){data=renderer.evaluateJavascript(script);if(runCatching { JSONObject(data ?: "{}").length()==requests.size }.getOrDefault(false))break;delay(20)}
+                while(true){data=renderer.evaluateJavascript(script);if(runCatching { val json=JSONObject(data ?: "{}");requests.all { json.has(pageBoundaryKey(it)) } }.getOrDefault(false))break;delay(20)}
             }
         } finally { withContext(NonCancellable) { renderer.commitDecorations(emptyList(),group) } }
         if(ticket!=generation||closed)return
@@ -238,6 +252,8 @@ class PageCounter(private val context: Context, private val id: String, private 
         var changed=false
         requests.forEach { locator -> val key=pageBoundaryKey(locator);val value=(json.opt(key) as? Number)?.toInt()
             if(value!=null && value in 0 until pages){boundaryPages[key]=value;changed=true} }
+        requests.forEach { locator -> val value=(json.opt(pageBoundaryKey(locator)+":before") as? Number)?.toInt()
+            if(value!=null && value in -1 until pages){boundaryPages[beforeBoundaryKey(locator)]=value;changed=true} }
         if(changed){dirty=true;schedulePersist();update()}
     }
     private fun retainMeasurement(href: String,renderer: EpubNavigatorFragment,source: String,sample: PaginationSample) {
@@ -445,7 +461,7 @@ internal data class PageInformation(val label: String="Calculating pages…",val
 internal object PaginationBoundaryCache {
     fun read(atomic: AtomicFile): Map<String,Int> = runCatching {
         atomic.openRead().use { input -> val bytes=input.readNBytesCompat(500001);require(bytes.size<=500000);val j=JSONObject(bytes.toString(Charsets.UTF_8));require(j.length()<=5000)
-            j.keys().asSequence().mapNotNull { key -> val value=(j.opt(key) as? Number)?.toInt();if(key.matches(Regex("[a-f0-9]{64}"))&&value!=null&&value in 0..99999)key to value else null }.toMap() }
+            j.keys().asSequence().mapNotNull { key -> val value=(j.opt(key) as? Number)?.toInt();if(key.matches(Regex("[a-f0-9]{64}"))&&value!=null&&value in -1..99999)key to value else null }.toMap() }
     }.getOrDefault(emptyMap())
     fun write(atomic: AtomicFile,values: Map<String,Int>) {
         if(values.isEmpty())return

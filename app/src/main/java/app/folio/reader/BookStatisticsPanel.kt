@@ -14,6 +14,8 @@ import org.readium.r2.shared.publication.Locator
 
 @Composable
 internal fun BookStatisticsPanel(model: ReaderModel,counter: PageCounter?,anchor: Locator?,jump:(Locator)->Unit,pauseSpeech:()->Unit) {
+    var chaptersOpen by remember { mutableStateOf(false) }
+    var detailsOpen by remember { mutableStateOf(false) }
     val statistics by model.statistics.collectAsStateWithLifecycle()
     val before by model.informationWord.collectAsStateWithLifecycle()
     val error by model.statisticsError.collectAsStateWithLifecycle()
@@ -35,21 +37,22 @@ internal fun BookStatisticsPanel(model: ReaderModel,counter: PageCounter?,anchor
                 val message=error
                 if(message==null){LinearProgressIndicator(Modifier.fillMaxWidth());Text("Preparing word information…")}else Text(message)
             } else {
-                Text("${info.totalWords} readable words",style=MaterialTheme.typography.titleMedium)
+                Text("${info.totalWords} readable words",style=MaterialTheme.typography.headlineMedium)
                 // Lazy item callbacks can outlive the parent composition; read nullable state once.
                 val position=before?.coerceIn(0,info.totalWords)
                 if(position==null)Text("Locating the current reading page…") else {
-                    Text("$position words before · ${info.totalWords-position} remaining")
+                    if(detailsOpen)Text("$position words before · ${info.totalWords-position} remaining")
                     Text("About ${info.remainingMinutes(position,wpm)} min remaining at ${wpm.toInt()} WPM")
                 }
-                Text("Remaining uses the first visible word on the reading page when this sheet opened. Guided and listening positions are independent.",style=MaterialTheme.typography.bodySmall)
-                Text("Counts use the same readable tokens as guided reading and speech, including headings, retained notes and front matter. Time excludes illustrations and additional pauses. CPS mode uses a 200 WPM estimate.",style=MaterialTheme.typography.bodySmall)
+                if(detailsOpen)Text("Remaining uses the first visible word on the reading page when this sheet opened. Guided and listening positions are independent.",style=MaterialTheme.typography.bodySmall)
+                TextButton(onClick={detailsOpen=!detailsOpen}) { Text(if(detailsOpen) "Hide counting details" else "Counting details") }
+                if(detailsOpen)Text("Counts use the same readable tokens as guided reading and speech, including headings, retained notes and front matter. Time excludes illustrations and additional pauses. CPS mode uses a 200 WPM estimate.",style=MaterialTheme.typography.bodySmall)
             }
         }
         if(speech.bookId==model.bookId&&speech.playing)item { OutlinedButton(onClick=pauseSpeech) { Text("Pause narration") } }
         statistics?.let { info ->
-            item { Text("Chapter distribution",style=MaterialTheme.typography.titleMedium);Text("Top-level rows partition the book's words. Indented contents entries are included within their parent. Page ranges can share boundary pages; they are not additive.",style=MaterialTheme.typography.bodySmall) }
-            items(info.chapters) { row ->
+            item { TextButton(onClick={chaptersOpen=!chaptersOpen}) { Text(if(chaptersOpen) "Hide chapter distribution" else "Show chapter distribution") } }
+            if(chaptersOpen)items(info.chapters) { row ->
                 val color=MaterialTheme.colorScheme.primary
                 Column(Modifier.fillMaxWidth().padding(start=(minOf(row.depth,4)*12).dp)) {
                     Text(row.title,style=MaterialTheme.typography.titleSmall)

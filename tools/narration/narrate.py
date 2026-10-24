@@ -20,6 +20,7 @@ os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 from tools.narration.core import (  # noqa: E402
     ENGINES,
     NarrationError,
+    NarrationPaused,
     create_job,
     format_duration,
     generate_job,
@@ -40,6 +41,8 @@ def _plan(args: argparse.Namespace) -> int:
         model_revision=args.model_revision,
         voice_reference=Path(args.voice_reference).expanduser() if args.voice_reference else None,
         max_chars=args.max_chars,
+        accelerator=args.accelerator,
+        voice=args.voice,
     )
     total_words = sum(len(cue["text"].split()) for chapter in job["chapters"] for cue in chapter["cues"])
     total_sentences = sum(len(chapter["cues"]) for chapter in job["chapters"])
@@ -48,6 +51,7 @@ def _plan(args: argparse.Namespace) -> int:
     print(f"Title: {job['title']}")
     print(f"Language: {job['language']}")
     print(f"Engine: {args.engine} ({ENGINES[args.engine]['repository']})")
+    print(f"Accelerator: {job.get('accelerator', 'cpu')}")
     print(f"Source SHA-256: {job['sourceSha256']}")
     print(f"Chapters: {len(job['chapters'])}")
     print(f"Sentence cues: {total_sentences}")
@@ -83,7 +87,10 @@ def _generate(args: argparse.Namespace) -> int:
                 flush=True,
             )
 
-    print(f"Loading local {job['engine']} model on CPU; first load may take a while...", flush=True)
+    target = {'cpu': 'CPU', 'directml': 'DirectML token model + CPU waveform',
+              'directml-acoustic': 'DirectML token/acoustic networks + CPU FFT/excitation',
+              'onnx-directml': 'CPU token model + DirectML acoustics'}.get(job.get('accelerator','cpu'),'unknown')
+    print(f"Loading local {job['engine']} model for {target}; first load may take a while...", flush=True)
     output, status = generate_job(
         directory,
         model_dir,
@@ -94,6 +101,11 @@ def _generate(args: argparse.Namespace) -> int:
         max_chapters=args.limit_chapters,
         cpu_threads=args.cpu_threads,
         progress_callback=report_progress,
+        control_file=Path(args.control_file) if args.control_file else None,
+        stop_after_seconds=args.stop_after_seconds,
+        through_sentences=args.through_sentences,
+        parallel_passages=args.parallel_passages,
+        selected_chapters=[int(i) for i in args.chapters.split(',')] if args.chapters else None,
     )
     print(f"Bundle: {output}")
     print(f"Progress: {status['doneSentences']}/{status['totalSentences']} sentence cues; {status['completedChapters']}/{status['totalChapters']} complete chapters")
@@ -152,6 +164,8 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--model-revision", help="Pinned Hugging Face model revision; defaults to the reviewed snapshot SHA")
     plan.add_argument("--voice-reference", help="Optional authorized local narrator reference audio")
     plan.add_argument("--max-chars", type=int, default=350, help="Maximum TTS input length (default: 350)")
+    plan.add_argument('--accelerator', choices=['cpu','directml','directml-acoustic','onnx-directml'], default='cpu', help='Backend must match the engine; CPU remains available.')
+    plan.add_argument('--voice', choices=['ida','tor','liv','ask','kaj'], help='Plapre named voice')
     plan.add_argument("--jobs-dir", help="Private job root; default is the current user's app-data directory")
     plan.set_defaults(run=_plan)
 
@@ -164,9 +178,14 @@ def build_parser() -> argparse.ArgumentParser:
     generate.add_argument("--ffmpeg", help="FFmpeg executable path; PATH and imageio-ffmpeg are checked by default")
     generate.add_argument("--bitrate", default="96k", help="Mono MP3 bitrate, for example 96k or 128k")
     generate.add_argument("--limit-sentences", type=int, help="Generate a measured preview of this many additional sentences")
+    generate.add_argument('--through-sentences',type=int,help='Absolute passage selection; resuming never extends a fixed preview')
+    generate.add_argument('--parallel-passages',type=int,choices=[1,2,4],default=1,help='Shared-model concurrency for Pico/Plapre 3/Røst/Nano; 1 is sequential')
     generate.add_argument("--limit-chapters", type=int, help="Generate a preview through this many chapters")
+    generate.add_argument('--chapters',help='Explicit comma-separated chapter numbers; excluded chapters keep their cached audio.')
     generate.add_argument("--progress-every", type=int, default=5, help="Print a concise update every N sentences (default: 5)")
     generate.add_argument("--cpu-threads", type=int, default=max(1, min(8, os.cpu_count() or 1)), help="CPU inference threads")
+    generate.add_argument('--control-file', help='Local cooperative pause/cancel control JSON')
+    generate.add_argument('--stop-after-seconds', type=float, help='Checkpoint and pause after this active run duration')
     generate.set_defaults(run=_generate)
 
     status = sub.add_parser("status", help="Inspect progress and measured throughput without printing book text")
@@ -180,6 +199,9 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return args.run(args)
+    except NarrationPaused as exc:
+        print(str(exc), flush=True)
+        return 10
     except NarrationError as exc:
         print(f"Narration error: {exc}", file=sys.stderr)
         return 2

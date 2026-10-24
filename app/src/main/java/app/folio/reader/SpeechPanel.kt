@@ -65,8 +65,30 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(if (settingsOnly) "Speech settings" else "Read aloud", style = MaterialTheme.typography.headlineSmall)
+        if (!settingsOnly) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(onClick = {
+                if(!localReady){packsOpen=true;return@Button}
+                if (thisBook && !state.finished && state.error == null) {
+                    if (state.playing || state.preparing) SpeechController.pause(context)
+                    else { SpeechController.resume(context); onAcceptedStart() }
+                } else { SpeechController.start(context, bookId); onAcceptedStart() }
+            }, modifier = Modifier.weight(1f)) {
+                Text(if(!localReady)"Download voice pack" else if (thisBook && state.playing) "Pause" else "Resume listening")
+            }
+            OutlinedButton(onClick = { if(localReady)onReadFromHere() else packsOpen=true },
+                enabled = currentLocator != null, modifier = Modifier.weight(1f)) { Text("Read from here") }
+        }
+        if (thisBook) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+            IconButton(onClick = { SpeechController.previous(context) }, enabled = !state.preparing) {
+                Icon(Icons.Outlined.SkipPrevious, "Previous sentence")
+            }
+            IconButton(onClick = { SpeechController.next(context) }, enabled = !state.preparing) {
+                Icon(Icons.Outlined.SkipNext, "Next sentence")
+            }
+            TextButton(onClick = { SpeechController.stop(context) }) { Text("Stop narration") }
+        }
         Text("Offline speech", style = MaterialTheme.typography.titleSmall)
-        Text(if (settingsOnly) "Choose an offline voice and speed. Open a book to start listening." else "Listening has its own saved position. Browsing the book does not move it.", style = MaterialTheme.typography.bodyMedium)
+        if (settingsOnly) Text("Choose a voice and speed. Open a book to listen.", style = MaterialTheme.typography.bodyMedium)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected=settings.backend=="plapre3",onClick={
                 settings=settings.copy(backend="plapre3");SpeechController.settings(context,settings)
@@ -107,18 +129,39 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
         if (thisBook && state.preparing) Text(state.preparation, style = MaterialTheme.typography.bodySmall)
         if(thisBook && state.preparationStage=="prepared") Text(state.preparation,style=MaterialTheme.typography.bodySmall)
         if(settings.isPlapre) {
-            Text("${settings.engineLabel} inference threads",style=MaterialTheme.typography.titleSmall)
-            FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                listOf(0,1,2,4,6,8).forEach { threads ->
-                    FilterChip(settings.inferenceThreads==threads,{
-                        settings=if(settings.backend=="plapre3")settings.copy(plapre3Threads=threads) else settings.copy(picoThreads=threads);SpeechController.settings(context,settings)
-                    },label={Text(if(threads==0)"Auto (up to 4)" else "$threads")})
+            var advanced by remember { mutableStateOf(false) }
+            TextButton(onClick={advanced=!advanced}) { Text(if(advanced) "Hide advanced settings" else "Advanced settings") }
+            if(advanced) Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                Text("CPU threads",Modifier.weight(1f))
+                var threadMenu by remember { mutableStateOf(false) }
+                Box {
+                    TextButton(onClick={threadMenu=true}) { Text(if(settings.inferenceThreads==0) "Auto" else "${settings.inferenceThreads}") }
+                    DropdownMenu(threadMenu,{threadMenu=false}) {
+                        listOf(0,1,2,4,6,8).forEach { threads -> DropdownMenuItem(text={Text(if(threads==0) "Auto (up to 4)" else "$threads")},onClick={
+                            settings=if(settings.backend=="plapre3")settings.copy(plapre3Threads=threads) else settings.copy(picoThreads=threads)
+                            SpeechController.settings(context,settings);threadMenu=false
+                        }) }
+                    }
                 }
             }
-            Text("More threads may increase heat or be slower. Use the performance test to compare on this device.",style=MaterialTheme.typography.bodySmall)
-            OutlinedButton(onClick={diagnosticsOpen=true}) { Text("${if(settings.backend=="plapre3")"Plapre 3" else "Pico"} performance test") }
-            if(!settingsOnly) OutlinedButton(onClick={SpeechController.prepareChapter(context,bookId)},enabled=localReady && !state.preparing) { Text("Prepare chapter ahead") }
-            if(!settingsOnly) Text("Prepare from the listening position while paused, up to about 8 minutes of audio. Books and listening progress stay in place; resume manually.",style=MaterialTheme.typography.bodySmall)
+            if(advanced) {
+                if(state.playing || state.preparing) Text("Pause narration to change chunk and buffer settings.",style=MaterialTheme.typography.bodySmall)
+                else {
+                    ChoiceRow("Passage target (nearest sentence)",listOf("Default","10","20","30","35"),if(settings.passageTargetWords==0)"Default" else "${settings.passageTargetWords}") {
+                        settings=settings.copy(passageTargetWords=it.toIntOrNull() ?: 0);SpeechController.settings(context,settings)
+                    }
+                    ChoiceRow("Lookahead passages",listOf("1","2","4","8","16","32"),"${settings.lookaheadPassages}") {
+                        settings=settings.copy(lookaheadPassages=it.toInt());SpeechController.settings(context,settings)
+                    }
+                    ChoiceRow("Startup buffer (seconds)",listOf("6","12","24","30"),"${settings.startBufferSeconds}") {
+                        settings=settings.copy(startBufferSeconds=it.toInt());SpeechController.settings(context,settings)
+                    }
+                }
+            }
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick={diagnosticsOpen=true},modifier=Modifier.weight(1f)) { Text("Performance test") }
+                if(!settingsOnly) OutlinedButton(onClick={SpeechController.prepareChapter(context,bookId)},enabled=localReady && !state.preparing,modifier=Modifier.weight(1f)) { Text("Prepare chapter ahead") }
+            }
         }
         if ((thisBook || state.previewing || settingsOnly) && state.error != null) Text(state.error!!, color = MaterialTheme.colorScheme.error)
         if (settings.backend == "android" && !probing && voices.isEmpty()) {
@@ -126,28 +169,6 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
                 style = MaterialTheme.typography.bodyMedium)
         }
         if (thisBook && state.passage.isNotBlank()) Text(state.passage.take(240), style = MaterialTheme.typography.bodySmall)
-        if (!settingsOnly) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = {
-                if(!localReady){packsOpen=true;return@Button}
-                if (thisBook && !state.finished && state.error == null) {
-                    if (state.playing || state.preparing) SpeechController.pause(context)
-                    else { SpeechController.resume(context); onAcceptedStart() }
-                } else { SpeechController.start(context, bookId); onAcceptedStart() }
-            }, modifier = Modifier.weight(1f)) {
-                Text(if(!localReady)"Download voice pack" else if (thisBook && state.playing) "Pause" else "Resume listening")
-            }
-            OutlinedButton(onClick = { if(localReady)onReadFromHere() else packsOpen=true },
-                enabled = currentLocator != null, modifier = Modifier.weight(1f)) { Text("Read from here") }
-        }
-        if (thisBook) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-            IconButton(onClick = { SpeechController.previous(context) }, enabled = !state.preparing) {
-                Icon(Icons.Outlined.SkipPrevious, "Previous sentence")
-            }
-            IconButton(onClick = { SpeechController.next(context) }, enabled = !state.preparing) {
-                Icon(Icons.Outlined.SkipNext, "Next sentence")
-            }
-            TextButton(onClick = { SpeechController.stop(context) }) { Text("Stop narration") }
-        }
         Text("Voice", style = MaterialTheme.typography.titleSmall)
         Box {
             OutlinedButton(onClick = { voiceMenu = true }, enabled = settings.isLocal || voices.isNotEmpty()) {
@@ -222,11 +243,8 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
         }) { Text("Android Speech settings") }
         settingsError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         state.recoveryNote?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
-        if (settings.isLocal) Text("Pause resumes at the saved point in the audio. Changing voice, language or Pico thread count repeats the current passage. Speed changes keep the current audio position. AI speech follows passages; word timing is unavailable.",
-            style = MaterialTheme.typography.bodySmall)
-        Text("All options work offline. Android speech uses installed English voices.",
-            style = MaterialTheme.typography.bodySmall)
+
     }
     if(packsOpen)VoicePacksPanel(initialBackend=settings.backend,close={packsOpen=false})
-    if(diagnosticsOpen)PicoDiagnosticsPanel(backend=settings.backend,close={diagnosticsOpen=false})
+    if(diagnosticsOpen)PicoDiagnosticsPanel(backend=settings.backend,close={diagnosticsOpen=false;settings=SpeechSettings.load(context)})
 }

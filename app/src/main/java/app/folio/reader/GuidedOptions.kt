@@ -7,7 +7,7 @@ data class GuidedOptions(val mode: String = "Window", val words: Int = 4,
     val practiceMinutes: Int = 0, val gradualIncrease: Boolean = false, val navigationUnit: String = "sentence") {
     fun normalized() = copy(mode = mode.takeIf { it in listOf("Window", "Groups", "Line") } ?: "Window",
         navigationUnit = navigationUnit.takeIf { it in listOf("sentence", "paragraph") } ?: "sentence",
-        words = words.coerceIn(1, 8), countdown = countdown.coerceIn(0, 5), practiceMinutes = practiceMinutes.coerceIn(0, 30))
+        words = words.coerceIn(1, 8), countdown = 0, practiceMinutes = 0, gradualIncrease = false)
     fun save(context: Context) { val o = normalized(); context.getSharedPreferences("pace", 0).edit()
         .putString("mode", o.mode).putInt("focusWords", o.words).putBoolean("punctuation", o.punctuation)
         .putBoolean("longWords", o.longWords).putInt("countdown", o.countdown)

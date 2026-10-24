@@ -48,7 +48,8 @@ data class SpeechVoice(val name: String, val label: String)
 data class SpeechSettings(val voice: String = "", val rate: Float = 1f, val backend: String = "android", val aiVoice: Int = 21,
     val supertonicVoice: Int = 0, val supertonicLanguage: String = "en",
     val navigationUnit: String = "sentence", val sentencePauseMillis: Int = 0, val paragraphPauseMillis: Int = 0,
-    val picoVoice: Int = 0, val picoThreads: Int = 0, val plapre3Voice: Int = 0, val plapre3Threads: Int = 0) {
+    val picoVoice: Int = 0, val picoThreads: Int = 0, val plapre3Voice: Int = 0, val plapre3Threads: Int = 0,
+    val passageTargetWords: Int = 0, val lookaheadPassages: Int = 32, val startBufferSeconds: Int = 12) {
     val isPlapre: Boolean get() = backend in setOf("pico","plapre3")
     val inferenceThreads: Int get() = if(backend=="plapre3")plapre3Threads else picoThreads
     val isLocal: Boolean get() = backend in setOf("kokoro", "supertonic", "pico", "plapre3")
@@ -59,7 +60,7 @@ data class SpeechSettings(val voice: String = "", val rate: Float = 1f, val back
     val synthesisRate: Float get() = if (stretchesPlayback) 1f else rate
     val playbackRate: Float get() = if (stretchesPlayback) rate else 1f
     fun sameSource(other: SpeechSettings) = backend == other.backend &&
-        (backend != "android" || voice == other.voice) && (!isPlapre || inferenceThreads == other.inferenceThreads) && localVoiceIdentity == other.localVoiceIdentity && synthesisRate == other.synthesisRate
+        (backend != "android" || voice == other.voice) && (!isPlapre || inferenceThreads == other.inferenceThreads) && passageTargetWords==other.passageTargetWords && localVoiceIdentity == other.localVoiceIdentity && synthesisRate == other.synthesisRate
     fun audioKey(text: String): String = AiListeningStore.key(text, localVoice, synthesisRate, backend, if(isPlapre) "da" else supertonicLanguage, inferenceThreads)
     fun save(context: Context) = context.getSharedPreferences("speech", Context.MODE_PRIVATE).edit()
         .putString("voice", voice).putFloat("rate", rate.coerceIn(.5f, 3f))
@@ -69,7 +70,9 @@ data class SpeechSettings(val voice: String = "", val rate: Float = 1f, val back
         .putInt("plapre3Voice", plapre3Voice.coerceIn(0,4)).putInt("plapre3Threads",plapre3Threads.coerceIn(0,8))
         .putInt("supertonicVoice", supertonicVoice).putString("supertonicLanguage", supertonicLanguage)
         .putString("navigationUnit", navigationUnit).putInt("sentencePauseMillis", sentencePauseMillis.coerceIn(0,5000))
-        .putInt("paragraphPauseMillis", paragraphPauseMillis.coerceIn(0,5000)).apply()
+        .putInt("paragraphPauseMillis", paragraphPauseMillis.coerceIn(0,5000))
+        .putInt("passageTargetWords",passageTargetWords.coerceIn(0,35)).putInt("lookaheadPassages",lookaheadPassages.coerceIn(1,32))
+        .putInt("startBufferSeconds",startBufferSeconds.coerceIn(0,30)).apply()
     companion object {
         fun load(context: Context): SpeechSettings = context.getSharedPreferences("speech", Context.MODE_PRIVATE).let {
             SpeechSettings(it.getString("voice", "").orEmpty(), it.getFloat("rate", 1f).takeIf { value -> value.isFinite() }?.coerceIn(.5f,3f) ?: 1f,
@@ -80,7 +83,8 @@ data class SpeechSettings(val voice: String = "", val rate: Float = 1f, val back
                 it.getString("navigationUnit", "sentence").takeIf { unit -> unit in setOf("line","sentence","paragraph","chapter") } ?: "sentence",
                 it.getInt("sentencePauseMillis", 0).coerceIn(0,5000), it.getInt("paragraphPauseMillis", 0).coerceIn(0,5000),
                 it.getInt("picoVoice", 0).takeIf { id -> id in 0..4 } ?: 0, it.getInt("picoThreads",0).coerceIn(0,8),
-                it.getInt("plapre3Voice",0).coerceIn(0,4),it.getInt("plapre3Threads",0).coerceIn(0,8))
+                it.getInt("plapre3Voice",0).coerceIn(0,4),it.getInt("plapre3Threads",0).coerceIn(0,8),
+                it.getInt("passageTargetWords",0).coerceIn(0,35),it.getInt("lookaheadPassages",32).coerceIn(1,32),it.getInt("startBufferSeconds",12).coerceIn(0,30))
         }
     }
 }
@@ -683,7 +687,7 @@ class SpeechService : Service() {
             val words = passageWords(pending.cursor, true)
             book.cursor(pending.cursor.sectionIndex, pending.cursor.wordIndex + words.lastIndex)
         } ?: book.cursor(here.sectionIndex, currentStartWord + currentWords.lastIndex) ?: return
-        while (ahead.size < MAX_BUFFER_PASSAGES) {
+        while (ahead.size < settings.lookaheadPassages.coerceIn(1,MAX_BUFFER_PASSAGES)) {
             val next = book.next(last) ?: break
             if (sleepTimer.chapter != null && SpeechNavigation.chapterIndex(book,next) != sleepTimer.chapter) break
             val words = passageWords(next, true)
@@ -745,7 +749,7 @@ class SpeechService : Service() {
             var seconds = (clip.samples.size - offset).toDouble() / clip.sampleRate
             // Pay preparation once, ahead of playback, rather than after each short line.
             for (pending in ahead.toList()) {
-                if (seconds / settings.playbackRate >= START_BUFFER_SECONDS) break
+                if (seconds / settings.playbackRate >= settings.startBufferSeconds) break
                 val prepared = pending.audio.await().getOrThrow()
                 seconds += prepared.samples.size.toDouble() / prepared.sampleRate
             }

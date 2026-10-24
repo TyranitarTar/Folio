@@ -16,7 +16,7 @@ enum class TapAction { PREVIOUS, MENU, NEXT }
 
 data class NavigationSettings(
     val layout: String = "Default", val inversion: String = "None", val direction: String = "Book",
-    val animate: Boolean = true, val overlay: Boolean = false, val invertVolume: Boolean = false
+    val animate: Boolean = true, val overlay: Boolean = true, val invertVolume: Boolean = false
 ) {
     fun action(x: Float, y: Float, rtl: Boolean = false): TapAction {
         val a = if (inversion == "Horizontal" || inversion == "Both") 1f - x else x
@@ -39,7 +39,7 @@ data class NavigationSettings(
             val p = context.getSharedPreferences("navigation", 0)
             val j = runCatching { JSONObject(p.getString(id, p.getString("global", "{}"))!!) }.getOrDefault(JSONObject())
             return NavigationSettings(j.optString("layout", "Default"), j.optString("inversion", "None"), j.optString("direction", "Book"),
-                j.optBoolean("animate", true), j.optBoolean("overlay"), j.optBoolean("invertVolume"))
+                j.optBoolean("animate", true), j.optBoolean("overlay", true), j.optBoolean("invertVolume"))
         }
         fun save(context: Context, id: String, value: NavigationSettings, bookOnly: Boolean) {
             val edit = context.getSharedPreferences("navigation", 0).edit()

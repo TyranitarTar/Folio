@@ -171,7 +171,7 @@ class LibraryBackup(private val context: Context, private val store: LibraryStor
                 values.keys().forEach { key -> when (val value = values.get(key)) {
                     is Boolean -> edit.putBoolean(key, if (name == "speech" && key == "follow") true else value)
                     is String -> edit.putString(key, value)
-                    is Number -> if ((name == "appearance" && key == "awakeMinutes") || (name == "home" && key == "columns") || (name == "speech" && key in setOf("aiVoice", "supertonicVoice", "picoVoice", "picoThreads", "plapre3Voice", "plapre3Threads", "sentencePauseMillis", "paragraphPauseMillis")) || (name == "pace" && key in setOf("focusWords", "countdown", "practiceMinutes"))) edit.putInt(key, value.toInt()) else edit.putFloat(key, value.toFloat())
+                    is Number -> if ((name == "appearance" && key == "awakeMinutes") || (name == "home" && key in setOf("columns","statusSchema")) || (name == "speech" && key in setOf("aiVoice", "supertonicVoice", "picoVoice", "picoThreads", "plapre3Voice", "plapre3Threads", "sentencePauseMillis", "paragraphPauseMillis", "passageTargetWords", "lookaheadPassages", "startBufferSeconds")) || (name == "pace" && key in setOf("focusWords", "countdown", "practiceMinutes"))) edit.putInt(key, value.toInt()) else edit.putFloat(key, value.toFloat())
                 } }
                 if (name == "appearance" && values.has("awake") && !values.has("awakeMode")) edit.remove("awakeMode").remove("awakeMinutes")
                 check(edit.commit()) { "Settings could not be restored." }
@@ -213,8 +213,8 @@ class LibraryBackup(private val context: Context, private val store: LibraryStor
                 val numeric = when (name) {
                     "appearance" -> key in setOf("fontSize", "lineHeight", "margins", "awakeMinutes")
                     "pace" -> key in setOf("speed", "focusWords", "countdown", "practiceMinutes")
-                    "speech" -> key in setOf("rate", "aiVoice", "supertonicVoice", "picoVoice", "picoThreads", "plapre3Voice", "plapre3Threads", "sentencePauseMillis", "paragraphPauseMillis")
-                    "home" -> key == "columns"
+                    "speech" -> key in setOf("rate", "aiVoice", "supertonicVoice", "picoVoice", "picoThreads", "plapre3Voice", "plapre3Threads", "sentencePauseMillis", "paragraphPauseMillis", "passageTargetWords", "lookaheadPassages", "startBufferSeconds")
+                    "home" -> key in setOf("columns","statusSchema")
                     else -> false
                 }
                 val boolean = when (name) {
@@ -229,9 +229,11 @@ class LibraryBackup(private val context: Context, private val store: LibraryStor
                 if (v is Number) {
                     val number = v.toDouble(); require(number.isFinite())
                     val range = when (key) { "rate" -> .5..3.0; "columns" -> 2.0..6.0; "aiVoice" -> 3.0..21.0; "supertonicVoice" -> 0.0..9.0; "picoVoice" -> 0.0..4.0; "picoThreads", "plapre3Threads" -> 0.0..8.0; "plapre3Voice" -> 0.0..4.0
+                        "statusSchema" -> 1.0..2.0; "passageTargetWords" -> 0.0..35.0; "lookaheadPassages" -> 1.0..32.0; "startBufferSeconds" -> 0.0..30.0;
                         "focusWords" -> 1.0..8.0; "countdown" -> 0.0..5.0; "practiceMinutes" -> 0.0..30.0;
                         "sentencePauseMillis", "paragraphPauseMillis" -> 0.0..5000.0; "speed" -> 1.0..1200.0; "fontSize" -> .5..3.0; "lineHeight" -> .8..3.0; "margins" -> .0..3.0; else -> .0..10000.0 }
                     require(number in range) { "A backup setting is outside its supported range." }
+                    if(key in setOf("statusSchema","passageTargetWords","lookaheadPassages","startBufferSeconds")) require(number==number.toInt().toDouble()) { "A whole-number backup setting is invalid." }
                     if (name == "appearance" && key == "awakeMinutes") require(number in setOf(2.0, 5.0, 10.0, 15.0, 30.0))
                 }
                 if (name == "appearance" && key == "awakeMode") require(v in setOf("device", "timed", "always"))

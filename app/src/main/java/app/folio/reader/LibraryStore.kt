@@ -37,6 +37,7 @@ import org.readium.r2.streamer.PublicationOpener
 import org.readium.r2.streamer.parser.DefaultPublicationParser
 
 data class Mark(val id: String, val locator: String, val label: String, val note: String = "") {
+    val quote: String get() = position()?.text?.highlight?.takeIf { it.isNotBlank() } ?: label
     fun json() = JSONObject().put("id", id).put("locator", JSONObject(locator)).put("label", label).put("note", note)
     fun position(): Locator? = runCatching { Locator.fromJSON(JSONObject(locator)) }.getOrNull()
     companion object {
@@ -48,12 +49,14 @@ data class Book(
     val id: String, val title: String, val author: String, val added: Long,
     val lastRead: Long = 0, val locator: String? = null, val progress: Double = 0.0,
     val bookmarks: List<Mark> = emptyList(), val highlights: List<Mark> = emptyList(),
-    val shelves: List<String> = emptyList(), val origin: SourceOrigin? = null
+    val shelves: List<String> = emptyList(), val origin: SourceOrigin? = null, val readState: String = "Auto"
 ) {
+    val isRead: Boolean get() = if(readState=="Read") true else if(readState=="Unread") false else progress>=.99
+    val statusLabel: String get() = when { isRead->"Read";lastRead==0L->"New";readState=="Unread"->"${(progress*100).toInt()}% · Unread";else->"${(progress*100).toInt()}% read" }
     fun json() = JSONObject().put("id", id).put("title", title).put("author", author)
         .put("added", added).put("lastRead", lastRead).put("locator", locator?.let(::JSONObject))
         .put("progress", progress).put("bookmarks", JSONArray(bookmarks.map { it.json() }))
-        .put("highlights", JSONArray(highlights.map { it.json() })).put("shelves", JSONArray(shelves)).put("origin", origin?.json())
+        .put("highlights", JSONArray(highlights.map { it.json() })).put("shelves", JSONArray(shelves)).put("origin", origin?.json()).put("readState",readState)
     fun position(): Locator? = locator?.let { runCatching { Locator.fromJSON(JSONObject(it)) }.getOrNull() }
     companion object {
         fun from(j: JSONObject): Book {
@@ -63,7 +66,7 @@ data class Book(
                 j.optLong("lastRead"), j.optJSONObject("locator")?.toString(), j.optDouble("progress", 0.0).takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0,
                 j.optJSONArray("bookmarks").marks(), j.optJSONArray("highlights").marks(),
                 j.optJSONArray("shelves")?.let { a -> (0 until a.length()).map { a.getString(it) }.distinct() }.orEmpty(),
-                j.optJSONObject("origin")?.let(SourceOrigin::from))
+                j.optJSONObject("origin")?.let(SourceOrigin::from), j.optString("readState","Auto").takeIf { it in listOf("Auto","Read","Unread") } ?: "Auto")
         }
     }
 }
@@ -198,7 +201,7 @@ class LibraryStore(private val context: Context, val engine: BookEngine) {
                 old.copy(locator = latest.locator, progress = latest.progress, lastRead = latest.lastRead,
                     bookmarks = (old.bookmarks + incoming.bookmarks).distinctBy { it.id },
                     highlights = (old.highlights + incoming.highlights).distinctBy { it.id }, shelves = (old.shelves + incoming.shelves).distinct(),
-                    origin = old.origin ?: incoming.origin)
+                    origin = old.origin ?: incoming.origin, readState=if(old.readState=="Auto")incoming.readState else old.readState)
             } ?: old } + items.filter { it.id !in _books.value.map { b -> b.id } && file(it.id).exists() })
         }
     }
@@ -385,7 +388,7 @@ class LibraryStore(private val context: Context, val engine: BookEngine) {
         context.contentResolver.openOutputStream(uri, "wt")?.bufferedWriter()?.use { out ->
             out.appendLine(book.title); out.appendLine(book.author); out.appendLine()
             for (mark in book.highlights) {
-                out.appendLine(mark.label)
+                out.appendLine(mark.quote)
                 if (mark.note.isNotBlank()) out.appendLine("Note: ${mark.note}")
                 out.appendLine()
             }

@@ -1,5 +1,36 @@
 # Folio: page navigation and speech implementation record
 
+## Next session: 22 October 2026 — Studio throughput
+
+Benchmark parallel passage generation before the Android interface work. Compare
+one, two and (for Pico if memory permits) four model instances, with controlled
+CPU threads and total finished-audio throughput measurements. Investigate shared
+GPU acoustics, preserving ordered assembly, checkpoints and voice identity.
+See the detailed [Studio TODO](../tools/studio/TODO.md). Studio 0.1.0 and the
+workspace cleanup are delivered; parallel generation is planned, not implemented.
+
+## Next Android version: 0.14 — after Folio Studio
+
+The user's complete reader/interface backlog is saved in
+[ROADMAP-0.14.md](ROADMAP-0.14.md): chapter page counts, copy/Danish lookup and saved
+passages, guided/narration panel cleanup, folder audiobooks, central Café navigation,
+tap-zone hints, compact voice cards/settings, book statistics, configurable
+buffering benchmarks and six icon drafts for user selection. These are future
+tasks following the Studio parallel-generation investigation above. The 21 October
+addition makes Audiobooks a cover-led library matching Books, moves setup to a
+dedicated + import screen, improves the small headphone navigation action and
+adds shared All / New (not started) / Unread / Read filters to both libraries.
+
+## Earlier session plan: 0.13.1 — 20 October 2026
+
+Plan saved: [audiobook library folders and desktop GPU tests](ROADMAP-0.13.1.md).
+Select an audiobook root once, discover its separate books and CD folders, retain
+access and listening state, and add All / Unread / Reading / Read filters.
+Test the actual desktop RX 5700 XT through compatible GPU runtimes, measuring
+complete speech generation and quality. Android emulator tests remain separate.
+GPU acceleration is unverified; do not promise a speedup or interrupt the active
+Danish chapter render while planning. Implement and test in the next session.
+
 ## 0.13 recorded narration
 
 Implemented separate Books/Audiobooks navigation, a local-file audiobook player,

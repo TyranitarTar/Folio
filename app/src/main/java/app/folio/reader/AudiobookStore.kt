@@ -36,8 +36,15 @@ data class Audiobook(
     val speed: Float = 1f,
     val bookmarks: List<AudioBookmark> = emptyList(),
     val lastPlayed: Long = 0L,
-    val preview: Boolean = false
-)
+    val preview: Boolean = false,
+    val started: Boolean = false,
+    val readState: String = "Auto"
+) {
+    val elapsedMs: Long get() = tracks.take(positionTrack).sumOf { it.durationMs } + positionMs
+    val totalMs: Long get() = tracks.sumOf { it.durationMs }
+    val isRead: Boolean get() = if(readState=="Read") true else if(readState=="Unread") false
+        else totalMs>0 && elapsedMs>=totalMs-1000 && positionTrack==tracks.lastIndex
+}
 
 data class AudioTrack(
     val file: String,
@@ -98,14 +105,14 @@ class AudiobookStore(private val context: Context) {
     }
 
     /** Imports ordered local audio files as one audiobook, streaming each file to private storage. */
-    suspend fun importAudio(uris: List<Uri>): Audiobook = withContext(Dispatchers.IO) {
+    suspend fun importAudio(uris: List<Uri>, preserveOrder: Boolean = false, titleOverride: String? = null): Audiobook = withContext(Dispatchers.IO) {
         require(uris.isNotEmpty() && uris.size <= MAX_TRACKS) { "Choose between 1 and $MAX_TRACKS audio files." }
         load()
         val orderedUris = uris.mapIndexed { index, uri -> Triple(index, uri, displayName(uri).orEmpty()) }
-            .sortedWith { left, right ->
+            .let { files -> if(preserveOrder) files else files.sortedWith { left, right ->
                 val order = compareNatural(left.third, right.third)
                 if (order != 0) order else left.first.compareTo(right.first)
-            }
+            } }
         val stage = stageDirectory()
         try {
             val tracks = mutableListOf<AudioTrack>()
@@ -131,8 +138,8 @@ class AudiobookStore(private val context: Context) {
                 tracks += AudioTrack(name, metadata.title?.takeIf { it.isNotBlank() } ?: sourceName?.substringBeforeLast('.')?.takeIf { it.isNotBlank() } ?: "Track ${index + 1}", metadata.durationMs)
                 digests += hex(digest.digest())
             }
-            val title = tracks.first().title.ifBlank { "Audiobook" }
-            publish(stage, title, firstAuthor, null, tracks, digests)
+            val title = titleOverride?.trim()?.takeIf { it.isNotEmpty() }?.take(500) ?: tracks.first().title.ifBlank { "Audiobook" }
+            publish(stage, title, firstAuthor, null, tracks, digests,replaceTitle=titleOverride!=null)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } finally {
@@ -277,7 +284,7 @@ class AudiobookStore(private val context: Context) {
             val duration = old.tracks[track].durationMs
             val position = positionMs.coerceAtLeast(0L).let { if (duration > 0L) it.coerceAtMost(duration) else it }
             val updated = old.copy(positionTrack = track, positionMs = position, speed = speed.takeIf { it.isFinite() }?.coerceIn(.5f, 3f) ?: 1f,
-                lastPlayed = System.currentTimeMillis())
+                lastPlayed = System.currentTimeMillis(), started=old.started || track>0 || position>0)
             writeCursor(updated)
             mutableBooks.value = mutableBooks.value.map { if (it.id == updated.id) updated else it }.sortedByDescending { it.lastPlayed }
         }
@@ -331,6 +338,12 @@ class AudiobookStore(private val context: Context) {
         }
     }
 
+    suspend fun markRead(id: String, read: Boolean) = withContext(Dispatchers.IO) {
+        load();mutex.withLock {
+            mutableBooks.value.firstOrNull { it.id==id }?.let { replaceLocked(it.copy(readState=if(read) "Read" else "Unread")) }
+        }
+    }
+
     private suspend fun publish(
         stage: File,
         title: String,
@@ -338,7 +351,8 @@ class AudiobookStore(private val context: Context) {
         bookId: String?,
         tracks: List<AudioTrack>,
         checksums: List<String>,
-        preview: Boolean = false
+        preview: Boolean = false,
+        replaceTitle: Boolean = false
     ): Audiobook = mutex.withLock {
         require(tracks.isNotEmpty() && tracks.size <= MAX_TRACKS && tracks.size == checksums.size)
         currentCoroutineContext().ensureActive()
@@ -346,6 +360,7 @@ class AudiobookStore(private val context: Context) {
         val existing = mutableBooks.value.firstOrNull { it.id == id }
         if (existing != null) {
             val updated = existing.copy(
+                title = if(replaceTitle)title else existing.title,
                 bookId = bookId ?: existing.bookId,
                 preview = existing.preview && preview
             )
@@ -353,7 +368,7 @@ class AudiobookStore(private val context: Context) {
             return@withLock updated
         }
         val audiobook = Audiobook(id, title.take(500).ifBlank { "Audiobook" }, author.take(500), bookId,
-            tracks.toList(), lastPlayed = System.currentTimeMillis(), preview = preview)
+            tracks.toList(), lastPlayed = 0L, preview = preview)
         val destination = File(root, id)
         if (destination.exists()) check(destination.deleteRecursively()) { "An incomplete audiobook import could not be cleared." }
         check(stage.renameTo(destination)) { "The audiobook files could not be committed." }
@@ -408,12 +423,13 @@ class AudiobookStore(private val context: Context) {
         val duration = book.tracks[track].durationMs
         book.copy(positionTrack = track, positionMs = if (duration > 0L) rawPosition.coerceAtMost(duration) else rawPosition,
             speed = json.optDouble("speed", 1.0).toFloat().takeIf { it.isFinite() }?.coerceIn(.5f, 3f) ?: 1f,
-            lastPlayed = json.optLong("lastPlayed", book.lastPlayed).coerceAtLeast(0L))
+            lastPlayed = json.optLong("lastPlayed", book.lastPlayed).coerceAtLeast(0L),
+            started = json.optBoolean("started", book.started || track>0 || rawPosition>0))
     }.getOrDefault(book)
 
     private fun writeCursor(book: Audiobook) {
         val bytes = JSONObject().put("version", 1).put("track", book.positionTrack).put("positionMs", book.positionMs)
-            .put("speed", book.speed.toDouble()).put("lastPlayed", book.lastPlayed).toString().toByteArray(Charsets.UTF_8)
+            .put("speed", book.speed.toDouble()).put("lastPlayed", book.lastPlayed).put("started",book.started).toString().toByteArray(Charsets.UTF_8)
         DurableJson.write(cursorFile(book.id), bytes)
     }
 
@@ -572,7 +588,9 @@ class AudiobookStore(private val context: Context) {
         return Audiobook(id, cleanText(json.optString("title", "Audiobook"), 500).ifBlank { "Audiobook" }, cleanText(json.optString("author", ""), 500),
             bookId, tracks, json.optInt("positionTrack", 0).coerceIn(0, tracks.lastIndex), json.optLong("positionMs", 0L).coerceAtLeast(0L),
             json.optDouble("speed", 1.0).toFloat().takeIf { it.isFinite() }?.coerceIn(.5f, 3f) ?: 1f,
-            bookmarks, json.optLong("lastPlayed", 0L).coerceAtLeast(0L), json.opt("preview") as? Boolean ?: false)
+            bookmarks, json.optLong("lastPlayed", 0L).coerceAtLeast(0L), json.opt("preview") as? Boolean ?: false,
+            json.optBoolean("started",json.optInt("positionTrack",0)>0 || json.optLong("positionMs",0)>0),
+            json.optString("readState","Auto").takeIf { it in listOf("Auto","Read","Unread") } ?: "Auto")
     }
 
     private fun parseChapter(json: JSONObject, index: Int): BundleChapter {
@@ -611,7 +629,7 @@ class AudiobookStore(private val context: Context) {
 
     private fun bookJson(book: Audiobook) = JSONObject()
         .put("id", book.id).put("title", book.title).put("author", book.author).put("bookId", book.bookId)
-        .put("preview", book.preview)
+        .put("preview", book.preview).put("started",book.started).put("readState",book.readState)
         .put("tracks", JSONArray(book.tracks.map { track -> JSONObject().put("file", track.file).put("title", track.title)
             .put("durationMs", track.durationMs).put("cues", JSONArray(track.cues.map { cue -> JSONObject().put("startMs", cue.startMs)
                 .put("endMs", cue.endMs).put("href", cue.href).put("fragment", cue.fragment).put("text", cue.text)

@@ -47,7 +47,7 @@ internal fun ReaderPlaybackBar(bookId: String, guide: GuidedReading?, navigate: 
                 active && message != null -> message!!
                 active -> "Guided · ${if (session.words > 0) "${session.words} words · ${session.effectiveWpm} actual WPM" else guide?.options?.mode}"
                 speech.error != null -> speech.error!!
-                preparing -> speech.preparation
+                preparing -> "${speech.preparation} · ${waitedSeconds}s"
                 speech.finished -> "End of book"
                 !speech.playing -> "Listening paused"
                 else -> options.copy(backend=speech.backend).engineLabel

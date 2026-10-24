@@ -97,6 +97,52 @@ def fake_encode(_ffmpeg: str, wav_path: Path, mp3_path: Path, _bitrate: str) -> 
 
 
 class NarrationTests(unittest.TestCase):
+    def test_untested_english_gpu_model_is_rejected_before_planning(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root/'test.epub'
+            make_epub(source)
+            for accelerator in ('directml', 'directml-acoustic'):
+                with self.subTest(accelerator=accelerator), self.assertRaises(core.NarrationError):
+                    core.create_job(source, 'chatterbox', root/'jobs', accelerator=accelerator)
+            self.assertFalse((root/'jobs').exists())
+
+    def test_gpu_jobs_are_separate_from_legacy_cpu_jobs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / 'test.epub'
+            make_epub(source)
+            cpu, cpu_job = core.create_job(source, 'roest', root/'jobs', language='da')
+            gpu, gpu_job = core.create_job(source, 'roest', root/'jobs', language='da', accelerator='directml')
+            self.assertNotEqual(cpu, gpu)
+            self.assertEqual(gpu_job['accelerator'], 'directml')
+            acoustic, acoustic_job = core.create_job(source, 'roest', root/'jobs', language='da', accelerator='directml-acoustic')
+            self.assertNotEqual(acoustic, gpu)
+            self.assertNotEqual(acoustic, cpu)
+            self.assertEqual(acoustic_job['accelerator'], 'directml-acoustic')
+            # v0.13 CPU plans did not record an accelerator. Their ID/resume
+            # remains valid, and choosing GPU cannot take their cached chunks.
+            cpu_job.pop('accelerator')
+            core.save_json(cpu/'job.json', cpu_job)
+            again, _ = core.create_job(source, 'roest', root/'jobs', language='da')
+            self.assertEqual(again, cpu)
+
+    def test_changed_accelerator_cannot_reuse_recorded_chunks(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root/'test.epub'
+            make_epub(source)
+            folder, job = core.create_job(source, 'roest', root/'jobs', language='da')
+            model = make_model_dir(root/'model')
+            synth = FakeSynth()
+            with patch.object(core, '_encode_mp3', side_effect=fake_encode):
+                core.generate_job(folder, model, max_sentences=1, fake_synth=synth)
+            job['accelerator'] = 'directml'
+            core.save_json(folder/'job.json', job)
+            with self.assertRaisesRegex(core.NarrationError, 'accelerator differs'):
+                core.generate_job(folder, model, fake_synth=synth)
+            self.assertEqual(len(synth.calls), 1)
+
     def test_sentence_splitter_and_edge_trim(self) -> None:
         self.assertEqual([s[0] for s in core._sentences('Dr. Vale said, "Ready?" Yes!')], ['Dr. Vale said, "Ready?"', "Yes!"])
         samples = [0.0] * 3000 + [0.1] * 4800 + [0.0] * 3000

@@ -42,11 +42,29 @@ IGNORED_TAGS = {"script", "style", "nav", "noscript", "template"}
 BLOCK_TAGS = {"p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "blockquote", "pre", "dt", "dd"}
 TTS_SOURCE_FORMAT = "chatterbox-tts==0.1.7"
 DEFAULT_MODEL_REVISIONS = {
+    "chatterbox-nano": "71ccd1d0081b430592cea481f4307e764e07bc64",
+    "pico": "40060c99ec388c19ec89b0c18030005e89c694ed",
+    "plapre3": "5300281a08c692a5ad18c9f00a4a47aa3dff9148",
     "roest": "2a12d9c0be51fbebd6ae100ab5578caef8b6bd4f",
     "chatterbox": "749d1c1a46eb10492095d68fbcf55691ccf137cd",
 }
 
 ENGINES: dict[str, dict[str, Any]] = {
+    "chatterbox-nano": {
+        "repository": "ResembleAI/chatterbox-nano", "language": "en",
+        "temperature": 0.8, "top_p": 0.95, "top_k": 1000, "repetition_penalty": 1.2,
+        "runtime": "chatterbox-tts==0.1.7+folio-nano-v1",
+    },
+    "pico": {
+        "repository": "varsan-g/plapre-pico-ONNX", "language": "da", "temperature": 0.7,
+        "top_p": 0.95, "top_k": 50, "repetition_penalty": 1.0,
+        "runtime": "folio-pico-onnx-v1",
+    },
+    "plapre3": {
+        "repository": "syvai/plapre-3", "language": "da", "temperature": 0.7,
+        "top_p": 0.95, "top_k": 50, "repetition_penalty": 1.0,
+        "runtime": "folio-plapre3-onnx-v1",
+    },
     "chatterbox": {
         "repository": "ResembleAI/chatterbox-turbo",
         "language": "en",
@@ -75,6 +93,10 @@ _ABBREVIATIONS = {
 
 class NarrationError(RuntimeError):
     """An expected, user-correctable narration job error."""
+
+
+class NarrationPaused(NarrationError):
+    """A cooperative checkpoint, not a failed or completed export."""
 
 
 @dataclass
@@ -397,7 +419,9 @@ def extract_epub(path: Path, language_override: str | None = None) -> dict[str, 
                     raise NarrationError(f"Could not safely read an EPUB spine document ({exc})") from exc
                 blocks = _body_blocks(root)
                 word_count = sum(len(block.text.split()) for block in blocks)
-                if word_count < 200:
+                # Short chapters and epilogues are still part of the supplied
+                # book. Only empty/non-readable spine resources are omitted.
+                if word_count == 0:
                     continue
                 all_chars = max(1, sum(len(block.text) for block in blocks))
                 title_text = nav_labels.get(archive_path, "")
@@ -434,7 +458,7 @@ def extract_epub(path: Path, language_override: str | None = None) -> dict[str, 
                     continue
                 chapters.append(ChapterSource(title_text, archive_path, cues))
             if not chapters:
-                raise NarrationError("No substantial XHTML chapters were found in the EPUB spine")
+                raise NarrationError("No readable XHTML chapters were found in the EPUB spine")
             return {
                 "title": title,
                 "author": author,
@@ -467,11 +491,22 @@ def create_job(
     model_revision: str | None = None,
     voice_reference: Path | None = None,
     max_chars: int = MAX_SENTENCE_CHARS,
+    accelerator: str = 'cpu',
+    voice: str | None = None,
 ) -> tuple[Path, dict[str, Any]]:
     if engine not in ENGINES:
         raise NarrationError(f"Unknown engine {engine!r}; choose from: {', '.join(ENGINES)}")
     if max_chars < 80 or max_chars > 2000:
         raise NarrationError("--max-chars must be between 80 and 2000")
+    allowed = {'roest': ('cpu','directml','directml-acoustic'),
+               'chatterbox': ('cpu',), 'chatterbox-nano': ('cpu','directml-acoustic'),
+               'plapre3': ('cpu','onnx-directml'), 'pico': ('cpu','onnx-directml')}
+    if accelerator not in allowed[engine]:
+        raise NarrationError('The selected engine does not support that acceleration backend.')
+    if voice is not None and (engine not in ('plapre3','pico') or voice not in ('ida','tor','liv','ask','kaj')):
+        raise NarrationError('Select an installed Plapre voice: ida, tor, liv, ask or kaj.')
+    if engine in ('plapre3','pico') and voice_reference:
+        raise NarrationError('This Plapre adapter uses its named voices, not a reference WAV.')
     plan = extract_epub(source, language_override=language)
     expected = ENGINES[engine]["language"]
     actual_primary = plan["language"].split("-", 1)[0]
@@ -491,6 +526,8 @@ def create_job(
         raise NarrationError(f"Voice reference file does not exist: {voice_reference}")
     reference_sha = sha256_file(voice_reference) if voice_reference else None
     profile = {key: ENGINES[engine][key] for key in ("temperature", "top_p", "top_k", "repetition_penalty")}
+    if engine in ('plapre3','pico'):
+        profile['voice'] = voice or 'ida'
     model_revision = model_revision or DEFAULT_MODEL_REVISIONS[engine]
     identity = {
         "sourceSha256": plan["sourceSha256"],
@@ -503,6 +540,10 @@ def create_job(
         "profile": profile,
         "parserVersion": JOB_SCHEMA,
     }
+    if accelerator != 'cpu':
+        identity['executionProfile'] = {'directml': 'directml-t3-v1',
+                                        'directml-acoustic': 'directml-acoustic-v1',
+                                        'onnx-directml': engine+'-cpu-lm-dml-acoustic-v1'}[accelerator]
     job_id = hashlib.sha256(json.dumps(identity, sort_keys=True).encode("utf-8")).hexdigest()[:20]
     root = jobs_root or private_jobs_root()
     job_dir = root / f"{engine}-{job_id}"
@@ -525,10 +566,12 @@ def create_job(
         "author": plan["author"],
         "language": plan["language"],
         "engine": engine,
+        "accelerator": accelerator,
         "model": {
             "repository": ENGINES[engine]["repository"],
             "revision": model_revision,
-            "runtime": TTS_SOURCE_FORMAT,
+            "runtime": ENGINES[engine].get('runtime', TTS_SOURCE_FORMAT),
+            "accelerator": accelerator,
         },
         "voiceReferencePath": str(voice_reference.resolve()) if voice_reference else None,
         "voiceReferenceSha256": reference_sha,
@@ -545,6 +588,7 @@ def create_job(
 def initial_progress(job: dict[str, Any]) -> dict[str, Any]:
     return {
         "jobId": job["jobId"],
+        "accelerator": job.get('accelerator', 'cpu'),
         "modelFilesSha256": None,
         "modelFiles": [],
         "startedUtc": None,
@@ -566,11 +610,25 @@ def load_json(path: Path) -> dict[str, Any]:
         raise NarrationError(f"Could not read job metadata at {path}: {exc}") from exc
 
 
+def _atomic_replace(source: Path, target: Path) -> None:
+    """Windows readers/antivirus can briefly deny replacing an otherwise valid file."""
+    for attempt in range(9):
+        try:
+            source.replace(target)
+            return
+        except PermissionError:
+            if attempt==8:raise
+            time.sleep(min(.025*2**attempt,.2))
+
+
 def save_json(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    tmp.replace(path)
+    with tmp.open('w',encoding='utf-8') as stream:
+        stream.write(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    _atomic_replace(tmp,path)
 
 
 def job_path(job_arg: str, jobs_root: Path | None = None) -> Path:
@@ -610,11 +668,28 @@ def fingerprint_model(
         raise NarrationError(f"Model directory does not exist: {model_dir}")
     records: list[dict[str, Any]] = []
     aggregate = hashlib.sha256()
-    for file in _model_component_names(model_dir):
+    index_path = model_dir / 'folio-component-index.json'
+    if index_path.exists():
+        index = load_json(index_path)
+        if index.get('engine') not in ('plapre3','pico','chatterbox-nano'):
+            raise NarrationError('Unsupported shared model component index')
+        components = {x['name']: Path(x['path']) for x in index.get('files', [])}
+        required = ({'language-model.onnx','embeddings.bin','tokenizer.json','voices.json','kanade.onnx','hift.onnx'}
+                    if index['engine']=='plapre3' else
+                    {'language-model.onnx','embeddings.npy','tokenizer.json','speakers.json','speaker-projection.onnx','kanade.onnx','hift.onnx'}
+                    if index['engine']=='pico' else
+                    {'t3_nano_v1.safetensors','s3gen_meanflow.safetensors','ve.safetensors','conds.pt',
+                     'added_tokens.json','merges.txt','special_tokens_map.json','tokenizer_config.json','vocab.json'})
+        if set(components) != required or any(not p.is_file() for p in components.values()):
+            raise NarrationError('Shared component index is missing required files')
+        named_files = sorted(components.items())
+    else:
+        named_files = [(p.name,p) for p in _model_component_names(model_dir)]
+    for name, file in named_files:
         digest = sha256_file(file)
         size = file.stat().st_size
-        records.append({"name": file.name, "sizeBytes": size, "sha256": digest})
-        aggregate.update(file.name.encode("utf-8"))
+        records.append({"name": name, "sizeBytes": size, "sha256": digest})
+        aggregate.update(name.encode("utf-8"))
         aggregate.update(b"\0")
         aggregate.update(digest.encode("ascii"))
         aggregate.update(b"\0")
@@ -695,11 +770,16 @@ def _write_wav(path: Path, samples: Sequence[float], sample_rate: int) -> int:
         value = int(round(bounded * 32767.0))
         pcm.extend(struct.pack("<h", value))
     path.parent.mkdir(parents=True, exist_ok=True)
-    with wave.open(str(path), "wb") as wav:
-        wav.setnchannels(1)
-        wav.setsampwidth(2)
-        wav.setframerate(sample_rate)
-        wav.writeframes(pcm)
+    temporary = path.with_suffix(path.suffix+'.tmp')
+    with temporary.open('wb') as stream:
+        with wave.open(stream, "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(sample_rate)
+            wav.writeframes(pcm)
+        stream.flush()
+        os.fsync(stream.fileno())
+    _atomic_replace(temporary,path)
     return len(samples)
 
 
@@ -710,7 +790,7 @@ def _read_wav(path: Path, expected_rate: int) -> list[float]:
                 raise NarrationError(f"Cached audio has unexpected WAV parameters: {path.name}")
             frames = wav.readframes(wav.getnframes())
         return [sample / 32768.0 for (sample,) in struct.iter_unpack("<h", frames)]
-    except (wave.Error, OSError) as exc:
+    except (wave.Error, OSError, EOFError, struct.error) as exc:
         raise NarrationError(f"Could not read cached audio {path}: {exc}") from exc
 
 
@@ -914,7 +994,8 @@ def _compose_manifest(job: dict[str, Any], progress: dict[str, Any], partial: bo
             "filesSha256": progress.get("modelFilesSha256"),
             "files": progress.get("modelFiles", []),
             "runtime": job["model"]["runtime"],
-            "device": "cpu",
+            "device": job.get('accelerator','cpu'),
+            "execution": progress.get('execution',{}),
             "sampleRate": job["sampleRate"],
             "sampling": job["sampling"],
             "voiceReferenceSha256": job.get("voiceReferenceSha256"),
@@ -983,7 +1064,7 @@ def write_bundle(job_dir: Path, job: dict[str, Any], progress: dict[str, Any], o
             raise NarrationError("The newly written audiobook manifest did not round-trip")
         if bundle.getinfo("book.epub").file_size != source.stat().st_size:
             raise NarrationError("The source EPUB size changed during export")
-    temp_output.replace(output)
+    _atomic_replace(temp_output,output)
     return output
 
 
@@ -1006,8 +1087,21 @@ def generate_job(
     fake_synth: Any | None = None,
     progress_callback: Any | None = None,
     cpu_threads: int | None = None,
+    control_file: Path | None = None,
+    stop_after_seconds: float | None = None,
+    through_sentences: int | None = None,
+    parallel_passages: int = 1,
+    selected_chapters: list[int] | None = None,
 ) -> tuple[Path, dict[str, Any]]:
     job = load_json(job_dir / "job.json")
+    if selected_chapters is not None:
+        if not selected_chapters or any(type(i)!=int or not 1<=i<=len(job['chapters']) for i in selected_chapters):
+            raise NarrationError('Chapter selection is outside this book.')
+        if max_chapters is not None or through_sentences is not None:raise NarrationError('Use chapter selection without prefix limits.')
+        selected_chapters=sorted(set(selected_chapters))
+    if parallel_passages not in (1,2,4):raise NarrationError('Parallel passages must be 1, 2 or 4')
+    if parallel_passages>1 and job['engine'] not in ('pico','plapre3','roest','chatterbox-nano'):
+        raise NarrationError('This engine has no verified shared-model passage adapter')
     _validate_source_unchanged(job)
     if job.get("voiceReferencePath"):
         reference = Path(job["voiceReferencePath"])
@@ -1015,6 +1109,8 @@ def generate_job(
             raise NarrationError("The voice reference is missing or has changed since the job was planned")
     if max_sentences is not None and max_sentences < 1:
         raise NarrationError("--limit-sentences must be at least 1")
+    if through_sentences is not None and (through_sentences<1 or max_sentences is not None):
+        raise NarrationError('--through-sentences must be positive and cannot combine with --limit-sentences')
     if max_chapters is not None and max_chapters < 1:
         raise NarrationError("--limit-chapters must be at least 1")
     if not re.fullmatch(r"\d+(?:k)?", bitrate, re.IGNORECASE):
@@ -1027,6 +1123,8 @@ def generate_job(
     )
     state_path = job_dir / "progress.json"
     progress = load_json(state_path) if state_path.exists() else initial_progress(job)
+    if progress.get('accelerator', 'cpu') != job.get('accelerator', 'cpu'):
+        raise NarrationError('The accelerator differs from this job cache. Create a separate plan; do not mix CPU and GPU chunks.')
     if progress.get("modelFilesSha256") not in (None, model_hash):
         raise NarrationError("The model files differ from those already used in this job; create a new plan to avoid mixing voices")
     if progress.get("voiceReferenceSha256") not in (None, job.get("voiceReferenceSha256")):
@@ -1035,6 +1133,16 @@ def generate_job(
     lock = _lock_job(job_dir)
     output_dir = output_dir or job_dir
     lock_start = time.monotonic()
+    pool=None
+    def checkpoint_control(chapter_boundary: bool = False) -> None:
+        command = load_json(control_file) if control_file and control_file.exists() else {}
+        action = command.get('action')
+        timed_out = stop_after_seconds is not None and time.monotonic()-lock_start >= stop_after_seconds
+        if action in ('pause','cancel') or (chapter_boundary and action == 'pause-chapter') or timed_out:
+            progress.update(phase='paused', pausedUtc=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),
+                            lastRunSeconds=time.monotonic()-lock_start, lastError=None)
+            save_json(state_path, progress)
+            raise NarrationPaused('Passage checkpoint saved; resume to continue.')
     try:
         if progress.get("modelFilesSha256") is None:
             progress["modelFilesSha256"] = model_hash
@@ -1042,7 +1150,9 @@ def generate_job(
         if not progress.get("startedUtc"):
             progress["startedUtc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         progress["lastError"] = None
+        progress['phase'] = 'loading'
         save_json(state_path, progress)
+        checkpoint_control()
         synth = fake_synth
         if synth is None:
             from .engines import load_engine
@@ -1051,17 +1161,43 @@ def generate_job(
                 job["engine"], model_dir,
                 Path(job["voiceReferencePath"]) if job.get("voiceReferencePath") else None,
                 job["sampling"], cpu_threads=cpu_threads,
+                accelerator=job.get('accelerator', 'cpu'),
             )
+            progress['execution'] = synth.execution
+            save_json(state_path, progress)
+        if parallel_passages>1 and not getattr(synth,'supports_parallel',False):
+            raise NarrationError('This adapter cannot safely share model state between passages')
+        from .parallel import PassagePool
+        def render_cue(cue):
+            started=time.monotonic();audio_parts=[]
+            for part_i,part in enumerate(_sentence_parts(cue['text'],int(job['maxSentenceChars']))):
+                rendered=synth.synthesize(part)
+                values=trim_boundary_silence(_as_float_samples(rendered),int(job['sampleRate']))
+                if part_i:audio_parts.extend([0.0]*int(job['sampleRate']*.08))
+                audio_parts.extend(values)
+            return audio_parts,time.monotonic()-started
+        pool=PassagePool(render_cue,parallel_passages)
+        progress['parallelExecution']=dict(passages=parallel_passages,weights='shared',commit='ordered',acoustics='serialized')
+        if 'execution' in progress:
+            progress['execution']['passagesInFlight']=parallel_passages
+            progress['execution']['modelCopies']=1
+        progress['phase'] = 'generating'
+        save_json(state_path, progress)
         processed_this_run = 0
         partial = False
         for chapter_index, chapter in enumerate(job["chapters"], 1):
+            if selected_chapters is not None and chapter_index not in selected_chapters:continue
+            chapter_offset=sum(len(c['cues']) for c in job['chapters'][:chapter_index-1])
+            if through_sentences is not None and chapter_offset>=through_sentences:
+                partial=True
+                break
             if max_chapters is not None and chapter_index > max_chapters:
                 partial = True
                 break
             state_key = str(chapter_index)
             chapter_record = progress.get("chapters", {}).get(state_key)
             expected_count = len(chapter["cues"])
-            if chapter_record and len(chapter_record.get("cues", [])) == expected_count:
+            if chapter_record and len(chapter_record.get("cues", [])) == expected_count and (through_sentences is None or chapter_offset+expected_count<=through_sentences):
                 # Validate the cached MP3 file exists; cue WAVs remain available for selective repair.
                 if (job_dir / chapter_record["file"]).is_file():
                     if max_chapters is not None and chapter_index >= max_chapters and chapter_index < len(job["chapters"]):
@@ -1069,45 +1205,61 @@ def generate_job(
                         break
                     continue
             rendered_cue_count = len(progress.get("chapters", {}).get(state_key, {}).get("cues", []))
+            pending=[(_cue_key(chapter_index,i),cue) for i,cue in enumerate(chapter['cues'],1)
+                     if (through_sentences is None or chapter_offset+i<=through_sentences)
+                     and not (_cue_key(chapter_index,i) in progress['cues'] and (job_dir/'chunks'/f'{_cue_key(chapter_index,i)}.wav').is_file())]
+            if max_sentences is not None:pending=pending[:max(0,max_sentences-processed_this_run)]
+            generation_clock=time.monotonic();pool.begin(pending)
             for cue_index, cue in enumerate(chapter["cues"], 1):
+                if through_sentences is not None and chapter_offset+cue_index>through_sentences:
+                    partial=True
+                    break
+                checkpoint_control()
                 key = _cue_key(chapter_index, cue_index)
                 cached_path = job_dir / "chunks" / f"{key}.wav"
                 if key in progress["cues"] and cached_path.is_file():
                     try:
-                        _read_wav(cached_path, int(job["sampleRate"]))
+                        values = _read_wav(cached_path, int(job["sampleRate"]))
+                        cached_record = progress['cues'][key]
+                        if len(values) != cached_record['samples'] or (cached_record.get('sha256') and sha256_file(cached_path) != cached_record['sha256']):
+                            raise NarrationError('Cached passage audio failed integrity verification')
                         continue
                     except NarrationError:
                         cached_path.unlink(missing_ok=True)
-                        progress["cues"].pop(key, None)
+                # Missing files and damaged files both invalidate the old
+                # record before regeneration, so counters are never doubled.
+                invalid=progress['cues'].pop(key,None)
+                if invalid:
+                    progress['generatedSamples']=max(0,progress.get('generatedSamples',0)-invalid['samples'])
+                    progress['generatedWords']=max(0,progress.get('generatedWords',0)-invalid['words'])
+                    progress['generatedSentences']=max(0,progress.get('generatedSentences',0)-1)
                 if max_sentences is not None and processed_this_run >= max_sentences:
                     partial = True
                     break
-                cue_started = time.monotonic()
-                audio_parts: list[float] = []
-                for part_i, part in enumerate(_sentence_parts(cue["text"], int(job["maxSentenceChars"]))):
-                    try:
-                        rendered = synth.synthesize(part)
-                    except Exception as exc:
-                        raise NarrationError(f"Synthesis failed at chapter {chapter_index}, sentence {cue_index}: {exc}") from exc
-                    values = trim_boundary_silence(_as_float_samples(rendered), int(job["sampleRate"]))
-                    if part_i:
-                        audio_parts.extend([0.0] * int(job["sampleRate"] * 0.08))
-                    audio_parts.extend(values)
+                try:audio_parts,worker_elapsed=pool.get(key,cue)
+                except Exception as exc:
+                    raise NarrationError(f'Synthesis failed at chapter {chapter_index}, sentence {cue_index}: {exc}') from exc
                 samples = _write_wav(cached_path, audio_parts, int(job["sampleRate"]))
-                elapsed = time.monotonic() - cue_started
+                elapsed = time.monotonic()-generation_clock if parallel_passages>1 else worker_elapsed
+                generation_clock=time.monotonic()
                 progress["synthesisSeconds"] = float(progress.get("synthesisSeconds", 0.0)) + elapsed
+                progress['workerSynthesisSeconds']=progress.get('workerSynthesisSeconds',0)+worker_elapsed
+                progress['parallelExecution']['peakConcurrentPassages']=pool.peak_active
+                if hasattr(synth,'metrics'):
+                    progress['execution']['stageMetrics']=synth.metrics()
                 progress["generatedSamples"] = int(progress.get("generatedSamples", 0)) + samples
                 progress["generatedWords"] = int(progress.get("generatedWords", 0)) + len(cue["text"].split())
                 progress["generatedSentences"] = int(progress.get("generatedSentences", 0)) + 1
                 progress["lastCueSynthesisSeconds"] = elapsed
                 progress["lastCueAudioMs"] = samples * 1000.0 / int(job["sampleRate"])
-                progress["cues"][key] = {"samples": samples, "words": len(cue["text"].split())}
+                progress["cues"][key] = {"samples": samples, "words": len(cue["text"].split()), 'sha256': sha256_file(cached_path)}
                 processed_this_run += 1
                 save_json(state_path, progress)
                 if progress_callback:
                     progress_callback(_status_rates(job, progress), chapter_index, cue_index)
             cue_count = len(progress.get("chapters", {}).get(state_key, {}).get("cues", []))
             cue_count = max(cue_count, sum(1 for i in range(1, expected_count + 1) if _cue_key(chapter_index, i) in progress["cues"]))
+            if through_sentences is not None:cue_count=min(cue_count,through_sentences-chapter_offset)
             if cue_count == 0:
                 if partial:
                     break
@@ -1119,6 +1271,8 @@ def generate_job(
             if cue_count < expected_count and not partial:
                 continue
             chapter_audio_dir = job_dir / "audio"
+            progress['phase'] = 'encoding'
+            save_json(state_path, progress)
             chapter_rel = f"audio/chapter-{chapter_index:04d}.mp3"
             wav_path = job_dir / "tmp" / f"chapter-{chapter_index:04d}.wav"
             wav_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1136,6 +1290,8 @@ def generate_job(
                 })
             progress["chapters"][state_key] = {"file": chapter_rel, "durationMs": duration_ms, "cues": cue_timing}
             save_json(state_path, progress)
+            checkpoint_control(chapter_boundary=True)
+            progress['phase'] = 'generating'
             if max_chapters is not None and chapter_index >= max_chapters and chapter_index < len(job["chapters"]):
                 partial = True
                 break
@@ -1150,14 +1306,24 @@ def generate_job(
         if status["completed"]:
             progress["completedUtc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         progress["lastRunSeconds"] = time.monotonic() - lock_start
+        progress['phase'] = 'exporting'
         save_json(state_path, progress)
-        bundle_path = write_bundle(job_dir, job, progress, output_dir, partial or not status["completed"])
+        export_progress=progress
+        selection_partial=selected_chapters is not None and len(selected_chapters)<len(job['chapters'])
+        if selected_chapters is not None:
+            export_progress=dict(progress,chapters={k:v for k,v in progress.get('chapters',{}).items() if int(k) in selected_chapters})
+        bundle_path = write_bundle(job_dir, job, export_progress, output_dir, partial or not status["completed"] or selection_partial)
+        progress['phase'] = 'complete' if status['completed'] and not selection_partial else 'preview-ready'
+        save_json(state_path, progress)
         return bundle_path, status
+    except NarrationPaused:
+        raise
     except Exception as exc:
         progress["lastError"] = str(exc)
         save_json(state_path, progress)
         raise
     finally:
+        if pool:pool.close()
         lock.unlink(missing_ok=True)
 
 
