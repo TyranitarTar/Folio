@@ -67,7 +67,7 @@ class Interface014InstrumentedTest {
             click("More")
             assertFalse(device.hasObject(By.text("Cat Café")))
             click("Audiobooks")
-            assertTrue(device.wait(Until.hasObject(By.text("Search audiobooks")),15000))
+            assertTrue(device.wait(Until.hasObject(By.desc("Search library")),15000))
             for(label in listOf("All","New","Unread","Read"))assertTrue(device.hasObject(By.text(label)))
             assertFalse(device.hasObject(By.text("Import audio files")))
             device.wait(Until.findObject(By.desc("Add audiobooks")),15000).click()
@@ -77,7 +77,7 @@ class Interface014InstrumentedTest {
             device.takeScreenshot(File(app.filesDir,"v014-audio-import.png"))
             device.pressBack();device.waitForIdle()
             device.takeScreenshot(File(app.filesDir,"v014-audio-library.png"))
-            click("Books")
+            click("Reading")
             for(label in listOf("All","New","Unread","Read"))assertTrue(device.hasObject(By.text(label)))
         }
     }

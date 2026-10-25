@@ -653,19 +653,20 @@ class ReaderActivity : FragmentActivity() {
             showZones = publication != null && model.navigation.overlay
             if (showZones) { delay(1000); showZones = false }
         }
-        BackHandler(enabled = sheet != null || !controls) {
-            if (sheet != null) { sheet = null; model.cancelSearch() } else controls = true
+        BackHandler {
+            if (sheet != null) { sheet = null; model.cancelSearch() }
+            else returnToLibrary(this@ReaderActivity,if(intent.getBooleanExtra("recordedFollow",false))"Audiobooks" else "Books")
         }
         Scaffold(
             snackbarHost = { SnackbarHost(snackbar) },
             topBar = {
                 if (controls) Column {
-                    Row(Modifier.statusBarsPadding().fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { finish() }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Library") }
-                        Text(book?.title ?: "Opening book…", Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, fontFamily = ComposeFont.Serif, fontSize = 17.sp)
+                    PublicationHeader(book?.title ?: "Opening book…",{
+                        returnToLibrary(this@ReaderActivity,if(intent.getBooleanExtra("recordedFollow",false))"Audiobooks" else "Books")
+                    },actions={
                         IconButton(onClick = { openSheet("search") }) { Icon(Icons.Outlined.Search, "Search book") }
                         IconButton(onClick = { openSheet("settings") }) { Text("Aa", fontSize = 19.sp) }
-                    }
+                    })
                     HorizontalDivider()
                 }
             },
@@ -712,7 +713,7 @@ class ReaderActivity : FragmentActivity() {
                     error != null -> Column(Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("Unable to open this book", fontSize = 23.sp, fontFamily = ComposeFont.Serif)
                         Text(error!!, Modifier.padding(vertical = 16.dp))
-                        Button(onClick = { finish() }) { Text("Back to library") }
+                        Button(onClick = { returnToLibrary(this@ReaderActivity,"Books") }) { Text("Back to library") }
                     }
                     publication == null -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                     else -> AndroidView(factory = { context ->

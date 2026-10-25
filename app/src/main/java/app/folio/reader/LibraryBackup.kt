@@ -24,7 +24,7 @@ import org.readium.r2.shared.publication.Locator
 class LibraryBackup(private val context: Context, private val store: LibraryStore) {
     private val manifestLimit = 20 * 1024 * 1024
     private val totalLimit = 2L * 1024 * 1024 * 1024
-    private val preferences = listOf("appearance", "navigation", "pace", "speech", "home")
+    private val preferences = listOf("appearance", "navigation", "pace", "speech", "home", "audioHome")
     suspend fun export(uri: Uri, includeBooks: Boolean) = withContext(Dispatchers.IO) {
         context.contentResolver.openOutputStream(uri, "wt")?.use { exportTo(it, includeBooks) }
             ?: throw IllegalArgumentException("The backup destination could not be opened.")
@@ -171,7 +171,7 @@ class LibraryBackup(private val context: Context, private val store: LibraryStor
                 values.keys().forEach { key -> when (val value = values.get(key)) {
                     is Boolean -> edit.putBoolean(key, if (name == "speech" && key == "follow") true else value)
                     is String -> edit.putString(key, value)
-                    is Number -> if ((name == "appearance" && key == "awakeMinutes") || (name == "home" && key in setOf("columns","statusSchema")) || (name == "speech" && key in setOf("aiVoice", "supertonicVoice", "picoVoice", "picoThreads", "plapre3Voice", "plapre3Threads", "sentencePauseMillis", "paragraphPauseMillis", "passageTargetWords", "lookaheadPassages", "startBufferSeconds")) || (name == "pace" && key in setOf("focusWords", "countdown", "practiceMinutes"))) edit.putInt(key, value.toInt()) else edit.putFloat(key, value.toFloat())
+                    is Number -> if ((name == "appearance" && key == "awakeMinutes") || (name in setOf("home","audioHome") && key in setOf("columns","statusSchema")) || (name == "speech" && key in setOf("aiVoice", "supertonicVoice", "picoVoice", "picoThreads", "plapre3Voice", "plapre3Threads", "sentencePauseMillis", "paragraphPauseMillis", "passageTargetWords", "lookaheadPassages", "startBufferSeconds")) || (name == "pace" && key in setOf("focusWords", "countdown", "practiceMinutes"))) edit.putInt(key, value.toInt()) else edit.putFloat(key, value.toFloat())
                 } }
                 if (name == "appearance" && values.has("awake") && !values.has("awakeMode")) edit.remove("awakeMode").remove("awakeMinutes")
                 check(edit.commit()) { "Settings could not be restored." }
@@ -214,14 +214,14 @@ class LibraryBackup(private val context: Context, private val store: LibraryStor
                     "appearance" -> key in setOf("fontSize", "lineHeight", "margins", "awakeMinutes")
                     "pace" -> key in setOf("speed", "focusWords", "countdown", "practiceMinutes")
                     "speech" -> key in setOf("rate", "aiVoice", "supertonicVoice", "picoVoice", "picoThreads", "plapre3Voice", "plapre3Threads", "sentencePauseMillis", "paragraphPauseMillis", "passageTargetWords", "lookaheadPassages", "startBufferSeconds")
-                    "home" -> key in setOf("columns","statusSchema")
+                    "home", "audioHome" -> key in setOf("columns","statusSchema")
                     else -> false
                 }
                 val boolean = when (name) {
                     "appearance" -> key in setOf("scroll", "publisher", "awake", "volume")
                     "pace" -> key in setOf("punctuation", "longWords", "gradualIncrease")
                     "speech" -> key == "follow"
-                    "home" -> key in setOf("descending", "annotated", "showProgress")
+                    "home", "audioHome" -> key in setOf("descending", "annotated", "showProgress")
                     else -> false
                 }
                 require(if (numeric) v is Number else if (boolean) v is Boolean else v is String) { "A backup setting has an invalid type." }
@@ -245,7 +245,7 @@ class LibraryBackup(private val context: Context, private val store: LibraryStor
                     require(nav.optString("inversion", "None") in setOf("None", "Horizontal", "Vertical", "Both"))
                     for (flag in listOf("animate", "overlay", "invertVolume")) if (nav.has(flag)) require(nav.get(flag) is Boolean)
                 }
-                if (name == "home" && key == "shelves") {
+                if (name in setOf("home","audioHome") && key == "shelves") {
                     val names = JSONArray(v as String); require(names.length() <= 5000)
                     for (i in 0 until names.length()) require(names.getString(i).length <= 40)
                 }

@@ -6,6 +6,13 @@ are listed in [IMPLEMENTATION-v0.14.md](IMPLEMENTATION-v0.14.md).
 Studio 0.3 queue controls, real GPU evaluation and packaging checks completed
 before final Android acceptance. Existing speech weights/runtimes are retained.
 
+**25 October review:** checked implementation is not completed user acceptance.
+The user still reports slow page calculation and requests easier library exit,
+matching reader/audio headers, the visible section name **Reading**, and removal
+of the redundant global **Read + listen** row. Voice-panel density and physical
+phone/foldable acceptance also remain open. The item-by-item audit and explicit
+follow-up checklist are in [REVIEW-0.14-FOLLOWUP.md](REVIEW-0.14-FOLLOWUP.md).
+
 ## Reading position, selection and saved passages
 
 - [x] Show both **Book: page x of y** and **Chapter: page x of y**. Both counts

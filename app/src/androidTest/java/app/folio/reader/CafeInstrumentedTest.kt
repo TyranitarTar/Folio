@@ -31,7 +31,7 @@ class CafeInstrumentedTest {
         device.waitForIdle()
         fun placed(): UiObject2? = device.findObject(By.text(text))?.takeIf { item ->
             val bounds = item.visibleBounds
-            val home = device.hasObject(By.text("Books")) && device.hasObject(By.text("More"))
+            val home = device.hasObject(By.text("Reading")) && device.hasObject(By.text("More"))
             text in listOf("More", "Books", "Café") || (!home || (bounds.top > 190 && bounds.bottom < device.displayHeight - 260)) && bounds.height() >= 24
         }
         device.wait(Until.hasObject(By.text(text)), 1500)
@@ -114,7 +114,7 @@ class CafeInstrumentedTest {
             scenario.recreate()
             click("Fortsæt kapitlet")
             assertTrue(device.wait(Until.hasObject(By.text(MisoStory.chapters[0].opening[1])), 5000))
-            click("Pause og gem"); click("Books")
+            click("Pause og gem"); click("Reading")
             assertEquals(original, app.library.books.value.first { it.id == book.id })
             assertEquals(originalBalance, app.cafe.profiles.value.normal.balance)
         }

@@ -14,6 +14,12 @@ import java.util.UUID
 import java.util.zip.ZipInputStream
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,19 +44,22 @@ data class Audiobook(
     val lastPlayed: Long = 0L,
     val preview: Boolean = false,
     val started: Boolean = false,
-    val readState: String = "Auto"
+    val readState: String = "Auto",
+    val sourceRoot: String? = null
 ) {
     val elapsedMs: Long get() = tracks.take(positionTrack).sumOf { it.durationMs } + positionMs
     val totalMs: Long get() = tracks.sumOf { it.durationMs }
+    val durationKnown: Boolean get() = tracks.all { it.durationMs>0 }
     val isRead: Boolean get() = if(readState=="Read") true else if(readState=="Unread") false
-        else totalMs>0 && elapsedMs>=totalMs-1000 && positionTrack==tracks.lastIndex
+        else durationKnown && totalMs>0 && elapsedMs>=totalMs-1000 && positionTrack==tracks.lastIndex
 }
 
 data class AudioTrack(
     val file: String,
     val title: String,
     val durationMs: Long,
-    val cues: List<AudioCue> = emptyList()
+    val cues: List<AudioCue> = emptyList(),
+    val sourceUri: String? = null
 )
 
 data class AudioCue(
@@ -68,6 +77,40 @@ data class AudioBookmark(val id: String, val track: Int, val positionMs: Long, v
 
 /** Private audio storage. Ordinary library backups intentionally know nothing about this directory. */
 class AudiobookStore(private val context: Context) {
+    private val metadataScope=CoroutineScope(SupervisorJob()+Dispatchers.IO)
+    private var metadataJob: Job?=null
+    internal val metadataProgress=MutableStateFlow<String?>(null)
+    internal fun cancelMetadata() { metadataJob?.cancel() }
+    /** Index first; read/cache durations afterwards, yielding to active narration. */
+    internal fun prepareLinkedMetadata() {
+        if(metadataJob?.isActive==true)return
+        metadataJob=metadataScope.launch(start=CoroutineStart.LAZY) {
+            try {
+                val pending=books.value.filter{it.sourceRoot!=null && !it.durationKnown}
+                var completed=0;val total=pending.sumOf{book->book.tracks.count{it.durationMs<=0}}
+                for(book in pending) {
+                    val found=mutableMapOf<String,AudioMetadata>()
+                    for(track in book.tracks.filter{it.durationMs<=0 && it.sourceUri!=null}) {
+                        currentCoroutineContext().ensureActive()
+                        while(AudiobookController.state.value.playing || SpeechController.state.value.playing || SpeechController.state.value.preparing)delay(300)
+                        metadataProgress.value="Reading durations ${++completed}/$total · ${book.title}"
+                        runCatching{readMetadata(Uri.parse(track.sourceUri))}.getOrNull()?.let{found[track.sourceUri!!]=it}
+                    }
+                    currentCoroutineContext().ensureActive()
+                    if(found.isNotEmpty())mutex.withLock {
+                        val latest=mutableBooks.value.firstOrNull{it.id==book.id} ?: return@withLock
+                        replaceLocked(latest.copy(tracks=latest.tracks.map { track ->
+                            val metadata=found[track.sourceUri]
+                            if(metadata==null || metadata.durationMs<=0)track else track.copy(durationMs=metadata.durationMs)
+                        }))
+                    }
+                }
+            } catch(cancelled:CancellationException){throw cancelled}
+            catch(_:Exception) { /* Playback can still discover individual durations. */ }
+            finally { if(metadataJob===currentCoroutineContext()[Job])metadataProgress.value=null }
+        }
+        metadataJob?.start()
+    }
     private val root = File(context.filesDir, "audiobooks").apply { mkdirs() }
     private val catalog = AtomicFile(File(root, "audiobooks.json"))
     private val mutex = Mutex()
@@ -92,7 +135,7 @@ class AudiobookStore(private val context: Context) {
                 for (index in 0 until array.length()) {
                     runCatching { parseBook(array.getJSONObject(index)) }
                         .onSuccess { book ->
-                            if (book.tracks.all { file(book.id, it.file).isFile } && parsed.none { it.id == book.id }) {
+                            if ((book.sourceRoot!=null || book.tracks.all { file(book.id, it.file).isFile }) && parsed.none { it.id == book.id }) {
                                 parsed += readCursor(book)
                                 hashes[book.id] = parseHashes(array.getJSONObject(index).optJSONArray("checksums"), book.tracks.size)
                             }
@@ -101,6 +144,48 @@ class AudiobookStore(private val context: Context) {
                 mutableBooks.value = parsed.sortedByDescending { it.lastPlayed }
             }
             loaded = true
+        }
+    }
+
+    /** Root libraries index SAF references without copying/hashing media or opening every decoder. */
+    internal suspend fun linkAudio(tree: Uri,sourceKey: String,fingerprint: String,title: String,entries: List<Pair<String,Uri>>,previousId: String?=null,knownId: String?=null): Audiobook = withContext(Dispatchers.IO) {
+        load();require(entries.isNotEmpty() && entries.size<=MAX_TRACKS)
+        require(fingerprint.isNotBlank())
+        val id=hex(MessageDigest.getInstance("SHA-256").digest(("folder-reference-v1\n$tree\n$sourceKey").toByteArray()))
+        val tracks=entries.mapIndexed { index,(name,uri) ->
+            require(validLinkedAudio(tree,uri)) { "A track is outside the selected library root." }
+            AudioTrack("track-${(index+1).toString().padStart(4,'0')}.m4a",name.take(500),0,sourceUri=uri.toString())
+        }
+        mutex.withLock {
+            mutableBooks.value.firstOrNull { it.id==id || (it.id==knownId && it.sourceRoot==tree.toString()) }?.let { existing ->
+                val newIndices=tracks.mapIndexed{index,track->track.sourceUri to index}.toMap()
+                require(existing.tracks.all{it.sourceUri in newIndices}) { "Existing source tracks were removed or renamed. Relink or remove the old entry deliberately before replacing its playlist." }
+                val updated=existing.copy(tracks=tracks,positionTrack=checkNotNull(newIndices[existing.tracks[existing.positionTrack].sourceUri]),
+                    bookmarks=existing.bookmarks.map{it.copy(track=checkNotNull(newIndices[existing.tracks[it.track].sourceUri]))})
+                writeCursor(updated);replaceLocked(updated)
+                return@withLock updated
+            }
+            // Relinking a moved root can retain the old edition/cursor only when
+            // its already discovered relative track sequence is identical.
+            val previous=mutableBooks.value.firstOrNull{it.id==previousId && it.sourceRoot!=null}
+            val restore=previous?.takeIf{it.tracks.map{track->track.title}==tracks.map{track->track.title}}
+            val book=if(restore==null)Audiobook(id,title.take(500).ifBlank{"Audiobook"},"",tracks=tracks,sourceRoot=tree.toString())
+                else restore.copy(tracks=tracks,sourceRoot=tree.toString())
+            File(root,book.id).mkdirs();hashes[book.id]=emptyList()
+            try {
+                writeCursor(book);val next=if(restore==null)mutableBooks.value+book else mutableBooks.value.map{if(it.id==book.id)book else it}
+                persistLocked(next);mutableBooks.value=next.sortedByDescending{it.lastPlayed}
+            } catch(error:Throwable) { if(restore==null)hashes.remove(book.id);throw error }
+            book
+        }
+    }
+
+    internal suspend fun decodedDuration(id: String,index: Int,duration: Long) = withContext(Dispatchers.IO) {
+        if(duration<=0 || duration>MAX_TRACK_DURATION_MS)return@withContext
+        mutex.withLock {
+            val book=mutableBooks.value.firstOrNull{it.id==id} ?: return@withLock
+            if(book.sourceRoot==null || index !in book.tracks.indices || book.tracks[index].durationMs==duration)return@withLock
+            replaceLocked(book.copy(tracks=book.tracks.mapIndexed{i,track->if(i==index)track.copy(durationMs=duration) else track}))
         }
     }
 
@@ -417,7 +502,8 @@ class AudiobookStore(private val context: Context) {
         val bytes = cursorFile(book.id).openRead().use { readLimited(it, MAX_CURSOR_BYTES) }
         val json = BoundedJson.objectFrom(bytes, MAX_CURSOR_BYTES, 8, 64)
         require(json.optInt("version") == 1)
-        val track = json.getInt("track")
+        val key=json.optString("sourceTrackKey","")
+        val track=if(book.sourceRoot!=null && key.matches(SHA256_PATTERN))book.tracks.indexOfFirst{sourceTrackKey(it)==key}.takeIf{it>=0} ?: json.getInt("track") else json.getInt("track")
         require(track in book.tracks.indices)
         val rawPosition = json.getLong("positionMs").coerceAtLeast(0L)
         val duration = book.tracks[track].durationMs
@@ -429,9 +515,11 @@ class AudiobookStore(private val context: Context) {
 
     private fun writeCursor(book: Audiobook) {
         val bytes = JSONObject().put("version", 1).put("track", book.positionTrack).put("positionMs", book.positionMs)
-            .put("speed", book.speed.toDouble()).put("lastPlayed", book.lastPlayed).put("started",book.started).toString().toByteArray(Charsets.UTF_8)
+            .put("speed", book.speed.toDouble()).put("lastPlayed", book.lastPlayed).put("started",book.started)
+            .put("sourceTrackKey",book.tracks.getOrNull(book.positionTrack)?.let{sourceTrackKey(it)}).toString().toByteArray(Charsets.UTF_8)
         DurableJson.write(cursorFile(book.id), bytes)
     }
+    private fun sourceTrackKey(track: AudioTrack): String? = track.sourceUri?.let{hex(MessageDigest.getInstance("SHA-256").digest(it.toByteArray()))}
 
     private fun stageDirectory(): File = File(root, ".stage-${UUID.randomUUID()}").apply {
         check(mkdirs()) { "Audiobook storage is not available." }
@@ -478,6 +566,16 @@ class AudiobookStore(private val context: Context) {
         }
         require(output.size() <= limit) { "The audiobook catalog exceeds its size limit." }
         return output.toByteArray()
+    }
+
+    private fun readMetadata(uri: Uri): AudioMetadata {
+        val retriever=MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(context,uri)
+            AudioMetadata(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE),
+                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()?.coerceIn(0L,MAX_TRACK_DURATION_MS) ?: 0L,
+                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST))
+        } finally { runCatching{retriever.release()} }
     }
 
     private fun readMetadata(file: File): AudioMetadata {
@@ -561,6 +659,9 @@ class AudiobookStore(private val context: Context) {
     private fun parseBook(json: JSONObject): Audiobook {
         val id = json.getString("id")
         require(id.matches(ID_PATTERN))
+        val sourceRoot=json.optString("sourceRoot","").takeIf{it.isNotBlank()}
+        val tree=sourceRoot?.let{Uri.parse(it)}
+        require(tree==null || (tree.scheme=="content" && android.provider.DocumentsContract.isTreeUri(tree)))
         val tracksJson = json.getJSONArray("tracks")
         require(tracksJson.length() in 1..MAX_TRACKS)
         var cueCount = 0
@@ -568,12 +669,14 @@ class AudiobookStore(private val context: Context) {
             val item = tracksJson.getJSONObject(index)
             val fileName = item.getString("file")
             require(fileName.matches(TRACK_FILE_PATTERN))
+            val sourceUri=item.optString("sourceUri","").takeIf{it.isNotBlank()}
+            require(if(tree==null)sourceUri==null else sourceUri!=null && validLinkedAudio(tree,Uri.parse(sourceUri)))
             val duration = item.optLong("durationMs", 0L).coerceAtLeast(0L)
             val cuesJson = item.optJSONArray("cues") ?: JSONArray()
             cueCount += cuesJson.length()
             require(cueCount <= MAX_CUES)
             val cues = (0 until cuesJson.length()).map { cueIndex -> parseCue(cuesJson.getJSONObject(cueIndex), duration) }.sortedBy { it.startMs }
-            AudioTrack(fileName, cleanText(item.optString("title", ""), 500), duration, cues)
+            AudioTrack(fileName, cleanText(item.optString("title", ""), 500), duration, cues,sourceUri)
         }
         val bookmarkJson = json.optJSONArray("bookmarks") ?: JSONArray()
         require(bookmarkJson.length() <= MAX_BOOKMARKS)
@@ -590,7 +693,7 @@ class AudiobookStore(private val context: Context) {
             json.optDouble("speed", 1.0).toFloat().takeIf { it.isFinite() }?.coerceIn(.5f, 3f) ?: 1f,
             bookmarks, json.optLong("lastPlayed", 0L).coerceAtLeast(0L), json.opt("preview") as? Boolean ?: false,
             json.optBoolean("started",json.optInt("positionTrack",0)>0 || json.optLong("positionMs",0)>0),
-            json.optString("readState","Auto").takeIf { it in listOf("Auto","Read","Unread") } ?: "Auto")
+            json.optString("readState","Auto").takeIf { it in listOf("Auto","Read","Unread") } ?: "Auto",sourceRoot)
     }
 
     private fun parseChapter(json: JSONObject, index: Int): BundleChapter {
@@ -629,9 +732,9 @@ class AudiobookStore(private val context: Context) {
 
     private fun bookJson(book: Audiobook) = JSONObject()
         .put("id", book.id).put("title", book.title).put("author", book.author).put("bookId", book.bookId)
-        .put("preview", book.preview).put("started",book.started).put("readState",book.readState)
+        .put("preview", book.preview).put("started",book.started).put("readState",book.readState).put("sourceRoot",book.sourceRoot)
         .put("tracks", JSONArray(book.tracks.map { track -> JSONObject().put("file", track.file).put("title", track.title)
-            .put("durationMs", track.durationMs).put("cues", JSONArray(track.cues.map { cue -> JSONObject().put("startMs", cue.startMs)
+            .put("durationMs", track.durationMs).put("sourceUri",track.sourceUri).put("cues", JSONArray(track.cues.map { cue -> JSONObject().put("startMs", cue.startMs)
                 .put("endMs", cue.endMs).put("href", cue.href).put("fragment", cue.fragment).put("text", cue.text)
                 .put("before", cue.before).put("after", cue.after).put("cssSelector", cue.cssSelector).put("progression", cue.progression) })) }))
         .put("bookmarks", JSONArray(book.bookmarks.map { mark -> JSONObject().put("id", mark.id).put("track", mark.track)

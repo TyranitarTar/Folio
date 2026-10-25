@@ -157,6 +157,10 @@ class ChatterboxAdapter:
 def load_engine(engine: str, model_dir: Path, voice_reference: Path | None, sampling: dict[str, Any], cpu_threads: int | None = None, accelerator: str = 'cpu') -> ChatterboxAdapter:
     if engine not in ENGINES:
         raise NarrationError(f"Unknown engine {engine!r}")
+    if accelerator=='rocm':
+        if engine!='plapre3':raise NarrationError('The ROCm production adapter is currently Plapre 3 only.')
+        from .rocm_backend import RocmPlapreAdapter
+        return RocmPlapreAdapter(model_dir,sampling,accelerator,cpu_threads or 2)
     if engine in ('plapre3','pico'):
         from .plapre_backend import PlapreAdapter, PicoAdapter
         adapter = PicoAdapter if engine=='pico' else PlapreAdapter

@@ -1,6 +1,17 @@
 # Folio
 Folio is a vibe-coded Android reader with Danish and English TTS.
 
+Version **0.14.1** makes **Reading** and **Audiobooks** use matching cover grids,
+compact/list layouts and library settings. Player/reader headers share a direct
+**Library** action; playback controls remain available after leaving a player.
+Audiobooks has a **rescan** icon for saved roots. New ordinary root-folder audio
+links original files immediately, with duration metadata read afterwards; this
+avoids copying/hashing the entire library. Keep those source folders available.
+FolioBooks and explicit imports still copy for offline use. Page turns reuse
+verified geometry, and chapter-boundary lookup avoids repeated document-prefix
+scans. Voice-pack cards are shorter. See [verification and limits](IMPLEMENTATION-v0.14.1.md)
+and [the Smart AudioBook Player comparison](SMART-AUDIOBOOK-COMPARISON.md).
+
 Version **0.14.0** uses the selected **Bookmark Cat (icon 2)** branding. Books and
 Audiobooks share All/New/Unread/Read filters and manual read status. Audiobooks
 has search/sort, a separate **+** import screen and saved library root folders

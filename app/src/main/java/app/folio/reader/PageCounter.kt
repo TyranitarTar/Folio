@@ -33,7 +33,7 @@ class PageCounter(private val context: Context, private val id: String, private 
     internal fun requestBoundaries(locators: List<Locator>) {
         boundaryRequests=(chapterStarts+locators).distinctBy(::pageBoundaryKey).take(5000)
         // Reuse the already visible renderer; never restart a whole-book count/create a renderer.
-        if(currentKey.isNotEmpty() && !fixed) verifyVisible()
+        if(currentKey.isNotEmpty() && !fixed) verifyVisible(force=true)
     }
     internal val diagnostics = MutableStateFlow(PaginationDiagnostics())
     internal val measurements = MutableStateFlow<Map<String,PaginationMeasurement>>(emptyMap())
@@ -56,6 +56,9 @@ class PageCounter(private val context: Context, private val id: String, private 
     private var currentKey = ""
     private var generation = 0L
     private var pageGeneration = 0L
+    private var pageRevision = 0L
+    private var activeVisible: String? = null
+    private var verifiedVisible: String? = null
     private var foreground = true
     private var closed = false
     private var cache: AtomicFile? = null
@@ -72,10 +75,11 @@ class PageCounter(private val context: Context, private val id: String, private 
         else if (!closed) pageLoaded()
     }
     /** Readium's PaginationListener.onPageLoaded(), called after content-ready and pending locator. */
-    fun pageLoaded() { if (!closed && currentKey.isNotEmpty() && !fixed) verifyVisible() }
+    fun pageLoaded() { if (!closed && currentKey.isNotEmpty() && !fixed) verifyVisible(force=true) }
     fun pageChanged(index: Int, locator: Locator, total: Int = 0) {
         if (closed) return
         localPage = index.coerceAtLeast(0); localHref = locator.href.removeFragment().toString()
+        pageRevision++
         // A callback may belong to the old preference/viewport render. Verify geometry before
         // saving its total under a newly selected key; existing cached totals remain immediate.
         if (fixed && counts.isNotEmpty()) counts.fill(1)
@@ -146,9 +150,9 @@ class PageCounter(private val context: Context, private val id: String, private 
                         val began = SystemClock.elapsedRealtime()
                         val measured = sample(renderer, hrefs[index], ticket)
                         ensureActive(); if (ticket != generation) return@launch
-                        captureBoundaries(renderer,hrefs[index],ticket,measured.pages)
                         retainMeasurement(hrefs[index],renderer,"hidden",measured)
                         record(index, measured.pages)
+                        captureBoundaries(renderer,hrefs[index],ticket,measured.pages)
                         diagnostics.value = diagnostics.value.copy(hiddenResources = diagnostics.value.hiddenResources + 1,
                             hiddenMeasureMillis = diagnostics.value.hiddenMeasureMillis + SystemClock.elapsedRealtime() - began)
                     } catch (e: TimeoutCancellationException) {
@@ -162,11 +166,19 @@ class PageCounter(private val context: Context, private val id: String, private 
             finally { if (ticket == generation) counting.value = false }
         }
     }
-    private fun verifyVisible() {
+    private fun verifyVisible(force: Boolean=false) {
         if (!foreground || currentKey.isEmpty()) return
+        val stamp="$generation:$localHref:${visible.publicationView.width}x${visible.publicationView.height}:${visible.settings.value}"
+        if((visibleJob?.isActive==true && activeVisible==stamp) || (!force && verifiedVisible==stamp)) {
+            diagnostics.value=diagnostics.value.copy(visibleReuses=diagnostics.value.visibleReuses+1)
+            return
+        }
         val ticket = generation; val request = ++pageGeneration
+        val revision=pageRevision
         val expected = localHref
         visibleJob?.cancel()
+        activeVisible=stamp
+        diagnostics.value=diagnostics.value.copy(visibleVerifications=diagnostics.value.visibleVerifications+1)
         visibleJob = scope.launch {
             try {
                 while (!workAllowed()) { delay(120); ensureActive() }
@@ -175,10 +187,11 @@ class PageCounter(private val context: Context, private val id: String, private 
                 if (ticket != generation || request != pageGeneration || localHref != expected) return@launch
                 val index = hrefs.indexOf(expected)
                 if (index < 0) return@launch
-                localPage = measured.page
-                captureBoundaries(visible,expected,ticket,measured.pages)
+                if(revision==pageRevision)localPage = measured.page
+                verifiedVisible=stamp
                 retainMeasurement(expected,visible,"visible",measured)
                 record(index, measured.pages)
+                captureBoundaries(visible,expected,ticket,measured.pages)
                 diagnostics.value = diagnostics.value.copy(visibleMeasureMillis = SystemClock.elapsedRealtime() - began)
             } catch (e: TimeoutCancellationException) { /* Next callback can retry. */ }
             catch (e: CancellationException) { throw e }
@@ -232,9 +245,9 @@ class PageCounter(private val context: Context, private val id: String, private 
             const items=window.readium.getDecorations('$group').items;
             function page(rect){const offset=${if(scroll) "rect.top+d.scrollTop" else "Math.abs(rect.left+d.scrollLeft)"};return Math.max(0,Math.min($pages-1,Math.floor(offset/span+.001)));}
             for(const item of items){try{const rect=item.range.getBoundingClientRect();if(!(rect.width>0&&rect.height>0))continue;result[item.decoration.id]=page(rect);
-                const anchor=item.range.cloneRange();anchor.collapse(true);const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let node,last=null;
-                while(node=walker.nextNode()) {let end=node.textContent.length;const same=node===anchor.startContainer;if(same)end=anchor.startOffset;else if(anchor.comparePoint(node,0)>=0)break;
-                    const text=node.textContent.slice(0,end),match=/\S(?=\s*$)/.exec(text);if(match){const r=document.createRange();r.setStart(node,match.index);r.setEnd(node,match.index+1);const rr=r.getBoundingClientRect();if(rr.width>0&&rr.height>0)last=rr;}if(same)break;}
+                const anchor=item.range.cloneRange();anchor.collapse(true);const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let node=anchor.startContainer,last=null,end=anchor.startOffset;
+                if(node.nodeType!==Node.TEXT_NODE){let previous=node.childNodes[end-1];if(previous){while(previous.lastChild)previous=previous.lastChild;walker.currentNode=previous;node=previous.nodeType===Node.TEXT_NODE?previous:walker.previousNode();}else{walker.currentNode=node;node=walker.previousNode();}end=node?node.textContent.length:0;}else walker.currentNode=node;
+                while(node){const text=node.textContent.slice(0,end),match=/\S(?=\s*$)/.exec(text);if(match){const r=document.createRange();r.setStart(node,match.index);r.setEnd(node,match.index+1);const rr=r.getBoundingClientRect();if(rr.width>0&&rr.height>0){last=rr;break;}}node=walker.previousNode();end=node?node.textContent.length:0;}
                 result[item.decoration.id+':before']=last?page(last):-1;
             }catch(e){}}
             return result;})()"""
@@ -303,6 +316,7 @@ class PageCounter(private val context: Context, private val id: String, private 
 }
 
 internal data class PaginationDiagnostics(val cacheReadMillis: Long = -1, val memoryHit: Boolean = false,
+    val visibleVerifications: Int=0,val visibleReuses: Int=0,
     val visibleMeasureMillis: Long = -1, val hiddenMeasureMillis: Long = 0, val hiddenResources: Int = 0)
 
 internal object PaginationCounts {

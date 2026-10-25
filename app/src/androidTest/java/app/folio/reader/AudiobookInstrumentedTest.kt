@@ -166,10 +166,25 @@ class AudiobookInstrumentedTest {
         assertTrue(app.audiobooks.books.value.first { it.id == book.id }.bookmarks.isEmpty())
     }
 
+    @Test fun library_exit_keeps_audio_playing_and_exposes_background_controls() {
+        val book=imported()
+        activity.onActivity { openAudiobook(it,book.id,true) }
+        waitFor { AudiobookController.state.value.id==book.id && AudiobookController.state.value.playing }
+        val library=device.wait(Until.findObject(By.desc("Library")),10000)
+        assertNotNull(library);library.click()
+        assertTrue(device.wait(Until.hasObject(By.desc("Add audiobooks")),10000))
+        assertTrue(device.hasObject(By.desc("Pause audiobook")))
+        assertEquals(book.id,AudiobookController.state.value.id)
+        assertTrue(AudiobookController.state.value.playing)
+        device.takeScreenshot(File(app.filesDir,"v0141-audio-library-playing.png"))
+        device.findObject(By.desc("Pause audiobook")).click()
+        waitFor { !AudiobookController.state.value.playing }
+    }
+
     @Test fun booksAndAudiobooksTabsExposePlayerAndOriginalBook() {
         val book = imported()
         activity.recreate()
-        assertTrue(device.wait(Until.hasObject(By.text("Books")), 15000))
+        assertTrue(device.wait(Until.hasObject(By.text("Reading")), 15000))
         device.wait(Until.findObject(By.text("Audiobooks")), 10000).click()
         assertTrue(device.wait(Until.hasObject(By.text(book.title)), 10000))
         device.takeScreenshot(File(app.filesDir, "v013-audiobook-library.png"))

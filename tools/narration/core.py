@@ -500,7 +500,7 @@ def create_job(
         raise NarrationError("--max-chars must be between 80 and 2000")
     allowed = {'roest': ('cpu','directml','directml-acoustic'),
                'chatterbox': ('cpu',), 'chatterbox-nano': ('cpu','directml-acoustic'),
-               'plapre3': ('cpu','onnx-directml'), 'pico': ('cpu','onnx-directml')}
+               'plapre3': ('cpu','onnx-directml','rocm'), 'pico': ('cpu','onnx-directml')}
     if accelerator not in allowed[engine]:
         raise NarrationError('The selected engine does not support that acceleration backend.')
     if voice is not None and (engine not in ('plapre3','pico') or voice not in ('ida','tor','liv','ask','kaj')):
@@ -543,7 +543,8 @@ def create_job(
     if accelerator != 'cpu':
         identity['executionProfile'] = {'directml': 'directml-t3-v1',
                                         'directml-acoustic': 'directml-acoustic-v1',
-                                        'onnx-directml': engine+'-cpu-lm-dml-acoustic-v1'}[accelerator]
+                                        'onnx-directml': engine+'-cpu-lm-dml-acoustic-v1',
+                                        'rocm': 'plapre3-rocm-fp32-fast-v1'}[accelerator]
     job_id = hashlib.sha256(json.dumps(identity, sort_keys=True).encode("utf-8")).hexdigest()[:20]
     root = jobs_root or private_jobs_root()
     job_dir = root / f"{engine}-{job_id}"
@@ -570,7 +571,7 @@ def create_job(
         "model": {
             "repository": ENGINES[engine]["repository"],
             "revision": model_revision,
-            "runtime": ENGINES[engine].get('runtime', TTS_SOURCE_FORMAT),
+            "runtime": 'plapre3-rocm-fp32-fast-v1' if accelerator=='rocm' else ENGINES[engine].get('runtime', TTS_SOURCE_FORMAT),
             "accelerator": accelerator,
         },
         "voiceReferencePath": str(voice_reference.resolve()) if voice_reference else None,
@@ -674,7 +675,11 @@ def fingerprint_model(
         if index.get('engine') not in ('plapre3','pico','chatterbox-nano'):
             raise NarrationError('Unsupported shared model component index')
         components = {x['name']: Path(x['path']) for x in index.get('files', [])}
-        required = ({'language-model.onnx','embeddings.bin','tokenizer.json','voices.json','kanade.onnx','hift.onnx'}
+        required = ({'model.safetensors','config.json','tokenizer.json','voices.json',
+                     'kanade.safetensors','kanade.yaml','hift.pt','audio.py','rocm_backend.py'} |
+                    {name for name in components if name.startswith('kanade-source/')}
+                    if index.get('pipeline')=='plapre3-rocm-fp32-fast-v1' else
+                    {'language-model.onnx','embeddings.bin','tokenizer.json','voices.json','kanade.onnx','hift.onnx'}
                     if index['engine']=='plapre3' else
                     {'language-model.onnx','embeddings.npy','tokenizer.json','speakers.json','speaker-projection.onnx','kanade.onnx','hift.onnx'}
                     if index['engine']=='pico' else
@@ -1171,7 +1176,14 @@ def generate_job(
         def render_cue(cue):
             started=time.monotonic();audio_parts=[]
             for part_i,part in enumerate(_sentence_parts(cue['text'],int(job['maxSentenceChars']))):
-                rendered=synth.synthesize(part)
+                if job.get('accelerator')=='rocm':
+                    # Resume and out-of-order worker completion must not change
+                    # a passage's stochastic narration. Other backends retain
+                    # their existing sampling behavior.
+                    seed=int(hashlib.sha256((job['jobId']+json.dumps(cue,sort_keys=True)+str(part_i)).encode('utf-8')).hexdigest()[:15],16)
+                    rendered=synth.synthesize(part,seed=seed)
+                else:
+                    rendered=synth.synthesize(part)
                 values=trim_boundary_silence(_as_float_samples(rendered),int(job['sampleRate']))
                 if part_i:audio_parts.extend([0.0]*int(job['sampleRate']*.08))
                 audio_parts.extend(values)

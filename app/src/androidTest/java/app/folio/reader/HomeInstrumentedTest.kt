@@ -72,7 +72,7 @@ class HomeInstrumentedTest {
             // More retains its scroll position, with theme choices still in view.
             scenario.recreate(); assertTrue(device.wait(Until.hasObject(By.text("Dark")), 15000))
             assertEquals("Dark", HomePreferences.load(app).theme)
-            click("Books")
+            click("Reading")
             device.takeScreenshot(File(app.filesDir, "home-v5-library.png"))
         }
     }

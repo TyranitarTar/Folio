@@ -44,6 +44,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 class LibraryViewModel(app: Application) : AndroidViewModel(app) {
+    internal val libraryRequest = MutableStateFlow<LibraryRequest?>(null)
     val store = (app as FolioApp).library
     val books = store.books
     val busy = MutableStateFlow(false)
@@ -114,6 +115,10 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); handleIntent(intent) }
     @Suppress("DEPRECATION")
     private fun handleIntent(intent: Intent) {
+        if(intent.hasExtra("librarySection")) {
+            model.libraryRequest.value=LibraryRequest(librarySection(intent.getStringExtra("librarySection")),android.os.SystemClock.elapsedRealtimeNanos())
+            intent.removeExtra("librarySection")
+        }
         val uri = try { when (intent.action) {
             Intent.ACTION_VIEW -> intent.data
             Intent.ACTION_SEND -> IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)

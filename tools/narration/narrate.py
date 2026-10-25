@@ -89,7 +89,8 @@ def _generate(args: argparse.Namespace) -> int:
 
     target = {'cpu': 'CPU', 'directml': 'DirectML token model + CPU waveform',
               'directml-acoustic': 'DirectML token/acoustic networks + CPU FFT/excitation',
-              'onnx-directml': 'CPU token model + DirectML acoustics'}.get(job.get('accelerator','cpu'),'unknown')
+              'onnx-directml': 'CPU token model + DirectML acoustics',
+              'rocm': 'AMD HIP FP32 token model + GPU acoustics'}.get(job.get('accelerator','cpu'),'unknown')
     print(f"Loading local {job['engine']} model for {target}; first load may take a while...", flush=True)
     output, status = generate_job(
         directory,
@@ -164,7 +165,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--model-revision", help="Pinned Hugging Face model revision; defaults to the reviewed snapshot SHA")
     plan.add_argument("--voice-reference", help="Optional authorized local narrator reference audio")
     plan.add_argument("--max-chars", type=int, default=350, help="Maximum TTS input length (default: 350)")
-    plan.add_argument('--accelerator', choices=['cpu','directml','directml-acoustic','onnx-directml'], default='cpu', help='Backend must match the engine; CPU remains available.')
+    plan.add_argument('--accelerator', choices=['cpu','directml','directml-acoustic','onnx-directml','rocm'], default='cpu', help='Backend must match the engine; CPU remains available.')
     plan.add_argument('--voice', choices=['ida','tor','liv','ask','kaj'], help='Plapre named voice')
     plan.add_argument("--jobs-dir", help="Private job root; default is the current user's app-data directory")
     plan.set_defaults(run=_plan)

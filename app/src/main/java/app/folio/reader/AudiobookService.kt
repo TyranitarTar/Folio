@@ -245,6 +245,7 @@ class AudiobookService : Service() {
             prepared = true
             val actualDuration = runCatching { preparedMedia.duration.toLong().coerceAtLeast(0L) }.getOrDefault(0L)
             val duration = actualDuration.takeIf { it > 0L } ?: track.durationMs
+            if(book.sourceRoot!=null && actualDuration>0)scope.launch { runCatching { store.decodedDuration(book.id,index,actualDuration) } }
             seekTargetMs = seekTargetMs.coerceAtLeast(0L).let { if (duration > 0L) it.coerceAtMost(duration) else it }
             if (seekTargetMs > 0L) requestPreparedSeek(ticket, preparedMedia, track, duration, seekTargetMs)
             else finishPreparedTrack(ticket, preparedMedia, track, duration, 0L)
@@ -257,7 +258,8 @@ class AudiobookService : Service() {
             true
         }
         runCatching {
-            media.setDataSource(store.file(book.id, track.file).absolutePath)
+            if(track.sourceUri!=null)media.setDataSource(this,android.net.Uri.parse(track.sourceUri))
+            else media.setDataSource(store.file(book.id, track.file).absolutePath)
             media.prepareAsync()
         }.onFailure { if (accepts(ticket, media)) handleMediaError(ticket) }
     }
@@ -602,7 +604,8 @@ class AudiobookService : Service() {
         releasePlayer(); releaseFocusAndWake()
         checkpoint()
         AudiobookController.mutable.value = AudiobookController.mutable.value.copy(playing = false, loading = false,
-            error = "This audio track could not be played.")
+            error = if(currentBook?.sourceRoot!=null)"The source audio could not be played. Check the file or relink its folder in + Add audiobooks."
+                else "This audio track could not be played.")
         publish()
     }
 

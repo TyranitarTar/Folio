@@ -10,7 +10,7 @@ import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 import java.security.MessageDigest
 
-/** Persisted SAF roots and discovery checkpoints; imported audio remains usable offline. */
+/** Persisted SAF roots: index ordinary audio in place; FolioBook bundles are extracted. */
 internal class AudiobookSources(private val context: Context, private val store: AudiobookStore) {
     private val preferences=context.getSharedPreferences("audiobook-sources",0)
     private val lock=Mutex()
@@ -30,7 +30,7 @@ internal class AudiobookSources(private val context: Context, private val store:
             } }
         } ?: error("Folder access is unavailable. Relink the source folder.")
     }
-    suspend fun refresh(tree: Uri, progress: (String)->Unit): String = withContext(Dispatchers.IO) { lock.withLock {
+    suspend fun refresh(tree: Uri, previousRoot: Uri?=null,progress: (String)->Unit): String = withContext(Dispatchers.IO) { lock.withLock {
         store.load()
         val saved=JSONObject(preferences.getString("root:$tree","{}") ?: "{}")
         var visited=0
@@ -65,24 +65,39 @@ internal class AudiobookSources(private val context: Context, private val store:
                 group(directory.id,directory.name,tracks)
             }
         }
+        val groupedIds=groups.flatMap{it.third}.mapTo(mutableSetOf()){it.id}
         for(entry in top.filter { it.name.endsWith(".foliobook",true) || audio(it) })
-            if(groups.none { it.third.any { nested -> nested.id==entry.id } })group(entry.id,entry.name.substringBeforeLast('.'),listOf(entry))
+            if(groupedIds.add(entry.id))group(entry.id,entry.name.substringBeforeLast('.'),listOf(entry))
         require(groups.isNotEmpty()) { "No supported audiobooks were found. Choose a root containing book folders or .foliobook files." }
-        var added=0;var unchanged=0
+        var added=0;var unchanged=0;var linked=0;var deferred=0
+        val presentIds=store.books.value.mapTo(mutableSetOf()){it.id}
         for((index,group) in groups.withIndex()) {
             currentCoroutineContext().ensureActive()
             val (sourceKey,name,tracks)=group
             withContext(Dispatchers.Main) { progress("${index+1}/${groups.size} · $name") }
             val fingerprint=MessageDigest.getInstance("SHA-256").digest(tracks.sortedBy { it.id }.joinToString("\n") { "${it.id}|${it.name}|${it.bytes}|${it.modified}" }.toByteArray()).joinToString("") { "%02x".format(it) }
             val old=saved.optJSONObject(sourceKey)
-            if(old?.optString("fingerprint")==fingerprint && tracks.all { it.bytes>0 && it.modified>0 } && store.books.value.any { it.id==old.optString("book") }) { unchanged++;continue }
+            if(old?.optString("fingerprint")==fingerprint && (old.optString("mode")=="linked-v1" || tracks.all { it.bytes>0 && it.modified>0 }) && old.optString("book") in presentIds) { unchanged++;continue }
             fun natural(name: String)=Regex("\\d+").replace(name.lowercase(java.util.Locale.ROOT)) { it.value.padStart(20,'0') }
             val uris=tracks.sortedBy { natural(it.name) }.map { D.buildDocumentUriUsingTree(tree,it.id) }
-            val book=if(tracks.size==1 && tracks[0].name.endsWith(".foliobook",true)) store.importBundle(uris.single()) else store.importAudio(uris,preserveOrder=true,titleOverride=name)
-            saved.put(sourceKey,JSONObject().put("fingerprint",fingerprint).put("book",book.id))
+            val bundle=tracks.size==1 && tracks[0].name.endsWith(".foliobook",true)
+            val existing=store.books.value.firstOrNull{it.id==old?.optString("book") && it.sourceRoot==tree.toString()}
+            val incomingUris=uris.mapTo(mutableSetOf()){it.toString()}
+            if(!bundle && existing!=null && (existing.tracks.any{it.sourceUri !in incomingUris} || AudiobookController.state.value.id==existing.id)) {
+                deferred++
+                withContext(Dispatchers.Main) { progress("Keeping $name unchanged: stop its player to update, or relink missing/renamed tracks.") }
+                continue
+            }
+            withContext(Dispatchers.Main) { progress(if(bundle)"Extracting FolioBook ${index+1}/${groups.size} · $name" else "Linking ${index+1}/${groups.size} · $name · no audio copy") }
+            val book=if(bundle)store.importBundle(uris.single()) else store.linkAudio(tree,sourceKey,fingerprint,name,
+                tracks.sortedBy{natural(it.name)}.map{it.name to D.buildDocumentUriUsingTree(tree,it.id)},
+                previousId=previousRoot?.let{oldRoot -> store.books.value.filter{it.sourceRoot==oldRoot.toString() && it.title==name}.singleOrNull()?.id},knownId=existing?.id)
+            saved.put(sourceKey,JSONObject().put("fingerprint",fingerprint).put("book",book.id).put("mode",if(bundle)"copied" else "linked-v1"))
+            presentIds+=book.id
             check(preferences.edit().putString("root:$tree",saved.toString()).commit()) { "Source progress could not be saved." }
-            added++
+            if(bundle)added++ else linked++
         }
-        "$added imported · $unchanged unchanged. Existing audio and listening positions were retained."
+        "$added imported · $unchanged unchanged"+(if(linked>0)" · $linked linked" else "")+
+            (if(deferred>0)" · $deferred title(s) kept unchanged; stop playback or relink changed tracks" else "")+". Existing audio and listening positions were retained."
     } }
 }
