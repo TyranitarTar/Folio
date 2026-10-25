@@ -18,7 +18,7 @@ class Interface0141InstrumentedTest {
     private val instrumentation=InstrumentationRegistry.getInstrumentation()
     private val app=instrumentation.targetContext.applicationContext as FolioApp
     private val device=UiDevice.getInstance(instrumentation)
-    private fun click(text:String) { val node=device.wait(Until.findObject(By.text(text)),15000);assertNotNull(text,node);node.click();device.waitForIdle() }
+    private fun click(text:String) { val node=device.wait(Until.findObject(if(text=="Reading")By.desc("Reading library") else By.text(text)),15000);assertNotNull(text,node);node.click();device.waitForIdle() }
     private suspend fun waitFor(test:()->Boolean) { withTimeout(30000){while(!test())delay(50)} }
 
     @Test fun audiobook_display_uses_the_shared_library_settings_and_persists() {

@@ -45,13 +45,17 @@ data class Audiobook(
     val preview: Boolean = false,
     val started: Boolean = false,
     val readState: String = "Auto",
-    val sourceRoot: String? = null
+    val sourceRoot: String? = null,
+    val artwork: String? = null,
+    val sourceCover: String? = null,
+    val history: List<AudioHistory> = emptyList(),
+    val completed: Boolean? = null
 ) {
     val elapsedMs: Long get() = tracks.take(positionTrack).sumOf { it.durationMs } + positionMs
     val totalMs: Long get() = tracks.sumOf { it.durationMs }
     val durationKnown: Boolean get() = tracks.all { it.durationMs>0 }
     val isRead: Boolean get() = if(readState=="Read") true else if(readState=="Unread") false
-        else durationKnown && totalMs>0 && elapsedMs>=totalMs-1000 && positionTrack==tracks.lastIndex
+        else completed ?: (durationKnown && totalMs>0 && positionMs>=tracks.last().durationMs && positionTrack==tracks.lastIndex)
 }
 
 data class AudioTrack(
@@ -59,7 +63,9 @@ data class AudioTrack(
     val title: String,
     val durationMs: Long,
     val cues: List<AudioCue> = emptyList(),
-    val sourceUri: String? = null
+    val sourceUri: String? = null,
+    val chapters: List<AudioChapter> = emptyList(),
+    val metadataVersion: Int = 0
 )
 
 data class AudioCue(
@@ -74,6 +80,7 @@ data class AudioCue(
     val progression: Double? = null
 )
 data class AudioBookmark(val id: String, val track: Int, val positionMs: Long, val label: String)
+data class AudioHistory(val track:Int,val positionMs:Long,val at:Long,val reason:String)
 
 /** Private audio storage. Ordinary library backups intentionally know nothing about this directory. */
 class AudiobookStore(private val context: Context) {
@@ -86,22 +93,33 @@ class AudiobookStore(private val context: Context) {
         if(metadataJob?.isActive==true)return
         metadataJob=metadataScope.launch(start=CoroutineStart.LAZY) {
             try {
-                val pending=books.value.filter{it.sourceRoot!=null && !it.durationKnown}
-                var completed=0;val total=pending.sumOf{book->book.tracks.count{it.durationMs<=0}}
+                val pending=books.value.filter{it.tracks.any{track->track.metadataVersion<AUDIO_METADATA_VERSION}}
+                var completed=0;val total=pending.sumOf{book->book.tracks.count{it.metadataVersion<AUDIO_METADATA_VERSION}}
                 for(book in pending) {
                     val found=mutableMapOf<String,AudioMetadata>()
-                    for(track in book.tracks.filter{it.durationMs<=0 && it.sourceUri!=null}) {
+                    var art:String?=null
+                    if(art==null && book.sourceCover!=null)runCatching {
+                        val bytes=context.contentResolver.openInputStream(Uri.parse(book.sourceCover))?.use{readLimited(it,8_000_000)}
+                        if(bytes!=null)art=cacheArtwork(book.id,bytes)
+                    }
+                    for(track in book.tracks.filter{it.metadataVersion<AUDIO_METADATA_VERSION}) {
                         currentCoroutineContext().ensureActive()
-                        while(AudiobookController.state.value.playing || SpeechController.state.value.playing || SpeechController.state.value.preparing)delay(300)
-                        metadataProgress.value="Reading durations ${++completed}/$total · ${book.title}"
-                        runCatching{readMetadata(Uri.parse(track.sourceUri))}.getOrNull()?.let{found[track.sourceUri!!]=it}
+                        while(AudiobookController.state.value.playing || AudiobookController.state.value.loading || SpeechController.state.value.playing || SpeechController.state.value.preparing)delay(300)
+                        metadataProgress.value="Reading audio details ${++completed}/$total · ${book.title}"
+                        runCatching{if(track.sourceUri!=null)readMetadata(Uri.parse(track.sourceUri)) else readMetadata(file(book.id,track.file))}.getOrNull()?.let{
+                            currentCoroutineContext().ensureActive()
+                            found[track.sourceUri ?: track.file]=it
+                            if(art==null && it.picture!=null)art=cacheArtwork(book.id,it.picture)
+                        }
                     }
                     currentCoroutineContext().ensureActive()
                     if(found.isNotEmpty())mutex.withLock {
                         val latest=mutableBooks.value.firstOrNull{it.id==book.id} ?: return@withLock
-                        replaceLocked(latest.copy(tracks=latest.tracks.map { track ->
-                            val metadata=found[track.sourceUri]
-                            if(metadata==null || metadata.durationMs<=0)track else track.copy(durationMs=metadata.durationMs)
+                        replaceLocked(latest.copy(author=latest.author.ifBlank{found.values.firstNotNullOfOrNull{it.artist?.takeIf{artist->artist.isNotBlank()}}.orEmpty()},artwork=art ?: latest.artwork,
+                            tracks=latest.tracks.map { track ->
+                            val metadata=found[track.sourceUri ?: track.file]
+                            if(metadata==null)track else track.copy(durationMs=metadata.durationMs.takeIf{it>0} ?: track.durationMs,
+                                chapters=metadata.chapters,metadataVersion=AUDIO_METADATA_VERSION)
                         }))
                     }
                 }
@@ -136,7 +154,8 @@ class AudiobookStore(private val context: Context) {
                     runCatching { parseBook(array.getJSONObject(index)) }
                         .onSuccess { book ->
                             if ((book.sourceRoot!=null || book.tracks.all { file(book.id, it.file).isFile }) && parsed.none { it.id == book.id }) {
-                                parsed += readCursor(book)
+                                val restored=readCursor(book)
+                                parsed += restored.copy(completed=restored.completed ?: restored.isRead)
                                 hashes[book.id] = parseHashes(array.getJSONObject(index).optJSONArray("checksums"), book.tracks.size)
                             }
                         }
@@ -148,7 +167,7 @@ class AudiobookStore(private val context: Context) {
     }
 
     /** Root libraries index SAF references without copying/hashing media or opening every decoder. */
-    internal suspend fun linkAudio(tree: Uri,sourceKey: String,fingerprint: String,title: String,entries: List<Pair<String,Uri>>,previousId: String?=null,knownId: String?=null): Audiobook = withContext(Dispatchers.IO) {
+    internal suspend fun linkAudio(tree: Uri,sourceKey: String,fingerprint: String,title: String,entries: List<Pair<String,Uri>>,previousId: String?=null,knownId: String?=null,sourceCover:Uri?=null): Audiobook = withContext(Dispatchers.IO) {
         load();require(entries.isNotEmpty() && entries.size<=MAX_TRACKS)
         require(fingerprint.isNotBlank())
         val id=hex(MessageDigest.getInstance("SHA-256").digest(("folder-reference-v1\n$tree\n$sourceKey").toByteArray()))
@@ -160,8 +179,9 @@ class AudiobookStore(private val context: Context) {
             mutableBooks.value.firstOrNull { it.id==id || (it.id==knownId && it.sourceRoot==tree.toString()) }?.let { existing ->
                 val newIndices=tracks.mapIndexed{index,track->track.sourceUri to index}.toMap()
                 require(existing.tracks.all{it.sourceUri in newIndices}) { "Existing source tracks were removed or renamed. Relink or remove the old entry deliberately before replacing its playlist." }
-                val updated=existing.copy(tracks=tracks,positionTrack=checkNotNull(newIndices[existing.tracks[existing.positionTrack].sourceUri]),
-                    bookmarks=existing.bookmarks.map{it.copy(track=checkNotNull(newIndices[existing.tracks[it.track].sourceUri]))})
+                val updated=existing.copy(tracks=tracks,sourceCover=sourceCover?.toString() ?: existing.sourceCover,positionTrack=checkNotNull(newIndices[existing.tracks[existing.positionTrack].sourceUri]),
+                    bookmarks=existing.bookmarks.map{it.copy(track=checkNotNull(newIndices[existing.tracks[it.track].sourceUri]))},
+                    history=existing.history.map{it.copy(track=checkNotNull(newIndices[existing.tracks[it.track].sourceUri]))})
                 writeCursor(updated);replaceLocked(updated)
                 return@withLock updated
             }
@@ -169,8 +189,8 @@ class AudiobookStore(private val context: Context) {
             // its already discovered relative track sequence is identical.
             val previous=mutableBooks.value.firstOrNull{it.id==previousId && it.sourceRoot!=null}
             val restore=previous?.takeIf{it.tracks.map{track->track.title}==tracks.map{track->track.title}}
-            val book=if(restore==null)Audiobook(id,title.take(500).ifBlank{"Audiobook"},"",tracks=tracks,sourceRoot=tree.toString())
-                else restore.copy(tracks=tracks,sourceRoot=tree.toString())
+            val book=if(restore==null)Audiobook(id,title.take(500).ifBlank{"Audiobook"},"",tracks=tracks,sourceRoot=tree.toString(),sourceCover=sourceCover?.toString(),completed=false)
+                else restore.copy(tracks=tracks,sourceRoot=tree.toString(),sourceCover=sourceCover?.toString())
             File(root,book.id).mkdirs();hashes[book.id]=emptyList()
             try {
                 writeCursor(book);val next=if(restore==null)mutableBooks.value+book else mutableBooks.value.map{if(it.id==book.id)book else it}
@@ -187,6 +207,45 @@ class AudiobookStore(private val context: Context) {
             if(book.sourceRoot==null || index !in book.tracks.indices || book.tracks[index].durationMs==duration)return@withLock
             replaceLocked(book.copy(tracks=book.tracks.mapIndexed{i,track->if(i==index)track.copy(durationMs=duration) else track}))
         }
+    }
+
+    /** The selected track's chapters/art are available before playback starts. */
+    internal suspend fun prepareTrack(id:String,index:Int) = withContext(Dispatchers.IO) {
+        val book=books.value.firstOrNull{it.id==id} ?: return@withContext
+        val track=book.tracks.getOrNull(index) ?: return@withContext
+        if(track.metadataVersion>=AUDIO_METADATA_VERSION)return@withContext
+        val metadata=runCatching{if(track.sourceUri!=null)readMetadata(Uri.parse(track.sourceUri)) else readMetadata(file(id,track.file))}.getOrNull() ?: return@withContext
+        currentCoroutineContext().ensureActive()
+        var art=if(index>0)book.artwork else null
+        if(art==null && book.sourceCover!=null)runCatching {
+            context.contentResolver.openInputStream(Uri.parse(book.sourceCover))?.use{readLimited(it,8_000_000)}?.let{art=cacheArtwork(id,it)}
+        }
+        if(art==null && metadata.picture!=null)art=cacheArtwork(id,metadata.picture)
+        mutex.withLock {
+            val latest=mutableBooks.value.firstOrNull{it.id==id} ?: return@withLock
+            if(latest.tracks.getOrNull(index)?.let{it.file==track.file && it.sourceUri==track.sourceUri}!=true)return@withLock
+            replaceLocked(latest.copy(author=latest.author.ifBlank{metadata.artist.orEmpty()},artwork=art ?: latest.artwork,
+                tracks=latest.tracks.mapIndexed{i,t->if(i==index)t.copy(durationMs=metadata.durationMs.takeIf{it>0} ?: t.durationMs,chapters=metadata.chapters,metadataVersion=AUDIO_METADATA_VERSION) else t}))
+        }
+    }
+
+    internal fun artworkFile(book:Audiobook):File?=book.artwork?.takeIf{it.matches(Regex("cover-[a-f0-9]{16}\\.jpg"))}?.let{File(root,"${book.id}/$it").takeIf{f->f.isFile}}
+    internal suspend fun recordHistory(id:String,track:Int,position:Long,reason:String) = withContext(Dispatchers.IO) { mutex.withLock {
+        val book=mutableBooks.value.firstOrNull{it.id==id} ?: return@withLock
+        if(track !in book.tracks.indices)return@withLock
+        val last=book.history.lastOrNull()
+        if(last!=null && last.track==track && kotlin.math.abs(last.positionMs-position)<1000 && last.reason==reason)return@withLock
+        replaceLocked(book.copy(history=(book.history+AudioHistory(track,position.coerceAtLeast(0),System.currentTimeMillis(),cleanText(reason,80))).takeLast(50)))
+    } }
+    @Synchronized private fun cacheArtwork(id:String,data:ByteArray):String? {
+        val bytes=thumbnail(data) ?: return null
+        val name="cover-${hex(MessageDigest.getInstance("SHA-256").digest(bytes)).take(16)}.jpg"
+        val folder=File(root,id).apply{mkdirs()};val target=AtomicFile(File(folder,name))
+        if(!target.baseFile.exists()) {
+            val stream=target.startWrite()
+            try{stream.write(bytes);target.finishWrite(stream)}catch(error:Throwable){target.failWrite(stream);throw error}
+        }
+        return name
     }
 
     /** Imports ordered local audio files as one audiobook, streaming each file to private storage. */
@@ -220,7 +279,7 @@ class AudiobookStore(private val context: Context) {
                 require(total <= MAX_AUDIO_BYTES) { "These audiobook files exceed the 4 GB storage limit." }
                 val metadata = readMetadata(target)
                 if (firstAuthor.isBlank()) firstAuthor = metadata.artist?.takeIf { it.isNotBlank() }.orEmpty()
-                tracks += AudioTrack(name, metadata.title?.takeIf { it.isNotBlank() } ?: sourceName?.substringBeforeLast('.')?.takeIf { it.isNotBlank() } ?: "Track ${index + 1}", metadata.durationMs)
+                tracks += AudioTrack(name, metadata.title?.takeIf { it.isNotBlank() } ?: sourceName?.substringBeforeLast('.')?.takeIf { it.isNotBlank() } ?: "Track ${index + 1}", metadata.durationMs,chapters=metadata.chapters)
                 digests += hex(digest.digest())
             }
             val title = titleOverride?.trim()?.takeIf { it.isNotEmpty() }?.take(500) ?: tracks.first().title.ifBlank { "Audiobook" }
@@ -428,6 +487,12 @@ class AudiobookStore(private val context: Context) {
             mutableBooks.value.firstOrNull { it.id==id }?.let { replaceLocked(it.copy(readState=if(read) "Read" else "Unread")) }
         }
     }
+    internal suspend fun markCompleted(id:String)=withContext(Dispatchers.IO) { mutex.withLock {
+        mutableBooks.value.firstOrNull{it.id==id}?.let{replaceLocked(it.copy(completed=true))}
+    } }
+    internal suspend fun markStarted(id:String)=withContext(Dispatchers.IO) { mutex.withLock {
+        mutableBooks.value.firstOrNull{it.id==id && !it.started}?.let{replaceLocked(it.copy(started=true))}
+    } }
 
     private suspend fun publish(
         stage: File,
@@ -453,7 +518,7 @@ class AudiobookStore(private val context: Context) {
             return@withLock updated
         }
         val audiobook = Audiobook(id, title.take(500).ifBlank { "Audiobook" }, author.take(500), bookId,
-            tracks.toList(), lastPlayed = 0L, preview = preview)
+            tracks.toList(), lastPlayed = 0L, preview = preview,completed=false)
         val destination = File(root, id)
         if (destination.exists()) check(destination.deleteRecursively()) { "An incomplete audiobook import could not be cleared." }
         check(stage.renameTo(destination)) { "The audiobook files could not be committed." }
@@ -574,7 +639,8 @@ class AudiobookStore(private val context: Context) {
             retriever.setDataSource(context,uri)
             AudioMetadata(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE),
                 retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()?.coerceIn(0L,MAX_TRACK_DURATION_MS) ?: 0L,
-                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST))
+                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST),audioChapters(context,uri),
+                retriever.embeddedPicture?.takeIf{it.size<=8_000_000})
         } finally { runCatching{retriever.release()} }
     }
 
@@ -585,7 +651,8 @@ class AudiobookStore(private val context: Context) {
             AudioMetadata(
                 retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE),
                 retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L,
-                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST),audioChapters(file),
+                retriever.embeddedPicture?.takeIf{it.size<=8_000_000}
             )
         } catch (error: Exception) {
             throw IllegalArgumentException("The audio data could not be read. Check that the file is complete and uses a supported format.", error)
@@ -643,18 +710,8 @@ class AudiobookStore(private val context: Context) {
         }
     }
 
-    private fun audioExtension(name: String?, mime: String?): String {
-        val fromName = name?.substringAfterLast('.', "")?.lowercase()?.takeIf { it in AUDIO_EXTENSIONS }
-        if (fromName != null) return fromName
-        return when (mime?.lowercase()?.substringBefore(';')) {
-            "audio/mpeg", "audio/mp3" -> "mp3"
-            "audio/mp4", "audio/x-m4a", "audio/m4a" -> "m4a"
-            "audio/x-m4b", "audio/m4b" -> "m4b"
-            "audio/ogg", "application/ogg", "audio/opus" -> "ogg"
-            "audio/wav", "audio/x-wav", "audio/wave" -> "wav"
-            else -> throw IllegalArgumentException("Choose an MP3, M4B, M4A, OGG, or WAV audio file.")
-        }
-    }
+    private fun audioExtension(name:String?,mime:String?):String=audioExtensionOrNull(name,mime)
+        ?: throw IllegalArgumentException("Choose a supported MP3, M4B, M4A, OGG, Opus, FLAC, AAC or WAV audio file.")
 
     private fun parseBook(json: JSONObject): Audiobook {
         val id = json.getString("id")
@@ -676,7 +733,11 @@ class AudiobookStore(private val context: Context) {
             cueCount += cuesJson.length()
             require(cueCount <= MAX_CUES)
             val cues = (0 until cuesJson.length()).map { cueIndex -> parseCue(cuesJson.getJSONObject(cueIndex), duration) }.sortedBy { it.startMs }
-            AudioTrack(fileName, cleanText(item.optString("title", ""), 500), duration, cues,sourceUri)
+            val chaptersJson=item.optJSONArray("chapters") ?: JSONArray();require(chaptersJson.length()<=10_000)
+            val chapters=(0 until chaptersJson.length()).map { c -> val chapter=chaptersJson.getJSONObject(c)
+                AudioChapter(cleanText(chapter.optString("title"),500),chapter.getLong("startMs")).also{require(it.startMs in 0..MAX_TRACK_DURATION_MS)}
+            }.distinctBy{it.startMs}.sortedBy{it.startMs}
+            AudioTrack(fileName, cleanText(item.optString("title", ""), 500), duration, cues,sourceUri,chapters,item.optInt("metadataVersion",0))
         }
         val bookmarkJson = json.optJSONArray("bookmarks") ?: JSONArray()
         require(bookmarkJson.length() <= MAX_BOOKMARKS)
@@ -688,12 +749,17 @@ class AudiobookStore(private val context: Context) {
         val bookId = json.optString("bookId", "").takeIf { it.isNotBlank() }
         require(bookId == null || bookId.matches(ID_PATTERN))
         require(!json.has("preview") || json.opt("preview") is Boolean)
+        val historyJson=json.optJSONArray("history") ?: JSONArray();require(historyJson.length()<=50)
+        val history=(0 until historyJson.length()).map{h->val item=historyJson.getJSONObject(h)
+            AudioHistory(item.getInt("track"),item.getLong("positionMs").coerceAtLeast(0),item.optLong("at"),cleanText(item.optString("reason"),80)).also{require(it.track in tracks.indices)} }
         return Audiobook(id, cleanText(json.optString("title", "Audiobook"), 500).ifBlank { "Audiobook" }, cleanText(json.optString("author", ""), 500),
             bookId, tracks, json.optInt("positionTrack", 0).coerceIn(0, tracks.lastIndex), json.optLong("positionMs", 0L).coerceAtLeast(0L),
             json.optDouble("speed", 1.0).toFloat().takeIf { it.isFinite() }?.coerceIn(.5f, 3f) ?: 1f,
             bookmarks, json.optLong("lastPlayed", 0L).coerceAtLeast(0L), json.opt("preview") as? Boolean ?: false,
             json.optBoolean("started",json.optInt("positionTrack",0)>0 || json.optLong("positionMs",0)>0),
-            json.optString("readState","Auto").takeIf { it in listOf("Auto","Read","Unread") } ?: "Auto",sourceRoot)
+            json.optString("readState","Auto").takeIf { it in listOf("Auto","Read","Unread") } ?: "Auto",sourceRoot,
+            json.optString("artwork","").takeIf{it.matches(Regex("cover-[a-f0-9]{16}\\.jpg"))},
+            json.optString("sourceCover","").takeIf{it.isNotBlank() && tree!=null && validLinkedAudio(tree,Uri.parse(it))},history,json.opt("completed") as? Boolean)
     }
 
     private fun parseChapter(json: JSONObject, index: Int): BundleChapter {
@@ -732,9 +798,12 @@ class AudiobookStore(private val context: Context) {
 
     private fun bookJson(book: Audiobook) = JSONObject()
         .put("id", book.id).put("title", book.title).put("author", book.author).put("bookId", book.bookId)
-        .put("preview", book.preview).put("started",book.started).put("readState",book.readState).put("sourceRoot",book.sourceRoot)
+        .put("preview", book.preview).put("started",book.started).put("readState",book.readState).put("sourceRoot",book.sourceRoot).put("artwork",book.artwork).put("sourceCover",book.sourceCover)
+        .put("history",JSONArray(book.history.map{JSONObject().put("track",it.track).put("positionMs",it.positionMs).put("at",it.at).put("reason",it.reason)}))
+        .put("completed",book.completed ?: book.isRead)
         .put("tracks", JSONArray(book.tracks.map { track -> JSONObject().put("file", track.file).put("title", track.title)
-            .put("durationMs", track.durationMs).put("sourceUri",track.sourceUri).put("cues", JSONArray(track.cues.map { cue -> JSONObject().put("startMs", cue.startMs)
+            .put("durationMs", track.durationMs).put("sourceUri",track.sourceUri).put("metadataVersion",track.metadataVersion)
+            .put("chapters",JSONArray(track.chapters.map{JSONObject().put("title",it.title).put("startMs",it.startMs)})).put("cues", JSONArray(track.cues.map { cue -> JSONObject().put("startMs", cue.startMs)
                 .put("endMs", cue.endMs).put("href", cue.href).put("fragment", cue.fragment).put("text", cue.text)
                 .put("before", cue.before).put("after", cue.after).put("cssSelector", cue.cssSelector).put("progression", cue.progression) })) }))
         .put("bookmarks", JSONArray(book.bookmarks.map { mark -> JSONObject().put("id", mark.id).put("track", mark.track)
@@ -762,7 +831,7 @@ class AudiobookStore(private val context: Context) {
     private fun cleanText(value: String, limit: Int): String = value.filter { it == '\n' || it == '\t' || it >= ' ' && it != '\u007f' }.take(limit)
     private fun hex(bytes: ByteArray): String = bytes.joinToString("") { "%02x".format(it) }
 
-    private data class AudioMetadata(val title: String?, val durationMs: Long, val artist: String?)
+    private data class AudioMetadata(val title: String?, val durationMs: Long, val artist: String?,val chapters:List<AudioChapter> = emptyList(),val picture:ByteArray?=null)
     private data class BundleChapter(val archivePath: String, val title: String, val durationMs: Long, val cues: List<AudioCue>)
 
     private class CompressedLimitInputStream(source: InputStream, private val limit: Long) : java.io.FilterInputStream(source) {
@@ -794,7 +863,7 @@ class AudiobookStore(private val context: Context) {
         const val MAX_BOOKMARKS = 10_000
         const val MAX_CUES = 300_000
         const val MAX_ZIP_ENTRIES = 512
-        const val MAX_TRACK_BYTES = 256L * 1024 * 1024
+        const val MAX_TRACK_BYTES = 4L * 1024 * 1024 * 1024
         const val MAX_EPUB_BYTES = 200L * 1024 * 1024
         const val MAX_AUDIO_BYTES = 4L * 1024 * 1024 * 1024
         const val MAX_BUNDLE_BYTES = 4L * 1024 * 1024 * 1024
@@ -802,7 +871,7 @@ class AudiobookStore(private val context: Context) {
         const val CUE_DURATION_SLOP_MS = 100L
         val ID_PATTERN = Regex("[a-f0-9]{64}")
         val SHA256_PATTERN = Regex("[a-f0-9]{64}")
-        val TRACK_FILE_PATTERN = Regex("track-[0-9]{4}\\.(mp3|m4b|m4a|ogg|wav)")
-        val AUDIO_EXTENSIONS = setOf("mp3", "m4b", "m4a", "ogg", "wav")
+        val TRACK_FILE_PATTERN = Regex("track-[0-9]{4}\\.(mp3|m4b|m4a|ogg|opus|flac|aac|wav)")
+        val AUDIO_EXTENSIONS = setOf("mp3", "m4b", "m4a", "ogg", "opus", "flac", "aac", "wav")
     }
 }

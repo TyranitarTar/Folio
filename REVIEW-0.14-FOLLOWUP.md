@@ -1,5 +1,10 @@
 # Folio 0.14 — review of the original list and follow-up
 
+Historical review of 0.14, before the 0.14.1 implementation. For delivered
+changes see [IMPLEMENTATION-v0.14.1.md](IMPLEMENTATION-v0.14.1.md); for current
+pending work see [ROADMAP-NEXT.md](ROADMAP-NEXT.md). Unchecked items below record
+the state at review time, not a claim that 0.14.1 omitted those changes.
+
 25 October 2026. Requested review, with the user's additional navigation and
 pagination feedback. This document separates implementation from acceptance.
 The original roadmap's checked boxes described code delivery; they did not

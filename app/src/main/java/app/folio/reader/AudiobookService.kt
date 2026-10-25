@@ -82,6 +82,8 @@ object AudiobookController {
     fun stop(context: Context) = command(context, AudiobookService.STOP)
     fun next(context: Context) = command(context, AudiobookService.NEXT)
     fun previous(context: Context) = command(context, AudiobookService.PREVIOUS)
+    fun rewind(context:Context)=command(context,AudiobookService.REWIND)
+    fun forward(context:Context)=command(context,AudiobookService.FORWARD)
     fun seek(context: Context, positionMs: Long) = command(context, AudiobookService.SEEK) { putExtra("position", positionMs) }
     fun seekTrack(context: Context, track: Int, positionMs: Long) = command(context, AudiobookService.SEEK_TRACK) {
         putExtra("track", track).putExtra("position", positionMs)
@@ -143,8 +145,10 @@ class AudiobookService : Service() {
                 override fun onPlay() = resumePlayback()
                 override fun onPause() = pausePlayback()
                 override fun onStop() = stopPlayback()
-                override fun onSkipToNext() = nextTrack()
-                override fun onSkipToPrevious() = previousTrack()
+                override fun onSkipToNext() = skipSeconds(AudioPreferences.load(this@AudiobookService).forwardSeconds)
+                override fun onSkipToPrevious() = skipSeconds(-AudioPreferences.load(this@AudiobookService).backSeconds)
+                override fun onRewind() = skipSeconds(-AudioPreferences.load(this@AudiobookService).backSeconds)
+                override fun onFastForward() = skipSeconds(AudioPreferences.load(this@AudiobookService).forwardSeconds)
                 override fun onSeekTo(pos: Long) = seekTo(pos)
             })
             isActive = true
@@ -174,6 +178,8 @@ class AudiobookService : Service() {
             STOP -> stopPlayback()
             NEXT -> nextTrack()
             PREVIOUS -> previousTrack()
+            REWIND -> skipSeconds(-AudioPreferences.load(this).backSeconds)
+            FORWARD -> skipSeconds(AudioPreferences.load(this).forwardSeconds)
             SEEK -> seekTo(intent.getLongExtra("position", 0L))
             SEEK_TRACK -> seekTrack(intent.getIntExtra("track", -1), intent.getLongExtra("position", 0L))
             SPEED -> setSpeed(intent.getFloatExtra("speed", 1f))
@@ -201,13 +207,16 @@ class AudiobookService : Service() {
                 while (SpeechController.serviceRunning && SystemClock.elapsedRealtime() < stopDeadline) delay(50L)
                 if (SpeechController.serviceRunning) throw IllegalStateException("Speech playback is still stopping. Try again in a moment.")
                 store.load()
+                val beforeMetadata=store.books.value.firstOrNull{it.id==id} ?: throw IllegalArgumentException("This audiobook is no longer in your library.")
+                store.prepareTrack(id,requestedTrack?.coerceIn(0,beforeMetadata.tracks.lastIndex) ?: beforeMetadata.positionTrack)
                 val storedBook = store.books.value.firstOrNull { it.id == id }
                     ?: throw IllegalArgumentException("This audiobook is no longer in your library.")
                 if (ticket != generation) return@launch
                 val book = pendingSpeed?.let { storedBook.copy(speed = it) } ?: storedBook
                 currentBook = book
                 val index = requestedTrack?.coerceIn(0, book.tracks.lastIndex) ?: book.positionTrack.coerceIn(0, book.tracks.lastIndex)
-                val position = requestedPosition ?: if (index == book.positionTrack) book.positionMs else 0L
+                var position = requestedPosition ?: if (index == book.positionTrack) book.positionMs else 0L
+                if(autoplay && requestedPosition==null && requestedTrack==null)position=rewoundPosition(id,position)
                 openTrack(book, index, position, autoplay, ticket)
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
@@ -224,6 +233,7 @@ class AudiobookService : Service() {
         currentBook = book
         pendingAutoplay = autoplay
         val track = book.tracks[index]
+        if(track.metadataVersion<AUDIO_METADATA_VERSION)scope.launch{runCatching{store.prepareTrack(book.id,index)}}
         val targetPosition = position.coerceAtLeast(0L).let { if (track.durationMs > 0L) it.coerceAtMost(track.durationMs) else it }
         seekInFlight = false
         seekTargetMs = targetPosition
@@ -279,6 +289,7 @@ class AudiobookService : Service() {
             pendingAutoplay = false
             lastObservedPosition = runCatching { media.currentPosition.toLong().coerceAtLeast(0L) }.getOrDefault(lastObservedPosition)
             AudiobookController.mutable.value = AudiobookController.mutable.value.copy(playing = true, loading = false, error = null)
+            currentBook?.id?.let{id->scope.launch{runCatching{store.markStarted(id)}}}
             publish()
         }.onFailure { handleMediaError(ticket) }
     }
@@ -311,6 +322,8 @@ class AudiobookService : Service() {
         val current = AudiobookController.mutable.value
         if (current.id == null) return
         pendingAutoplay = true
+        val rewind=rewoundPosition(current.id,current.positionMs)
+        if(rewind!=current.positionMs){seekTo(rewind);return}
         if (currentBook != null) {
             val media = player
             if (media != null && prepared) beginPlayback(generation, media)
@@ -335,6 +348,10 @@ class AudiobookService : Service() {
         }
         releaseFocusAndWake()
         checkpoint()
+        if(current.id!=null && (current.playing || current.loading)) {
+            getSharedPreferences("audiobook-pauses",0).edit().putLong(current.id,System.currentTimeMillis()).apply()
+            history("Paused")
+        }
         publish()
     }
 
@@ -350,20 +367,38 @@ class AudiobookService : Service() {
     }
 
     private fun nextTrack() {
-        val book = currentBook ?: return
+        val book = latestBook() ?: return
         val current = AudiobookController.mutable.value
-        if (current.trackIndex + 1 < book.tracks.size) transitionTrack(current.trackIndex + 1, 0L, current.playing || pendingAutoplay, explicit = true)
+        val chapters=book.listeningChapters();val index=chapters.currentChapter(current.trackIndex,current.positionMs)
+        chapters.getOrNull(index+1)?.let{history("Before chapter jump");if(it.track==current.trackIndex)seekTo(it.startMs) else transitionTrack(it.track,it.startMs,current.playing || pendingAutoplay,explicit=true)}
     }
 
     private fun previousTrack() {
         val current = AudiobookController.mutable.value
-        if (current.positionMs > 3_000L) {
-            seekTo(0L)
+        val book=latestBook() ?: return
+        val chapters=book.listeningChapters();val index=chapters.currentChapter(current.trackIndex,current.positionMs);val chapter=chapters.getOrNull(index) ?: return
+        if (current.positionMs-chapter.startMs > 3_000L) {
+            seekTo(chapter.startMs)
             return
         }
-        val book = currentBook ?: return
-        if (current.trackIndex > 0) transitionTrack(current.trackIndex - 1, 0L, current.playing || pendingAutoplay, explicit = true)
-        else seekTo(0L)
+        val previous=chapters.getOrNull(index-1) ?: chapter
+        if(previous.track==current.trackIndex)seekTo(previous.startMs) else transitionTrack(previous.track,previous.startMs,current.playing || pendingAutoplay,explicit=true)
+    }
+
+    private fun latestBook():Audiobook? { val book=currentBook ?: return null;return store.books.value.firstOrNull{it.id==book.id}?.copy(speed=book.speed) ?: book }
+    private fun history(reason:String) { val state=AudiobookController.mutable.value;state.id?.let{id->scope.launch{runCatching{store.recordHistory(id,state.trackIndex,state.positionMs,reason)}}} }
+    private fun rewoundPosition(id:String,position:Long):Long {
+        val pauses=getSharedPreferences("audiobook-pauses",0);val at=pauses.getLong(id,0);pauses.edit().remove(id).apply()
+        val options=AudioPreferences.load(this);val elapsed=System.currentTimeMillis()-at
+        return if(options.autoRewind && at>0 && elapsed>=options.afterMinutes*60_000L && elapsed<=30L*24*60*60*1000)
+            (position-options.rewindSeconds*1000L).coerceAtLeast(0) else position
+    }
+    private fun skipSeconds(seconds:Int) {
+        val state=AudiobookController.mutable.value;val book=latestBook() ?: return
+        if(book.durationKnown) {
+            val position=book.positionAt(book.tracks.take(state.trackIndex).sumOf{it.durationMs}+state.positionMs+seconds*1000L)
+            if(position.track==state.trackIndex)seekTo(position.positionMs) else seekTrack(position.track,position.positionMs)
+        } else seekTo((state.positionMs+seconds*1000L).coerceIn(0,state.durationMs.coerceAtLeast(state.positionMs)))
     }
 
     private fun transitionTrack(index: Int, position: Long, autoplay: Boolean, explicit: Boolean = false) {
@@ -392,6 +427,7 @@ class AudiobookService : Service() {
             // Completion is the sole automatic track-advance path.
             openTrack(book, index + 1, 0L, true)
         } else {
+            scope.launch{runCatching{store.markCompleted(book.id)}}
             publish()
         }
     }
@@ -400,6 +436,8 @@ class AudiobookService : Service() {
         val current = AudiobookController.mutable.value
         val book = currentBook ?: return
         val track = book.tracks.getOrNull(current.trackIndex) ?: return
+        history("Before seek")
+        getSharedPreferences("audiobook-pauses",0).edit().remove(book.id).apply()
         val position = positionMs.coerceAtLeast(0L).let { if (current.durationMs > 0L) it.coerceAtMost(current.durationMs) else it }
         val wasPlaying = current.playing || pendingAutoplay
         val media = player
@@ -429,6 +467,9 @@ class AudiobookService : Service() {
     private fun seekTrack(index: Int, positionMs: Long) {
         val book = currentBook ?: return
         if (index !in book.tracks.indices) return
+        history("Before chapter jump")
+        getSharedPreferences("audiobook-pauses",0).edit().remove(book.id).apply()
+        if(index==AudiobookController.mutable.value.trackIndex){seekTo(positionMs);return}
         transitionTrack(index, positionMs, AudiobookController.mutable.value.playing || pendingAutoplay, explicit = true)
     }
 
@@ -618,7 +659,7 @@ class AudiobookService : Service() {
         val current = AudiobookController.mutable.value
         if (::session.isInitialized) {
             val actions = PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_STOP or
-                PlaybackState.ACTION_SKIP_TO_NEXT or PlaybackState.ACTION_SKIP_TO_PREVIOUS or PlaybackState.ACTION_SEEK_TO or PlaybackState.ACTION_PLAY_PAUSE
+                PlaybackState.ACTION_SKIP_TO_NEXT or PlaybackState.ACTION_SKIP_TO_PREVIOUS or PlaybackState.ACTION_SEEK_TO or PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_REWIND or PlaybackState.ACTION_FAST_FORWARD
             session.setPlaybackState(PlaybackState.Builder().setActions(actions)
                 .setState(if (current.playing) PlaybackState.STATE_PLAYING else if (current.loading) PlaybackState.STATE_BUFFERING else PlaybackState.STATE_PAUSED,
                     current.positionMs, if (current.playing) current.speed else 0f).build())
@@ -636,15 +677,16 @@ class AudiobookService : Service() {
         val open = PendingIntent.getActivity(this, 419, Intent(this, AudiobookActivity::class.java)
             .putExtra("audiobook", current.id), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val paused = !current.playing
+        val options=AudioPreferences.load(this)
         return Notification.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_folio)
             .setContentTitle(current.title.ifBlank { "Folio audiobook" })
             .setContentText(current.error ?: if (current.loading) "Loading audio…" else if (current.playing) current.trackTitle else "Playback paused")
             .setContentIntent(open).setDeleteIntent(action(STOP)).setOnlyAlertOnce(true)
             .setOngoing(current.playing || current.loading).setVisibility(Notification.VISIBILITY_PUBLIC)
-            .addAction(Notification.Action.Builder(android.R.drawable.ic_media_previous, "Previous track", action(PREVIOUS)).build())
+            .addAction(Notification.Action.Builder(android.R.drawable.ic_media_rew, "Back ${options.backSeconds} seconds", action(REWIND)).build())
             .addAction(Notification.Action.Builder(if (paused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause,
                 if (paused) "Play" else "Pause", action(if (paused) PLAY else PAUSE)).build())
-            .addAction(Notification.Action.Builder(android.R.drawable.ic_media_next, "Next track", action(NEXT)).build())
+            .addAction(Notification.Action.Builder(android.R.drawable.ic_media_ff, "Forward ${options.forwardSeconds} seconds", action(FORWARD)).build())
             .addAction(Notification.Action.Builder(android.R.drawable.ic_menu_close_clear_cancel, "Stop", action(STOP)).build())
             .setStyle(Notification.MediaStyle().setMediaSession(session.sessionToken).setShowActionsInCompactView(0, 1, 2)).build()
     }
@@ -681,6 +723,8 @@ class AudiobookService : Service() {
         const val STOP = "folio.audiobook.STOP"
         const val NEXT = "folio.audiobook.NEXT"
         const val PREVIOUS = "folio.audiobook.PREVIOUS"
+        const val REWIND="folio.audiobook.REWIND"
+        const val FORWARD="folio.audiobook.FORWARD"
         const val SEEK = "folio.audiobook.SEEK"
         const val SEEK_TRACK = "folio.audiobook.SEEK_TRACK"
         const val SPEED = "folio.audiobook.SPEED"

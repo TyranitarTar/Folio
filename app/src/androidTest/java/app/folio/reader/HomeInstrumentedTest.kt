@@ -34,7 +34,7 @@ class HomeInstrumentedTest {
         }
         repeat(3) { attempt ->
             device.waitForIdle()
-            val item = device.wait(Until.findObject(By.text(text)), 15000)
+            val item = device.wait(Until.findObject(if(text=="Reading")By.desc("Reading library") else By.text(text)), 15000)
             assertNotNull("Missing $text", item)
             try { item.click(); device.waitForIdle(); return }
             catch (stale: StaleObjectException) { if (attempt == 2) throw stale }
@@ -48,11 +48,11 @@ class HomeInstrumentedTest {
         // Keep this row visible even when other acceptance tests left newer books.
         runBlocking { app.library.update(book.id) { it.copy(lastRead = System.currentTimeMillis(), progress = .8) } }
         ActivityScenario.launch<MainActivity>(Intent(app, MainActivity::class.java)).use { scenario ->
-            assertTrue(device.wait(Until.hasObject(By.text("All books")), 15000))
+            assertTrue(device.wait(Until.hasObject(By.desc("Choose shelf")), 15000))
             description("Library settings"); click("Display"); click("List")
             assertEquals("List", HomePreferences.load(app).layout)
             device.pressBack(); scenario.recreate()
-            assertTrue(device.wait(Until.hasObject(By.text("80% read")), 15000))
+            assertTrue(device.wait(Until.hasObject(By.text("80% · Reading")), 15000))
             click("The Quiet Hour")
             assertTrue(device.wait(Until.hasObject(By.text("Book details")), 15000))
             assertTrue(device.wait(Until.hasObject(By.text("Welcome")), 15000))
@@ -92,7 +92,7 @@ class HomeInstrumentedTest {
             description("Assign shelf"); click("Favourites"); click("Apply")
             runBlocking { withTimeout(5000) { while (app.library.books.value.first { it.id == book.id }.shelves != listOf("Favourites")) delay(50) } }
             assertEquals(listOf("Favourites"), app.library.books.value.first { it.id == book.id }.shelves)
-            click("Favourites"); scenario.recreate()
+            description("Choose shelf"); click("Favourites"); scenario.recreate()
             assertTrue(device.wait(Until.hasObject(By.desc("Cover of The Quiet Hour")), 15000))
             description("Search library")
             device.wait(Until.findObject(By.clazz("android.widget.EditText")), 10000)!!.text = "no-such-book"

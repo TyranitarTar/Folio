@@ -64,7 +64,7 @@ internal fun BookDetails(book: Book, store: LibraryStore, read: (Book) -> Unit, 
     }, actions = { Box {
         IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "Book menu") }
         DropdownMenu(menu, { menu = false }) {
-            DropdownMenuItem(text = { Text(if(book.isRead) "Mark unread" else "Mark read") }, onClick = { menu=false; scope.launch {
+            DropdownMenuItem(text = { Text(if(book.isRead) "Mark unfinished" else "Mark finished") }, onClick = { menu=false; scope.launch {
                 runCatching { store.update(book.id) { it.copy(readState=if(book.isRead) "Unread" else "Read") } }
                     .onFailure { snackbar.showSnackbar("Reading status could not be saved.") }
             } })

@@ -215,10 +215,12 @@ class AudiobookInstrumentedTest {
             activity.onActivity { openAudiobook(it, audio.id, true) }
             waitFor(20_000) { AudiobookController.state.value.id == audio.id && AudiobookController.state.value.playing }
             waitFor { AudiobookController.state.value.positionMs > 300 }
-            assertTrue(device.wait(Until.hasObject(By.text("Preview · this recording does not cover the whole book")), 10000))
+            assertTrue(device.wait(Until.hasObject(By.text("Preview recording")), 10000))
             device.takeScreenshot(File(app.filesDir, "v013-private-narration-player.png"))
             device.wait(Until.findObject(By.text("Read book")), 10000).click()
             assertTrue(device.wait(Until.hasObject(By.desc("Stop recorded narration")), 20000))
+            File(app.filesDir,"v015-recorded-fixture.json").writeText(JSONObject().put("passed",true).put("realGeneratedAudioPlayed",true)
+                .put("hybridTextLinked",true).put("privateFixtureSupplied",true).toString(2))
         } finally {
             AudiobookController.stop(app); waitFor { AudiobookController.state.value.id == null }
             if (audio.bookId !in priorIds) app.library.removeBook(audio.bookId!!)

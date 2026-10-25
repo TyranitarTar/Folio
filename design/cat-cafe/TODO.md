@@ -1,5 +1,9 @@
 # Folio Cat Café · implemented baseline and future todos
 
+**25 October:** the consolidated remaining work and order are in
+[FOLIO-MASTER-TODO.md](../../../FOLIO-MASTER-TODO.md), section G. The dated notes
+below retain the original feedback and first-slice history.
+
 The first Miso slice is implemented in 0.12.0. See
 [play, storage and test-mode details](../../IMPLEMENTATION-v0.12.md).
 The remaining multi-cat work below is future expansion.

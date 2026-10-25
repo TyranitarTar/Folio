@@ -77,10 +77,12 @@ class ReaderV71InstrumentedTest {
     @Test fun versionHistoryAndManualUpdateControlsAreAvailableFromMore() {
         ActivityScenario.launch<MainActivity>(Intent(app,MainActivity::class.java)).use {
             device.wait(Until.findObject(By.text("More")),15000).click()
-            UiScrollable(UiSelector().scrollable(true)).scrollTextIntoView("Version history")
+            UiScrollable(UiSelector().scrollable(true)).scrollTextIntoView("About Folio")
+            device.wait(Until.findObject(By.text("About Folio")),10000).click()
             device.wait(Until.findObject(By.text("Version history")),10000).click()
             assertTrue(device.wait(Until.hasObject(By.text("Folio ${versionHistory.first().version}")),10000))
             device.takeScreenshot(File(app.filesDir,"v71-version-history.png"))
+            device.pressBack()
             device.pressBack()
             UiScrollable(UiSelector().scrollable(true)).scrollTextIntoView("App updates")
             device.wait(Until.findObject(By.text("App updates")),10000).click()

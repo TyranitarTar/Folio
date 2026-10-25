@@ -28,7 +28,7 @@ internal suspend fun audiobookFolder(context: Context, tree: Uri): List<Uri> = w
             currentCoroutineContext().ensureActive()
             val relative = "$prefix$name"
             if (type == DocumentsContract.Document.MIME_TYPE_DIR) visit(child, "$relative/", depth + 1)
-            else if (type.startsWith("audio/") || name.substringAfterLast('.', "").lowercase() in setOf("mp3", "m4b", "m4a", "ogg", "opus", "wav", "flac", "aac")) {
+            else if (audioExtensionOrNull(name,type)!=null) {
                 result += relative to DocumentsContract.buildDocumentUriUsingTree(tree, child)
                 require(result.size <= 256) { "Choose an audiobook with at most 256 tracks." }
             }

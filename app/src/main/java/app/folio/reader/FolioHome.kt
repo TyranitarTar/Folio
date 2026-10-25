@@ -9,6 +9,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -33,6 +34,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -88,6 +91,7 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
         var settings by remember { mutableStateOf(false) }
         var settingsAudio by remember { mutableStateOf(false) }
         var audioScanRequest by rememberSaveable { mutableIntStateOf(0) }
+        var audioImportRequest by rememberSaveable { mutableIntStateOf(0) }
         var audioScanning by remember { mutableStateOf(false) }
         var menu by remember { mutableStateOf(false) }
         var shelfDialog by remember { mutableStateOf(false) }
@@ -135,15 +139,25 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
         } else Scaffold(
             snackbarHost = { SnackbarHost(snackbar) },
             topBar = {
-                if (searching && tab in listOf("Books", "History")) Row(Modifier.fillMaxWidth().statusBarsPadding(), verticalAlignment = Alignment.CenterVertically) {
+                if (searching && tab in listOf("Books", "Audiobooks", "History")) Row(Modifier.fillMaxWidth().statusBarsPadding(), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { searching = false; query = "" }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Close search") }
                     TextField(query, { query = it }, Modifier.weight(1f), singleLine = true, placeholder = { Text("Search title or author") },
                         colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent))
                     IconButton(onClick = { query = "" }) { Icon(Icons.Outlined.Close, "Clear search") }
                 } else TopAppBar(title = {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(if (selected.isNotEmpty()) "${selected.size} selected" else if(tab=="Books")"Reading" else tab)
-                        if (tab in listOf("Books","Audiobooks") && selected.isEmpty()) Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+                        if(tab=="Books" && selected.isEmpty())Box {
+                            var shelfMenu by remember{mutableStateOf(false)}
+                            TextButton(onClick={shelfMenu=true},contentPadding=PaddingValues(0.dp)) {
+                                Text(if(shelf=="All books")"Reading" else shelf,maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.titleLarge,modifier=Modifier.widthIn(max=160.dp))
+                                Icon(Icons.Outlined.ArrowDropDown,"Choose shelf")
+                            }
+                            DropdownMenu(shelfMenu,{shelfMenu=false}) {
+                                (listOf("All books")+prefs.shelves).forEach{label->DropdownMenuItem(text={Text(label)},onClick={shelf=label;shelfMenu=false})}
+                                DropdownMenuItem(text={Text("Manage shelves")},onClick={shelfMenu=false;shelfDialog=true})
+                            }
+                        } else Text(if(selected.isNotEmpty())"${selected.size} selected" else tab,maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.titleLarge)
+                        if (tab=="Books" && selected.isEmpty()) Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
                             Text((if(tab=="Books")visible.size else audioPrefs.visibleAudiobooks(audioBooks,query).size).toString(), Modifier.padding(horizontal = 10.dp, vertical = 2.dp), fontSize = 14.sp)
                         }
                     }
@@ -153,7 +167,7 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
                             var statusMenu by remember { mutableStateOf(false) }
                             IconButton(onClick={statusMenu=true}) { Icon(Icons.Outlined.MoreVert,"Reading status") }
                             DropdownMenu(statusMenu,{statusMenu=false}) {
-                                listOf("Read","Unread").forEach { status -> DropdownMenuItem(text={Text("Mark ${status.lowercase()}")},onClick={
+                                listOf("Read","Unread").forEach { status -> DropdownMenuItem(text={Text(if(status=="Read")"Mark finished" else "Mark unfinished")},onClick={
                                     statusMenu=false
                                     val ids=selected
                                     scope.launch { runCatching { ids.forEach { id -> model.store.update(id) { it.copy(readState=status) } } }
@@ -168,26 +182,35 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
                         if (tab in listOf("Books", "Audiobooks", "History")) IconButton(onClick = { searching = true }) { Icon(Icons.Outlined.Search, "Search library") }
                         if(tab=="Audiobooks")IconButton(onClick={audioScanRequest++},enabled=!audioScanning) { Icon(Icons.Outlined.Refresh,"Rescan audiobook folders") }
                         if (tab in listOf("Books","Audiobooks")) IconButton(onClick = { settingsAudio=tab=="Audiobooks";settings = true }) { Icon(Icons.Outlined.FilterList, "Library settings") }
-                        if(tab!="Audiobooks")Box {
+                        Box {
                             IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "Library menu") }
                             DropdownMenu(menu, { menu = false }) {
-                                DropdownMenuItem(text = { Text("Import EPUB") }, onClick = { menu = false; importBooks() })
-                                DropdownMenuItem(text = { Text("Manage shelves") }, onClick = { menu = false; shelfDialog = true })
-                                DropdownMenuItem(text = { Text("Open sample book") }, onClick = { menu = false; model.sample(open) })
+                                if(tab=="Audiobooks") {
+                                    DropdownMenuItem(text={Text("Add audiobooks / folders")},onClick={menu=false;audioImportRequest++})
+                                    DropdownMenuItem(text={Text("Rescan folders")},enabled=!audioScanning,onClick={menu=false;audioScanRequest++})
+                                    DropdownMenuItem(text={Text("Library settings")},onClick={menu=false;settingsAudio=true;settings=true})
+                                } else {
+                                    DropdownMenuItem(text = { Text("Import EPUB") }, onClick = { menu = false; importBooks() })
+                                    DropdownMenuItem(text = { Text("Manage shelves") }, onClick = { menu = false; shelfDialog = true })
+                                    DropdownMenuItem(text = { Text("Open sample book") }, onClick = { menu = false; model.sample(open) })
+                                }
                                 DropdownMenuItem(text = { Text("About Folio") }, onClick = { menu = false; about = true })
                             }
                         }
                     }
                 })
             },
-            bottomBar = { Column { LibraryAudioBar();NavigationBar {
+            bottomBar = { Surface(tonalElevation=2.dp) { Column(Modifier.navigationBarsPadding()) { LibraryAudioBar();Row(Modifier.fillMaxWidth()) {
                 (listOf("Books" to Icons.Outlined.CollectionsBookmark, "Audiobooks" to Icons.Outlined.Headphones) +
                     listOf("Café" to Icons.Outlined.Pets) +
                     listOf("Browse" to Icons.Outlined.TravelExplore, "More" to Icons.Outlined.MoreHoriz)).forEach { (name, icon) ->
-                    NavigationBarItem(tab == name, { tab = name; selected = emptySet(); query = ""; searching = false },
-                        icon = { Icon(icon, null) }, label = { Text(if(name=="Books")"Reading" else name,fontSize=12.sp,maxLines=1,softWrap=false,overflow=TextOverflow.Ellipsis) })
+                    Column(Modifier.weight(1f).heightIn(min=64.dp).semantics{contentDescription=if(name=="Books")"Reading library" else "$name tab"}.selectable(tab==name,role=Role.Tab,onClick={tab=name;selected=emptySet();query="";searching=false}),
+                        horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
+                        Box(Modifier.clip(RoundedCornerShape(20.dp)).background(if(tab==name)MaterialTheme.colorScheme.secondaryContainer else Color.Transparent).padding(horizontal=14.dp,vertical=3.dp)) { Icon(icon,null,Modifier.size(22.dp)) }
+                        Text(if(name=="Books")"Reading" else name,fontSize=11.sp,maxLines=1,softWrap=false)
+                    }
                 }
-            } } },
+            } } } },
             floatingActionButton = { if (tab == "Books" && selected.isEmpty()) FloatingActionButton(onClick = { importBooks() }) { Icon(Icons.Outlined.Add, "Import EPUB") } }
         ) { padding ->
             Column(Modifier.fillMaxSize().padding(padding)) {
@@ -200,21 +223,15 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
                 when {
                     loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                     tab == "Books" -> {
-                        TabRow(listOf("All","New","Unread","Read").indexOf(prefs.status).coerceAtLeast(0)) {
-                            listOf("All","New","Unread","Read").forEach { status -> Tab(prefs.status==status,{update(prefs.copy(status=status))},text={Text(status)}) }
-                        }
-                        ScrollableTabRow((listOf("All books") + prefs.shelves).indexOf(shelf).coerceAtLeast(0), edgePadding = 12.dp) {
-                            (listOf("All books") + prefs.shelves).forEach { label -> Tab(shelf == label, { shelf = label }, text = { Text(label) }) }
-                        }
-                        if (prefs.status != "All" || prefs.annotated) Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            AssistChip(onClick = { settings = true }, label = { Text(listOfNotNull(prefs.status.takeIf { it != "All" }, "Annotated".takeIf { prefs.annotated }).joinToString(" · ")) })
-                            TextButton(onClick = { update(prefs.copy(status = "All", annotated = false)) }) { Text("Clear filters") }
-                        }
+                        LibraryStatusPager(prefs.status,{update(prefs.copy(status=it))},selected.isEmpty()) { page ->
+                        val pagePrefs=prefs.copy(status=page)
+                        val pageBooks=remember(books,pagePrefs,query,shelf){pagePrefs.visibleBooks(books,query,shelf)}
                         if (books.isEmpty()) EmptyLibrary({ importBooks() }, { model.sample(open) })
-                        else if (visible.isEmpty()) EmptyMessage("No books match", "Change the shelf, search or filters to see more books.", Icons.Outlined.FilterList)
-                        else LibraryBooks(visible, model.store, prefs, selected, { if (selected.isEmpty()) detailId = it.id else toggle(it) }, ::toggle, open)
+                        else if (pageBooks.isEmpty()) EmptyMessage("No books match", "Change the shelf, search or filters to see more books.", Icons.Outlined.FilterList)
+                        else LibraryBooks(pageBooks, model.store, pagePrefs, selected, { if (selected.isEmpty()) detailId = it.id else toggle(it) }, ::toggle, open)
+                        }
                     }
-                    tab == "Audiobooks" -> AudiobookLibrary(audioStore, books, audioPrefs, query, ::updateAudio, open,audioScanRequest,{audioScanning=it})
+                    tab == "Audiobooks" -> AudiobookLibrary(audioStore, books, audioPrefs, query, ::updateAudio, open,audioScanRequest,{audioScanning=it},audioImportRequest)
                     tab == "History" -> {
                         val history = books.filter { it.lastRead > 0 && (query.isBlank() || "${it.title} ${it.author}".contains(query, true)) }.sortedByDescending { it.lastRead }
                         if (history.isEmpty()) EmptyMessage("No reading history", "Books you open will appear here with their saved reading position.", Icons.Outlined.History)
@@ -239,7 +256,6 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
                         HorizontalDivider(Modifier.padding(vertical = 12.dp))
                         ChoiceRow("App theme", listOf("System", "Light", "Dark"), prefs.theme) { update(prefs.copy(theme = it)) }
                         Spacer(Modifier.height(16.dp))
-                        HomeAction("Version history", "What changed in each release", Icons.Outlined.History, { historyNotes = true })
                         HomeAction("App updates", "Check GitHub for a newer signed version", Icons.Outlined.SystemUpdate, { updates = true })
                         HomeAction("About Folio", "Version $version", Icons.Outlined.Info, { about = true })
                         HomeAction("Licenses", "Mihon, Readium and offline voice credits", Icons.Outlined.Description, { licenses = true })
@@ -248,7 +264,7 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
                 }
             }
         }
-        if (historyNotes) VersionHistorySheet { historyNotes = false }
+        if (historyNotes) VersionHistorySheet { historyNotes = false;about=true }
         if (updates) AppUpdatesSheet(close = { updates = false })
         if (voicePacks) VoicePacksPanel(close = { voicePacks = false })
         if (speechSettings) ModalBottomSheet(onDismissRequest = { speechSettings = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
@@ -297,8 +313,11 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
                 runCatching { model.store.removeBooks(selected) }.onSuccess { selected = emptySet(); detailId = null; removeDialog = false }
                     .onFailure { model.notice.value = "The selected books could not be removed." }
             } }) { Text("Remove") } }, dismissButton = { TextButton(onClick = { removeDialog = false; selected = emptySet() }) { Text("Cancel") } })
-        if (about) AlertDialog(onDismissRequest = { about = false }, title = { Text("Folio $version") },
-            text = { Text("An offline EPUB reader with a library layout adapted from Mihon. Local shelves, history and book details sit alongside Readium page rendering and offline Kokoro/Supertonic narration. Your books and positions stay on your device.") },
+        if (about) AlertDialog(onDismissRequest = { about = false }, title = { Text("About Folio") },
+            text = { Column { Text("Folio $version · build ${androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(context.packageManager.getPackageInfo(context.packageName,0))}")
+                Text("Read and listen offline. Your library and positions stay on your device.",Modifier.padding(vertical=12.dp))
+                TextButton(onClick={about=false;historyNotes=true}) { Text("Version history") }
+            } },
             confirmButton = { TextButton(onClick = { about = false }) { Text("Close") } }, dismissButton = { TextButton(onClick = { about = false; licenses = true }) { Text("Licenses") } })
         if (licenses) {
             val credits = remember { listOf("MIHON_LICENSE.txt", "AI_VOICE_LICENSES.txt", "THIRD_PARTY_NOTICES.txt").joinToString("\n\n") { context.assets.open(it).bufferedReader().use { reader -> reader.readText() } } }
@@ -342,7 +361,7 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
     } else LazyVerticalGrid(GridCells.Adaptive((340 / prefs.columns).coerceAtLeast(90).dp), contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 90.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         items(books, key = { it.id }) { book ->
-            LibraryCoverTile(book.title,if(book.isRead)"Read" else if(book.lastRead==0L)"New" else "${(book.progress*100).toInt()}%",
+            LibraryCoverTile(book.title,if(book.isRead)"Finished" else if(book.lastRead==0L)"New" else "${(book.progress*100).toInt()}%",
                 book.progress.toFloat(),prefs,book.id in selected,{click(book)},{long(book)},"Read ${book.title}",{read(book)}) {
                 BookCover(book,store,Modifier.fillMaxSize())
             }
@@ -364,7 +383,7 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
             Column(Modifier.weight(1f, fill=false).verticalScroll(rememberScrollState())) {
                 when (tab) {
                     0 -> {
-                        ChoiceRow("Reading status", listOf("All", "New", "Unread", "Read", "Reading"), prefs.status) { update(prefs.copy(status = it)) }
+                        ChoiceRow("Reading status", libraryStatuses, prefs.status) { update(prefs.copy(status = it)) }
                         if(!audio)Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(prefs.annotated, { update(prefs.copy(annotated = it)) }); Text("Has bookmarks or notes") }
                     }
                     1 -> {

@@ -17,13 +17,18 @@ import androidx.lifecycle.viewmodel.compose.viewModel
     // Material may read this callback during semantics/layout after the model advances.
     // Capture this composition's non-null value rather than reading a later nullable state.
     val progress = state.progress
+    val release=state.release
     val context = LocalContext.current
     val installed = remember { context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty() }
     ModalBottomSheet(onDismissRequest = close, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.fillMaxWidth().fillMaxHeight(.94f).padding(horizontal=24.dp).padding(bottom=24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("App updates", style = MaterialTheme.typography.headlineSmall)
             Text("Installed · Folio $installed")
-            Text("Updates are checked on GitHub only when you choose. Your books and reading activity stay on your device.", style = MaterialTheme.typography.bodySmall)
+            Button(onClick={when{state.ready->model.install();state.release!=null->model.download();else->model.check()}},
+                enabled=!state.busy,modifier=Modifier.fillMaxWidth()) {
+                Text(when{state.busy && state.downloading->"Downloading…";state.busy->if(state.release!=null)"Verifying…" else "Checking…";
+                    state.ready->"Install update";release!=null->"Download ${release.version} · ${release.bytes/1_000_000} MB";else->"Check for updates"})
+            }
             Text(state.status, color = if (state.error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
             if (state.busy) {
                 if (progress != null) {
@@ -32,15 +37,16 @@ import androidx.lifecycle.viewmodel.compose.viewModel
                 } else LinearProgressIndicator(Modifier.fillMaxWidth())
                 OutlinedButton(onClick = model::cancel) { Text("Cancel update") }
             }
-            if (!state.busy) Button(onClick = model::check, modifier = Modifier.fillMaxWidth()) { Text("Check for updates") }
-            state.release?.let { release ->
-                if (release.notes.isNotBlank()) { Text("Release notes", style = MaterialTheme.typography.titleMedium); Text(release.notes) }
-                if (!state.busy) {
-                    if (state.ready) Button(onClick = model::install, modifier = Modifier.fillMaxWidth()) { Text("Install update") }
-                    else OutlinedButton(onClick = model::download, modifier = Modifier.fillMaxWidth()) { Text("Download ${release.version} · ${release.bytes / 1_000_000} MB") }
+            if(!state.busy && state.release!=null)TextButton(onClick=model::check) { Text("Check again") }
+            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                release?.let { available ->
+                    if(available.notes.isNotBlank()) {
+                        Text("Release notes",style=MaterialTheme.typography.titleMedium)
+                        Text(available.notes)
+                    }
                 }
+                Text("Downloads can continue in the background. Folio checks the checksum and signing key before installation. Android asks for confirmation; your library is kept.",style=MaterialTheme.typography.bodySmall)
             }
-            Text("Downloads can continue in the background. Folio checks the checksum and signing key before installation. Android asks for confirmation; your library is kept.", style = MaterialTheme.typography.bodySmall)
         }
     }
 }

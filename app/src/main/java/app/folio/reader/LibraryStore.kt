@@ -52,7 +52,7 @@ data class Book(
     val shelves: List<String> = emptyList(), val origin: SourceOrigin? = null, val readState: String = "Auto"
 ) {
     val isRead: Boolean get() = if(readState=="Read") true else if(readState=="Unread") false else progress>=.99
-    val statusLabel: String get() = when { isRead->"Read";lastRead==0L->"New";readState=="Unread"->"${(progress*100).toInt()}% · Unread";else->"${(progress*100).toInt()}% read" }
+    val statusLabel: String get() = when { isRead->"Finished";lastRead==0L->"New";else->"${(progress*100).toInt()}% · Reading" }
     fun json() = JSONObject().put("id", id).put("title", title).put("author", author)
         .put("added", added).put("lastRead", lastRead).put("locator", locator?.let(::JSONObject))
         .put("progress", progress).put("bookmarks", JSONArray(bookmarks.map { it.json() }))

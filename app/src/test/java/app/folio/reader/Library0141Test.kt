@@ -16,7 +16,7 @@ class Library0141Test {
         HomePreferences(layout="List",columns=4,status="Read").save(context)
         HomePreferences(layout="Compact",columns=2,status="New").save(context,"audioHome")
         val reading=HomePreferences.load(context);val audio=HomePreferences.load(context,"audioHome")
-        assertEquals("List",reading.layout);assertEquals("Read",reading.status);assertEquals(4,reading.columns)
+        assertEquals("List",reading.layout);assertEquals("Finished",reading.status);assertEquals(4,reading.columns)
         assertEquals("Compact",audio.layout);assertEquals("New",audio.status);assertEquals(2,audio.columns)
     }
     @Test fun audiobook_filters_sort_and_manual_status_preserve_the_listening_cursor() {
@@ -59,6 +59,7 @@ class Library0141Test {
         assertFalse(first.durationKnown)
         store.savePosition(first.id,1,4000,1.5f)
         val mark=store.addBookmark(first.id,1,3500,"Saved point")
+        store.recordHistory(first.id,1,3400,"Before seek")
         val privateFiles=java.io.File(context.filesDir,"audiobooks/${first.id}").listFiles().orEmpty()
         assertTrue(privateFiles.isNotEmpty());assertTrue(privateFiles.none{it.name.startsWith("track-")})
         val reloaded=AudiobookStore(context);reloaded.load()
@@ -74,6 +75,7 @@ class Library0141Test {
         val refreshed=reloaded.linkAudio(moved,"book","metadata-v3","Book",listOf(inserted)+tracks(moved),knownId=relinked.id)
         assertEquals(first.id,refreshed.id);assertEquals(2,refreshed.positionTrack)
         assertEquals(4000L,refreshed.positionMs);assertEquals(2,refreshed.bookmarks.single().track)
+        assertEquals(2,refreshed.history.single().track)
         val restarted=AudiobookStore(context);restarted.load()
         assertEquals(2,restarted.books.value.first{it.id==first.id}.positionTrack)
     }

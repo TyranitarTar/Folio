@@ -37,13 +37,14 @@ for name in ("IMPLEMENTATION-v0.10.1.md", "DESIGN-v0.10.1-speech-continuity-and-
              "ROADMAP-0.13.1.md", "IMPLEMENTATION-v0.13.1-GPU.md"):
     if (root / name).is_file(): files.append(root / name)
 for name in ("ROADMAP-0.14.md", "DESIGN-0.14.md", "IMPLEMENTATION-v0.14.md", "validate_release_v014.py",
-             "IMPLEMENTATION-v0.14.1.md","REVIEW-0.14-FOLLOWUP.md","SMART-AUDIOBOOK-COMPARISON.md","validate_release_v0141.py"):
+             "IMPLEMENTATION-v0.14.1.md","REVIEW-0.14-FOLLOWUP.md","SMART-AUDIOBOOK-COMPARISON.md","validate_release_v0141.py",
+             "IMPLEMENTATION-v0.15.md","validate_release_v015.py"):
     if (root / name).is_file(): files.append(root / name)
 files.extend(p for p in (root / "design/icons-0.14").glob("*") if p.is_file() and p.suffix in (".svg", ".png", ".md"))
 files.append(root / "design/make_icons_014.py")
 for name in ("MISO-FIRST-CAT.md", "MISO-STORY-DANISH.md", "TODO.md"):
     files.append(root / "design/cat-cafe" / name)
-for name in ("FEASIBILITY.md", "model-metadata-2026-10-19.json", "FORMAT-v1.md"):
+for name in ("FEASIBILITY.md", "model-metadata-2026-10-19.json", "FORMAT-v1.md", "REVERSE-ALIGNMENT-TODO.md"):
     files.append(root / "design/desktop-audiobooks" / name)
 for name in ("CAT-CAFE-GDD.md", "DESIGN-SYSTEM.md", "assets/folio-cat-book.svg", "assets/folio-cat-book-monochrome.svg", "assets/cats/miso.svg"):
     files.append(root / "design/cat-cafe/v1" / name)

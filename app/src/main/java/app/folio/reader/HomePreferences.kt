@@ -9,7 +9,7 @@ data class HomePreferences(val layout: String = "Comfortable", val columns: Int 
     val shelves: List<String> = emptyList()) {
     fun save(context: Context, preferenceName: String = "home") = context.getSharedPreferences(preferenceName, Context.MODE_PRIVATE).edit()
         .putString("layout", layout).putInt("columns", columns.coerceIn(2, 6)).putString("sort", sort)
-        .putBoolean("descending", descending).putString("status", status).putInt("statusSchema",2).putBoolean("annotated", annotated)
+        .putBoolean("descending", descending).putString("status",libraryStatus(status)).putInt("statusSchema",3).putBoolean("annotated", annotated)
         .putBoolean("showProgress", showProgress).putString("theme", theme)
         .putString("shelves", JSONArray(shelves).toString()).apply()
     companion object {
@@ -21,7 +21,7 @@ data class HomePreferences(val layout: String = "Comfortable", val columns: Int 
             } }.getOrDefault(emptyList())
             return HomePreferences(choice("layout", "Comfortable", listOf("Comfortable", "Compact", "List")),
                 p.getInt("columns", 3).coerceIn(2, 6), choice("sort", "Last read", listOf("Last read", "Date added", "Title", "Author")),
-                p.getBoolean("descending", true), if(p.getInt("statusSchema",1)<2) when(p.getString("status","All")) { "Unread"->"New"; "Finished"->"Read"; else->choice("status","All",listOf("All","Reading")) } else choice("status","All",listOf("All","New","Unread","Read","Reading")),
+                p.getBoolean("descending", true), if(p.getInt("statusSchema",1)<2 && p.getString("status","All")=="Unread")"New" else libraryStatus(p.getString("status","All").orEmpty()),
                 p.getBoolean("annotated", false), p.getBoolean("showProgress", true),
                 choice("theme", "System", listOf("System", "Light", "Dark")), shelves)
         }
@@ -34,7 +34,7 @@ internal fun HomePreferences.visibleAudiobooks(books: List<Audiobook>, query: St
             "New" -> !book.started && !book.isRead
             "Unread" -> !book.isRead
             "Reading" -> book.started && !book.isRead
-            "Read" -> book.isRead
+            "Read", "Finished" -> book.isRead
             else -> true
         }
     }
@@ -45,6 +45,9 @@ internal fun HomePreferences.visibleAudiobooks(books: List<Audiobook>, query: St
     }
     return if(descending)sorted.reversed() else sorted
 }
+
+internal val libraryStatuses=listOf("All","New","Reading","Finished")
+internal fun libraryStatus(value:String):String=when(value){"Unread"->"Reading";"Read"->"Finished";in libraryStatuses->value;else->"All"}
 
 internal fun HomePreferences.visibleBooks(books: List<Book>, query: String, shelf: String): List<Book> {
     val selected = books.filter { book ->

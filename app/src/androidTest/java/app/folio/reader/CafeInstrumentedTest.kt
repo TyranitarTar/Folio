@@ -51,6 +51,9 @@ class CafeInstrumentedTest {
         File(app.filesDir, "v012-$label-state.json").writeText(app.cafe.profiles.value.test.json().toString(2))
     }
     private fun click(text: String) {
+        if(text=="Reading") {
+            device.wait(Until.findObject(By.desc("Reading library")),10000).click();device.waitForIdle();return
+        }
         find(text); Thread.sleep(500)
         val target = device.findObject(By.text(text)) ?: find(text)
         val point = target.visibleBounds
@@ -58,9 +61,13 @@ class CafeInstrumentedTest {
         device.click(point.centerX(), point.centerY()); Thread.sleep(400); device.waitForIdle()
     }
     private fun top() { repeat(14) { device.swipe(device.displayWidth / 2, device.displayHeight / 3, device.displayWidth / 2, device.displayHeight * 3 / 4, 25) }; Thread.sleep(500); device.waitForIdle() }
-    private fun tools() { click("Indstillinger, sikkerhedskopi og testtilstand") }
+    private fun tools() {
+        top()
+        val control=device.wait(Until.findObject(By.desc("Caféindstillinger og testtilstand")),10000)
+        assertNotNull(control);control.click();device.waitForIdle()
+    }
     private fun enterTest() {
-        click("More"); click("Cat Café"); click("Prøv alt i testcaféen")
+        click("Café"); click("Prøv alt i testcaféen"); top()
         assertTrue(device.wait(Until.hasObject(By.text("TESTCAFÉ")), 5000))
     }
     @Test fun firstCatStoryTestModeAndFreeAnimationReplayUseIsolatedDurableState() = runBlocking {

@@ -1,5 +1,9 @@
 # Folio 0.14 — reader and interface overhaul
 
+**After 0.14.1:** current next-release requests and remaining priorities are in
+[ROADMAP-NEXT.md](ROADMAP-NEXT.md), including About/version history and the
+single top-of-screen update flow. The checklist below is historical.
+
 Implemented for 0.14 on 23–24 October 2026. The checkboxes below record
 implementation; acceptance evidence and remaining device/SAF edge-case checks
 are listed in [IMPLEMENTATION-v0.14.md](IMPLEMENTATION-v0.14.md).

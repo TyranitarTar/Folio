@@ -1,5 +1,10 @@
 # Folio: page navigation and speech implementation record
 
+**25 October 2026:** this document retains earlier session plans. Their dates
+and deferred/implemented claims are historical. For the current remaining-work
+map after Android 0.14.1 and Studio 0.4, see
+[FOLIO-MASTER-TODO.md](../FOLIO-MASTER-TODO.md).
+
 ## Next session: 22 October 2026 — Studio throughput
 
 Benchmark parallel passage generation before the Android interface work. Compare

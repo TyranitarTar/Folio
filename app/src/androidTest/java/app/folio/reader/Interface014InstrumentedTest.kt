@@ -22,7 +22,7 @@ class Interface014InstrumentedTest {
     private val instrumentation=InstrumentationRegistry.getInstrumentation()
     private val app=instrumentation.targetContext.applicationContext as FolioApp
     private val device=UiDevice.getInstance(instrumentation)
-    private fun click(text:String) { val node=device.wait(Until.findObject(By.text(text)),15000);assertNotNull("Missing $text",node);node.click();device.waitForIdle() }
+    private fun click(text:String) { val node=device.wait(Until.findObject(if(text=="Reading")By.desc("Reading library") else By.text(text)),15000);assertNotNull("Missing $text",node);node.click();device.waitForIdle() }
     private fun guide(a:ReaderActivity)=(ReaderActivity::class.java.getDeclaredField("guided$"+"delegate").apply { isAccessible=true }.get(a) as androidx.compose.runtime.State<*>).value as GuidedReading
     private fun nav(a:ReaderActivity)=ReaderActivity::class.java.getDeclaredField("navigator").apply { isAccessible=true }.get(a) as EpubNavigatorFragment
     private fun sheet(a:ReaderActivity,name:String)=ReaderActivity::class.java.getDeclaredMethod("openSheet",String::class.java).apply { isAccessible=true }.invoke(a,name)
@@ -68,7 +68,7 @@ class Interface014InstrumentedTest {
             assertFalse(device.hasObject(By.text("Cat Café")))
             click("Audiobooks")
             assertTrue(device.wait(Until.hasObject(By.desc("Search library")),15000))
-            for(label in listOf("All","New","Unread","Read"))assertTrue(device.hasObject(By.text(label)))
+            for(label in libraryStatuses)assertTrue(device.hasObject(By.text(label)))
             assertFalse(device.hasObject(By.text("Import audio files")))
             device.wait(Until.findObject(By.desc("Add audiobooks")),15000).click()
             assertTrue(device.wait(Until.hasObject(By.text("Add audiobooks")),10000))
@@ -78,7 +78,7 @@ class Interface014InstrumentedTest {
             device.pressBack();device.waitForIdle()
             device.takeScreenshot(File(app.filesDir,"v014-audio-library.png"))
             click("Reading")
-            for(label in listOf("All","New","Unread","Read"))assertTrue(device.hasObject(By.text(label)))
+            for(label in libraryStatuses)assertTrue(device.hasObject(By.text(label)))
         }
     }
 

@@ -144,6 +144,7 @@ class ReliabilityRegressionTest {
         AiListeningStore(context).write(book.id, ai)
         SpeechSettings(backend = "supertonic", aiVoice = 3, supertonicVoice = 7, supertonicLanguage = "da", picoThreads = 8,plapre3Voice=4,plapre3Threads=6,passageTargetWords=30,lookaheadPassages=8,startBufferSeconds=24).save(context)
         HomePreferences(status="Unread").save(context)
+        AudioPreferences(backSeconds=15,forwardSeconds=60,autoRewind=true,rewindSeconds=10,afterMinutes=5).save(context)
         Appearance().withAwake(ReaderAwakePolicy("timed", 15)).save(context)
         val origin = SourceOrigin("WIKISOURCE", "Prøve", "da", SourceUrls.wikiPage("da", "Prøve"), "a".repeat(64))
         store.update(book.id) { it.copy(origin = origin,readState="Read") }
@@ -153,7 +154,8 @@ class ReliabilityRegressionTest {
         assertTrue(result.contains("1 books"))
         val restored = destination.books.value.single()
         assertTrue(restored.isRead)
-        assertEquals("Unread",HomePreferences.load(other).status)
+        assertEquals("Reading",HomePreferences.load(other).status)
+        assertEquals(AudioPreferences(15,60,true,10,5),AudioPreferences.load(other))
         assertEquals(30,SpeechSettings.load(other).passageTargetWords)
         assertEquals(8,SpeechSettings.load(other).lookaheadPassages)
         assertEquals(24,SpeechSettings.load(other).startBufferSeconds)

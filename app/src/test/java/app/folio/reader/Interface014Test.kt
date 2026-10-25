@@ -26,7 +26,7 @@ class Interface014Test {
         val restored=Book.from(book.json())
         assertTrue(restored.isRead);assertEquals(.4,restored.progress,0.0)
         val prefs=HomePreferences(status="Unread");prefs.save(context)
-        assertEquals("Unread",HomePreferences.load(context).status)
+        assertEquals("Reading",HomePreferences.load(context).status)
         assertTrue(prefs.visibleBooks(listOf(restored),"","All books").isEmpty())
         assertEquals(1,prefs.visibleBooks(listOf(restored.copy(readState="Unread")),"","All books").size)
     }

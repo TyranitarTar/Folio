@@ -1,6 +1,14 @@
 # Folio
 Folio is a vibe-coded Android reader with Danish and English TTS.
 
+Version **0.15.0** adds compact swipeable **All / New / Reading / Finished**
+libraries, shelf selection in the Reading title, cached audiobook covers,
+embedded M4B chapter navigation and separate chapter/book seek bars. Listening
+has clearer transport, bookmarks and recovery history, configurable skip
+intervals and optional rewind after longer pauses. Version history is inside
+**About Folio**; all update actions/progress stay at the top of **App updates**.
+Existing voices are unchanged. See [implementation and limits](IMPLEMENTATION-v0.15.md).
+
 Version **0.14.1** makes **Reading** and **Audiobooks** use matching cover grids,
 compact/list layouts and library settings. Player/reader headers share a direct
 **Library** action; playback controls remain available after leaving a player.
@@ -47,7 +55,7 @@ Version 0.9.0 adds optional voice-pack downloads with authentic pre-download sam
 
 ## Install and use
 
-Copy `Folio-0.13.0.apk` to your Android phone, open it, and allow installation from that source if Android asks. Install over the earlier signed Folio release to retain your library, annotations and saved positions. Minimum supported version: Android 8.0 (API 26). Emulator checks do not establish physical-phone performance.
+Copy `Folio-0.15.0.apk` to your Android phone, open it, and allow installation from that source if Android asks. Install over the earlier signed Folio release to retain your library, annotations and saved positions. Minimum supported version: Android 8.0 (API 26). Emulator checks do not establish physical-phone performance.
 
 Choose **Read aloud → Supertonic 3 → English / Dansk**, then choose one of ten voices. **Kokoro · English** retains British Emma and American Heart for comparison; **Android speech** uses installed offline English voices. Choose **Resume listening** for the saved listening position or **Read from here** for the first visible word on the current page. Download a neural voice pack once in **More → Voice packs**. Reading then works offline; Android speech uses its already installed voices.
 
