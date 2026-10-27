@@ -30,6 +30,7 @@ import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
 import org.readium.r2.shared.publication.services.coverFitting
 import org.readium.r2.shared.publication.services.isRestricted
+import org.readium.r2.shared.publication.services.positions
 import org.readium.r2.shared.util.asset.AssetRetriever
 import org.readium.r2.shared.util.getOrElse
 import org.readium.r2.shared.util.http.DefaultHttpClient
@@ -49,7 +50,8 @@ data class Book(
     val id: String, val title: String, val author: String, val added: Long,
     val lastRead: Long = 0, val locator: String? = null, val progress: Double = 0.0,
     val bookmarks: List<Mark> = emptyList(), val highlights: List<Mark> = emptyList(),
-    val shelves: List<String> = emptyList(), val origin: SourceOrigin? = null, val readState: String = "Auto"
+    val shelves: List<String> = emptyList(), val origin: SourceOrigin? = null, val readState: String = "Auto",
+    val originalSources:List<String> = emptyList()
 ) {
     val isRead: Boolean get() = if(readState=="Read") true else if(readState=="Unread") false else progress>=.99
     val statusLabel: String get() = when { isRead->"Finished";lastRead==0L->"New";else->"${(progress*100).toInt()}% · Reading" }
@@ -57,6 +59,7 @@ data class Book(
         .put("added", added).put("lastRead", lastRead).put("locator", locator?.let(::JSONObject))
         .put("progress", progress).put("bookmarks", JSONArray(bookmarks.map { it.json() }))
         .put("highlights", JSONArray(highlights.map { it.json() })).put("shelves", JSONArray(shelves)).put("origin", origin?.json()).put("readState",readState)
+        .put("originalSources",JSONArray(originalSources))
     fun position(): Locator? = locator?.let { runCatching { Locator.fromJSON(JSONObject(it)) }.getOrNull() }
     companion object {
         fun from(j: JSONObject): Book {
@@ -66,7 +69,8 @@ data class Book(
                 j.optLong("lastRead"), j.optJSONObject("locator")?.toString(), j.optDouble("progress", 0.0).takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0,
                 j.optJSONArray("bookmarks").marks(), j.optJSONArray("highlights").marks(),
                 j.optJSONArray("shelves")?.let { a -> (0 until a.length()).map { a.getString(it) }.distinct() }.orEmpty(),
-                j.optJSONObject("origin")?.let(SourceOrigin::from), j.optString("readState","Auto").takeIf { it in listOf("Auto","Read","Unread") } ?: "Auto")
+                j.optJSONObject("origin")?.let(SourceOrigin::from), j.optString("readState","Auto").takeIf { it in listOf("Auto","Read","Unread") } ?: "Auto",
+                j.optJSONArray("originalSources")?.let{a->require(a.length()<=256);(0 until a.length()).map{a.getString(it)}.filter{it.length<=8192 && Uri.parse(it).scheme=="content"}.distinct()}.orEmpty())
         }
     }
 }
@@ -107,6 +111,9 @@ class LibraryStore(private val context: Context, val engine: BookEngine) {
     private val progressScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val progressLock = Any()
     private val progressVersions = mutableMapOf<String, Long>()
+    private val progressRequestedAt=mutableMapOf<String,Long>()
+    private val recordedPositions=linkedMapOf<String,List<Locator>>()
+    private val recordedPositionMutex=Mutex()
     private val readingSessions = mutableMapOf<String, Long>()
     private val progressJobs = mutableMapOf<String, Job>()
     fun file(id: String) = File(directory, "$id.epub")
@@ -237,8 +244,13 @@ class LibraryStore(private val context: Context, val engine: BookEngine) {
             shelves.value = catalog!!.shelves()
         }
     }
-    suspend fun importUri(uri: Uri): Book = importStream {
-        context.contentResolver.openInputStream(uri) ?: throw IllegalArgumentException("The selected file could not be read.")
+    suspend fun importUri(uri: Uri): Book {
+        val book=importStream{context.contentResolver.openInputStream(uri) ?: throw IllegalArgumentException("The selected file could not be read.")}
+        if(uri.scheme=="content" && android.provider.DocumentsContract.isDocumentUri(context,uri)) {
+            persistDocumentAccess(context,uri)
+            update(book.id){it.copy(originalSources=(it.originalSources+uri.toString()).distinct())}
+        }
+        return books.value.firstOrNull{it.id==book.id} ?: book
     }
 
     suspend fun importSample(): Book = importStream { context.assets.open("sample.epub") }
@@ -311,9 +323,35 @@ class LibraryStore(private val context: Context, val engine: BookEngine) {
         ((readingSessions[id] ?: 0L) + 1).also { readingSessions[id] = it }
     }
     private fun revokeReading(id: String) = synchronized(progressLock) { readingSessions[id] = (readingSessions[id] ?: 0L) + 1; progressTicket(id); Unit }
-    private fun progressTicket(id: String): Long = synchronized(progressLock) {
+    private fun progressTicket(id: String,at:Long=System.currentTimeMillis()): Long = synchronized(progressLock) {
         progressJobs.remove(id)?.cancel()
+        progressRequestedAt[id]=at
         ((progressVersions[id] ?: 0L) + 1).also { progressVersions[id] = it }
+    }
+    internal fun cacheRecordedPositions(id:String,positions:List<Locator>)=synchronized(recordedPositions) {
+        recordedPositions.remove(id);recordedPositions[id]=positions
+        while(recordedPositions.size>4)recordedPositions.remove(recordedPositions.keys.first())
+    }
+    internal fun queueRecordedProgress(id:String,source:Locator,observedAt:Long) {
+        val ticket=synchronized(progressLock) {
+            if((progressRequestedAt[id] ?: 0)>observedAt)return
+            progressTicket(id,observedAt)
+        }
+        val task=progressScope.launch {
+            try {
+                val positions=recordedPositionMutex.withLock {
+                    synchronized(recordedPositions){recordedPositions[id]} ?: run {
+                        load()
+                        if(books.value.none{it.id==id})return@launch
+                        val publication=engine.open(file(id))
+                        try{publication.positions().also{cacheRecordedPositions(id,it)}}finally{publication.close()}
+                    }
+                }
+                persistProgress(id,RecordedNarration.readingLocator(source,positions),ticket,observedAt=observedAt)
+            } catch(cancelled:CancellationException){throw cancelled}
+            catch(_:Exception){recovery.value="The FolioBook reading position could not be synchronized."}
+        }
+        synchronized(progressLock){if(progressVersions[id]==ticket)progressJobs[id]=task else task.cancel()}
     }
     suspend fun progress(id: String, locator: Locator) {
         val ticket = progressTicket(id)
@@ -331,13 +369,14 @@ class LibraryStore(private val context: Context, val engine: BookEngine) {
         }
         synchronized(progressLock) { if (progressVersions[id] == ticket) progressJobs[id] = job else job.cancel() }
     }
-    private suspend fun persistProgress(id: String, locator: Locator, ticket: Long, session: Long? = null) = withContext(Dispatchers.IO) {
+    private suspend fun persistProgress(id: String, locator: Locator, ticket: Long, session: Long? = null,observedAt:Long?=null) = withContext(Dispatchers.IO) {
         load(); mutex.withLock {
             if (synchronized(progressLock) { progressVersions[id] != ticket || (session != null && readingSessions[id] != session) }) return@withLock
             val old = _books.value.firstOrNull { it.id == id } ?: return@withLock
+            if(observedAt!=null && old.lastRead>observedAt)return@withLock
             val point = locator.toJSON().toString()
             if (old.locator == point) return@withLock
-            val updated = old.copy(locator = point, progress = locator.locations.totalProgression ?: old.progress, lastRead = System.currentTimeMillis())
+            val updated = old.copy(locator = point, progress = locator.locations.totalProgression ?: old.progress, lastRead = observedAt ?: System.currentTimeMillis())
             catalog!!.transaction { catalog!!.put(updated, old) }
             _books.value = _books.value.map { if (it.id == id) updated else it }
         }
@@ -356,6 +395,27 @@ class LibraryStore(private val context: Context, val engine: BookEngine) {
         it.copy(bookmarks = it.bookmarks.filterNot { m -> m.id == markId }, highlights = it.highlights.filterNot { m -> m.id == markId })
     }
     suspend fun removeBook(id: String) = removeBooks(setOf(id))
+    internal suspend fun deleteBooksFromDevice(ids:Set<String>)=withContext(Dispatchers.IO) {
+        load()
+        for(id in ids) {
+            val book=books.value.firstOrNull{it.id==id} ?: continue
+            val originals=book.originalSources.map(Uri::parse)
+            val journal=File(directory,"source-deletion-$id.json")
+            val alreadyDeleted=if(journal.exists())runCatching{JSONObject(journal.readText()).optJSONArray("deleted")?.let{a->(0 until a.length()).map{a.getString(it)}.toSet()}}.getOrNull().orEmpty() else emptySet()
+            // A restored/edited catalog cannot authorize deletion of a different
+            // document merely by naming its URI. Verify the EPUB content identity.
+            for(uri in originals.filterNot{it.toString() in alreadyDeleted}) {
+                val digest=MessageDigest.getInstance("SHA-256");var bytes=0L
+                context.contentResolver.openInputStream(uri)?.use{input->val buffer=ByteArray(65536)
+                    while(true){val n=input.read(buffer);if(n<0)break;bytes+=n;require(bytes<=200L*1024*1024);digest.update(buffer,0,n)}
+                } ?: error("Original EPUB access is unavailable; the book was kept.")
+                require(digest.digest().joinToString(""){"%02x".format(it)}==id){"The original EPUB changed. It was kept; remove the library copy only."}
+            }
+            val shared=books.value.filter{it.id!=id}.flatMap{it.originalSources}.map(Uri::parse)
+            deleteSourceDocuments(context,originals,shared,journal)
+            removeBook(id)
+        }
+    }
     suspend fun assignShelves(ids: Set<String>, labels: List<String>) = withContext(Dispatchers.IO) {
         require(labels.all { it.isNotBlank() && it.length <= 40 })
         mutex.withLock { check(loaded); save(_books.value.map { if (it.id in ids) it.copy(shelves = labels.distinct()) else it }) }

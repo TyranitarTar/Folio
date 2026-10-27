@@ -24,8 +24,8 @@ android {
         applicationId = "app.folio.reader"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20
-        versionName = "0.15.0"
+        versionCode = 21
+        versionName = "0.16.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_static" } }
     }
@@ -68,6 +68,16 @@ android {
     }
 }
 tasks.named("preBuild") { dependsOn(stageCoreAssets) }
+tasks.withType<Test>().configureEach {
+    // Keep the local sandbox's JVM/Robolectric files inside the workspace.
+    val localHome=rootProject.file("toolchain/test-home")
+    if(localHome.isDirectory)systemProperty("user.home",localHome.absolutePath)
+    val localSdks=rootProject.file("toolchain/test-home/android-sdk-jars")
+    if(localSdks.isDirectory && localSdks.listFiles()?.any{it.extension=="jar"}==true) {
+        systemProperty("robolectric.dependency.dir",localSdks.absolutePath)
+        systemProperty("robolectric.offline","true")
+    }
+}
 dependencies {
     implementation("androidx.core:core-ktx:1.16.0")
     implementation("androidx.activity:activity-compose:1.10.1")

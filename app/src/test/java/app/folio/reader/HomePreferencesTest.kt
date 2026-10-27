@@ -12,6 +12,13 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class HomePreferencesTest {
+    @Test fun retired_five_and_six_column_choices_migrate_to_four() {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        context.getSharedPreferences("audioHome",0).edit().putInt("columns",6).commit()
+        assertEquals(4,HomePreferences.load(context,"audioHome").columns)
+        HomePreferences(columns=5).save(context)
+        assertEquals(4,HomePreferences.load(context).columns)
+    }
     private val context = ApplicationProvider.getApplicationContext<Context>()
     @Test fun displaySortingFiltersShelvesAndThemeSurviveReload() {
         val prefs = HomePreferences(layout = "List", columns = 4, sort = "Author", descending = false,

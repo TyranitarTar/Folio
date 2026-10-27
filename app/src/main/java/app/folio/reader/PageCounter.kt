@@ -261,7 +261,7 @@ class PageCounter(private val context: Context, private val id: String, private 
             }
         } finally { withContext(NonCancellable) { renderer.commitDecorations(emptyList(),group) } }
         if(ticket!=generation||closed)return
-        val json=runCatching { JSONObject(data) }.getOrNull() ?: return
+        val json=runCatching { JSONObject(data ?: return) }.getOrNull() ?: return
         var changed=false
         requests.forEach { locator -> val key=pageBoundaryKey(locator);val value=(json.opt(key) as? Number)?.toInt()
             if(value!=null && value in 0 until pages){boundaryPages[key]=value;changed=true} }

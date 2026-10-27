@@ -116,7 +116,6 @@ fun SourceBrowser(open: (Book) -> Unit, importLocal: () -> Unit, sample: () -> U
         when (section) {
             "Local" -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 item { SourceAction("Local EPUB files", "Import books from your device", Icons.Outlined.FolderOpen, importLocal) }
-                item { SourceAction("The Quiet Hour", "Open the English and Danish sample", Icons.Outlined.AutoStories, sample) }
                 item { Text("Imported books are copied into your private library.", style = MaterialTheme.typography.bodyMedium) }
             }
             "Downloads" -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

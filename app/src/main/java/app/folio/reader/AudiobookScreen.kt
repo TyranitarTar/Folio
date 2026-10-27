@@ -43,7 +43,7 @@ internal fun openAudiobook(context: Context, id: String, autoplay: Boolean = fal
 /** Audio is an independent library; linked EPUBs also remain ordinary Books entries. */
 @Composable
 internal fun AudiobookLibrary(store: AudiobookStore, epubs: List<Book>, prefs: HomePreferences, query: String, update: (HomePreferences)->Unit, read: (Book) -> Unit,
-    scanRequest: Int=0,scanningChanged: (Boolean)->Unit={},importRequest:Int=0) {
+    scanRequest: Int=0,scanningChanged: (Boolean)->Unit={},importRequest:Int=0,shelf:String="All books",manageShelves:()->Unit={}) {
     val context = LocalContext.current
     val entries by store.books.collectAsStateWithLifecycle()
     val playback by AudiobookController.state.collectAsStateWithLifecycle()
@@ -71,7 +71,7 @@ internal fun AudiobookLibrary(store: AudiobookStore, epubs: List<Book>, prefs: H
         if (uri != null) importing { store.importBundle(uri) }
     }
     val folder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        if (uri != null) importing { store.importAudio(audiobookFolder(context, uri),preserveOrder=true) }
+        if (uri != null) importing { persistDocumentAccess(context,uri);store.importAudio(audiobookFolder(context, uri),preserveOrder=true) }
     }
     var imports by rememberSaveable { mutableStateOf(false) }
     var consumedImport by rememberSaveable{mutableIntStateOf(importRequest)}
@@ -125,6 +125,8 @@ internal fun AudiobookLibrary(store: AudiobookStore, epubs: List<Book>, prefs: H
     }
     val visible=remember(entries,prefs,query) { prefs.visibleAudiobooks(entries,query) }
     var actions by remember { mutableStateOf<Audiobook?>(null) }
+    var assigning by remember{mutableStateOf<Audiobook?>(null)}
+    var splitting by remember{mutableStateOf<Audiobook?>(null)}
     Scaffold(contentWindowInsets=WindowInsets(0,0,0,0),floatingActionButton={ FloatingActionButton(onClick={imports=true}) { Icon(Icons.Outlined.Add,"Add audiobooks") } }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -139,7 +141,7 @@ internal fun AudiobookLibrary(store: AudiobookStore, epubs: List<Book>, prefs: H
             }
             message?.let { Text(it,Modifier.padding(horizontal=16.dp),style=MaterialTheme.typography.bodySmall) }
             LibraryStatusPager(prefs.status,{update(prefs.copy(status=it))}) { page ->
-            val visible=remember(entries,prefs,query,page){prefs.copy(status=page).visibleAudiobooks(entries,query)}
+            val visible=remember(entries,prefs,query,page,shelf){prefs.copy(status=page).visibleAudiobooks(entries,query,shelf)}
             if(visible.isEmpty())Column(Modifier.padding(24.dp)) {
                 Icon(Icons.Outlined.Headphones,null,Modifier.size(52.dp),tint=MaterialTheme.colorScheme.primary)
                 Text(if(entries.isEmpty())"Your audiobook library" else "No matching audiobooks",style=MaterialTheme.typography.titleLarge)
@@ -148,19 +150,19 @@ internal fun AudiobookLibrary(store: AudiobookStore, epubs: List<Book>, prefs: H
                 items(visible,key={it.id}) { audio ->
                     val fraction=if(audio.durationKnown && audio.totalMs>0)(audio.elapsedMs.toFloat()/audio.totalMs).coerceIn(0f,1f) else 0f
                     LibraryTitleRow(audio.title,audio.author,if(prefs.showProgress)audioLibraryBadge(audio,playback.id==audio.id && playback.playing) else "",
-                        click={openAudiobook(context,audio.id)},longClick={actions=audio},actionLabel="Listen ${audio.title}",action={openAudiobook(context,audio.id,true)}) {
+                        click={openAudiobook(context,audio.id)},longClick={actions=audio},actionLabel="Listen ${audio.title}",action={openAudiobook(context,audio.id,true)},folioBook=audio.bookId!=null) {
                         AudiobookCover(audio,epubs,Modifier.fillMaxSize())
                     }
                 }
             } else androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
-                columns=androidx.compose.foundation.lazy.grid.GridCells.Adaptive((340/prefs.columns).coerceAtLeast(90).dp),
-                contentPadding=PaddingValues(start=8.dp,end=8.dp,top=8.dp,bottom=72.dp),
+                columns=androidx.compose.foundation.lazy.grid.GridCells.Fixed(prefs.columns.coerceIn(2,4)),modifier=Modifier.fillMaxSize(),
+                contentPadding=PaddingValues(start=8.dp,end=8.dp,top=4.dp,bottom=72.dp),
                 horizontalArrangement=Arrangement.spacedBy(8.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
                 items(visible.size,key={visible[it].id}) { index ->
                     val audio=visible[index]
                     val fraction=if(audio.durationKnown && audio.totalMs>0)(audio.elapsedMs.toFloat()/audio.totalMs).coerceIn(0f,1f) else 0f
                     LibraryCoverTile(audio.title,audioLibraryBadge(audio,playback.id==audio.id && playback.playing),fraction,prefs,
-                        click={openAudiobook(context,audio.id)},longClick={actions=audio},actionLabel="Listen ${audio.title}",action={openAudiobook(context,audio.id,true)}) {
+                        click={openAudiobook(context,audio.id)},longClick={actions=audio},actionLabel="Listen ${audio.title}",action={openAudiobook(context,audio.id,true)},folioBook=audio.bookId!=null) {
                         AudiobookCover(audio,epubs,Modifier.fillMaxSize())
                     }
                 }
@@ -169,14 +171,33 @@ internal fun AudiobookLibrary(store: AudiobookStore, epubs: List<Book>, prefs: H
         }
     }
     actions?.let { audio -> ModalBottomSheet(onDismissRequest={actions=null}) {
-        Column(Modifier.padding(24.dp).padding(bottom=24.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.fillMaxWidth().heightIn(max=650.dp).verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(24.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
             Text(audio.title,style=MaterialTheme.typography.titleLarge)
-            TextButton(onClick={actions=null;openAudiobook(context,audio.id,true)}) { Text(if(audio.started)"Resume listening" else "Listen") }
-            epubs.firstOrNull{it.id==audio.bookId}?.let { linked -> TextButton(onClick={actions=null;read(linked)}) { Text("Read book") } }
-            TextButton(onClick={actions=null;scope.launch { runCatching{store.markRead(audio.id,!audio.isRead)}.onFailure{message=it.message} }}) { Text(if(audio.isRead)"Mark unfinished" else "Mark finished") }
-            TextButton(onClick={actions=null;removing=audio}) { Text("Remove audiobook") }
+            AudioMenuRow(if(audio.started)"Resume listening" else "Listen"){actions=null;openAudiobook(context,audio.id,true)}
+            epubs.firstOrNull{it.id==audio.bookId}?.let { linked -> AudioMenuRow("Read book"){actions=null;read(linked)} }
+            listOf("New","Reading","Finished").forEach{status->AudioMenuRow("Mark ${status.lowercase()}"){actions=null;scope.launch{runCatching{store.setStatus(audio.id,status)}.onFailure{message=it.message}}}}
+            AudioMenuRow("Assign shelves"){actions=null;assigning=audio}
+            if(audio.bookId==null && audio.sourceRoot!=null && audio.tracks.size>1)AudioMenuRow("Split files into separate books…"){actions=null;splitting=audio}
+            AudioMenuRow("Delete from device…"){actions=null;removing=audio}
         }
     } }
+    assigning?.let{audio->
+        val labels by (context.applicationContext as FolioApp).library.shelves.collectAsStateWithLifecycle()
+        ShelfDialog(labels,true,audio.shelves.toSet(),{assigning=null},{assigning=null;manageShelves()},
+            {selected->scope.launch{runCatching{store.assignShelves(audio.id,selected.orEmpty())}.onSuccess{assigning=null}.onFailure{message=it.message}}},{},{})
+    }
+    splitting?.let{audio->
+        var working by remember(audio.id){mutableStateOf(false)}
+        var failure by remember(audio.id){mutableStateOf<String?>(null)}
+        AlertDialog(onDismissRequest={if(!working)splitting=null},title={Text("Split ${audio.tracks.size} files into books?")},text={Column {
+            Text("Each source audio file becomes its own library entry. Its bookmarks and listening position follow the file. The source files stay in place.")
+            audio.tracks.take(5).forEach{Text(it.title,Modifier.padding(top=6.dp),style=MaterialTheme.typography.bodySmall)}
+            failure?.let{Text(it,color=MaterialTheme.colorScheme.error)}
+            if(working)LinearProgressIndicator(Modifier.fillMaxWidth())
+        }},confirmButton={TextButton(enabled=!working,onClick={working=true;scope.launch{
+            runCatching{sources.splitFiles(audio)}.onSuccess{splitting=null;message="Files split into separate books. Future rescans keep this grouping."}.onFailure{failure=it.message;working=false}
+        }}){Text("Split files")}},dismissButton={TextButton(enabled=!working,onClick={splitting=null}){Text("Cancel")}})
+    }
     if(imports)ModalBottomSheet(onDismissRequest={if(!busy)imports=false},sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) {
         Column(Modifier.fillMaxWidth().heightIn(max=650.dp).verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
             Text("Add audiobooks",style=MaterialTheme.typography.headlineSmall)
@@ -204,10 +225,34 @@ internal fun AudiobookLibrary(store: AudiobookStore, epubs: List<Book>, prefs: H
             TextButton(onClick={imports=false},enabled=!busy) { Text("Done") }
         }
     }
-    removing?.let { audio -> AlertDialog(onDismissRequest={removing=null},title={Text("Remove audiobook?")},
-        text={Text(if(audio.sourceRoot!=null)"Remove ${audio.title} and its listening bookmarks from Folio? Source audio files stay in their folder." else "Remove ${audio.title}, its local audio and listening bookmarks? The EPUB and its reading annotations remain.")},
-        confirmButton={TextButton(onClick={removing=null;scope.launch { runCatching { store.remove(audio.id) }.onFailure { message=it.message } }}) { Text("Remove") }},
-        dismissButton={TextButton(onClick={removing=null}) { Text("Cancel") }}) }
+    removing?.let { audio ->
+        var keepOriginals by remember(audio.id){mutableStateOf(false)}
+        var deleteFolder by remember(audio.id){mutableStateOf(false)}
+        val folderTarget=remember(audio.id){sources.bookFolder(audio)}
+        var deleting by remember(audio.id){mutableStateOf(false)}
+        var deleteError by remember(audio.id){mutableStateOf<String?>(null)}
+        val originals=(audio.tracks.mapNotNull{it.sourceUri}+audio.originalSources).distinct()
+        AlertDialog(onDismissRequest={if(!deleting)removing=null},title={Text("Delete ${audio.title}?")},text={Column(Modifier.heightIn(max=380.dp).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+            Text(if(originals.isEmpty())"Delete Folio’s stored audio and listening bookmarks. This older import has no recorded original source location." else "Delete the source files below, Folio’s stored audio and listening bookmarks. Other library entries are protected.")
+            originals.take(5).forEach{Text(android.net.Uri.decode(it).substringAfter("/document/").takeLast(160),Modifier.padding(top=5.dp),style=MaterialTheme.typography.bodySmall)}
+            if(originals.size>5)Text("And ${originals.size-5} more source files.",style=MaterialTheme.typography.bodySmall)
+            if(audio.bookId!=null)Text("The eBook and reading annotations remain.",Modifier.padding(top=8.dp),style=MaterialTheme.typography.bodySmall)
+            Row(verticalAlignment=Alignment.CenterVertically){Checkbox(keepOriginals,{if(!deleting)keepOriginals=it});Text("Keep original files · remove Folio entry only",style=MaterialTheme.typography.bodySmall)}
+            if(folderTarget!=null && !keepOriginals) {
+                Row(verticalAlignment=Alignment.CenterVertically){Checkbox(deleteFolder,{if(!deleting)deleteFolder=it});Text("Also delete the book folder and its remaining contents",style=MaterialTheme.typography.bodySmall)}
+                if(deleteFolder)Text(android.net.Uri.decode(folderTarget.toString()).substringAfter("/document/"),style=MaterialTheme.typography.bodySmall)
+            }
+            if(deleting)LinearProgressIndicator(Modifier.fillMaxWidth())
+            deleteError?.let{Text(it,color=MaterialTheme.colorScheme.error)}
+        }},confirmButton={TextButton(enabled=!deleting,onClick={deleting=true;scope.launch{
+            runCatching{if(keepOriginals)store.remove(audio.id) else store.deleteFromDevice(audio.id,if(deleteFolder)folderTarget else null)}
+                .onSuccess{removing=null}.onFailure{deleteError=it.message;deleting=false}
+        }}){Text(if(keepOriginals)"Remove entry" else "Delete")}},dismissButton={TextButton(enabled=!deleting,onClick={removing=null}){Text("Cancel")}})
+    }
+}
+
+@Composable private fun AudioMenuRow(label:String,action:()->Unit) {
+    ListItem(headlineContent={Text(label)},modifier=Modifier.fillMaxWidth().clickable(onClick=action))
 }
 
 internal fun audioLibraryBadge(book: Audiobook,playing: Boolean=false): String = when {

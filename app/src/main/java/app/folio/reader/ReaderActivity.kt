@@ -140,6 +140,19 @@ class ReaderModel(app: Application) : AndroidViewModel(app) {
                 val opened = withContext(Dispatchers.IO) { store.engine.open(store.file(id)) }
                 try {
                     positions = withContext(Dispatchers.IO) { opened.positions() }
+                    store.cacheRecordedPositions(id,positions)
+                    runCatching {
+                        val audioStore=(getApplication<Application>() as FolioApp).audiobooks
+                        audioStore.load()
+                        val active= AudiobookController.state.value.takeIf{it.bookId==id}
+                        val audio=RecordedNarration.preferred(audioStore.books.value,id,active?.id)
+                        if(audio!=null && (audio.lastPlayed>book.lastRead || active?.playing==true)) {
+                            val index=active?.trackIndex ?: audio.positionTrack
+                            val at=active?.positionMs ?: audio.positionMs
+                            val cue=active?.cue ?: audio.tracks.getOrNull(index)?.cues?.firstOrNull{at>=it.startMs && at<it.endMs}
+                            cue?.let(RecordedNarration::locator)?.let { source -> location.value=RecordedNarration.readingLocator(source,positions) }
+                        }
+                    }.onFailure{notice.value="The recording position could not be restored; your saved reading page is available."}
                     publication.value = opened
                 } catch (e: Throwable) { opened.close(); throw e }
             } catch (e: Exception) { error.value = e.message ?: "The book could not be opened." }

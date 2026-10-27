@@ -10,6 +10,12 @@ import androidx.compose.ui.unit.dp
 
 internal data class VersionNote(val version: String, val changes: List<String>)
 internal val versionHistory = listOf(
+    VersionNote("0.16.0",listOf("Safer audiobook controls: read-only book progress, speed-adjusted time remaining and separate 10-second/1-minute skip buttons. Chapter seeking requires Adjust and Apply.",
+        "Chapters and bookmarks open on demand. Position recovery, sleep timer and extra tools move to the player menu; the current passage remains visible.",
+        "Bluetooth/headset and interruption settings, with guarded resume after temporary audio-focus loss. Manual pause, stop and headphone disconnection cancel automatic resume.",
+        "eBooks/Audiobooks share shelf controls and top-aligned 2–4-column layouts. FolioBooks have a small marker, list play buttons are larger and long-press menus use full-width rows.",
+        "Delete source files with explicit confirmation, provider permissions and retry receipts. Remove-entry-only remains an explicit option. Reading positions follow matched FolioBook audio cues.",
+        "Ambiguous linked playlists can be split into one book per file while retaining positions/bookmarks. Named folder artwork and larger bounded cover images are supported. Voice models are unchanged.")),
     VersionNote("0.15.0",listOf("Swipe through All, New, Reading and Finished in both libraries. Shelves move into the Reading title selector; compact navigation and fewer stacked rows leave more room for books.",
         "Audiobook covers load from embedded artwork or folder covers and are cached for the library, player and mini-player. Author/series folders are scanned as containers, with overlapping roots deduplicated.",
         "M4B embedded chapters, chapter selection and separate chapter/book seek bars. Listening uses clearer transport, speed, sleep and bookmark controls, with a recovery history.",

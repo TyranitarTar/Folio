@@ -1,6 +1,23 @@
 # Folio
 Folio is a vibe-coded Android reader with Danish and English TTS.
 
+Version **0.16.0** redesigns the audiobook player around protected navigation:
+read-only book progress, listening time remaining at the current speed, four
+10-second/1-minute skip controls and a smaller chapter bar with explicit Apply.
+Chapters and bookmarks open on demand; recovery history and sleep tools live
+in the player menu. **Bluetooth & headset** settings control skips, temporary
+interruptions and optional rewind. FolioBooks have a format marker and linked
+audio updates the saved reading passage. Text and audio percentages measure
+different things and need not match numerically.
+
+The **eBooks** and **Audiobooks** libraries now share top-aligned two-to-four
+column grids and shelf controls. Long-press actions use full-width rows and list
+play buttons are larger. Deleting a book offers confirmed source deletion where
+write access and ownership can be verified; older imports may only have Folio's
+stored copy. Keep-originals remains an explicit choice. Series playlists can be
+split into separate file-based books without deleting the media. See
+[implementation and verification limits](IMPLEMENTATION-v0.16.md).
+
 Version **0.15.0** adds compact swipeable **All / New / Reading / Finished**
 libraries, shelf selection in the Reading title, cached audiobook covers,
 embedded M4B chapter navigation and separate chapter/book seek bars. Listening

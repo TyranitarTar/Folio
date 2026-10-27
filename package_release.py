@@ -38,7 +38,8 @@ for name in ("IMPLEMENTATION-v0.10.1.md", "DESIGN-v0.10.1-speech-continuity-and-
     if (root / name).is_file(): files.append(root / name)
 for name in ("ROADMAP-0.14.md", "DESIGN-0.14.md", "IMPLEMENTATION-v0.14.md", "validate_release_v014.py",
              "IMPLEMENTATION-v0.14.1.md","REVIEW-0.14-FOLLOWUP.md","SMART-AUDIOBOOK-COMPARISON.md","validate_release_v0141.py",
-             "IMPLEMENTATION-v0.15.md","validate_release_v015.py"):
+             "IMPLEMENTATION-v0.15.md","validate_release_v015.py",
+             "ROADMAP-0.16.md","IMPLEMENTATION-v0.16.md","validate_release_v016.py"):
     if (root / name).is_file(): files.append(root / name)
 files.extend(p for p in (root / "design/icons-0.14").glob("*") if p.is_file() and p.suffix in (".svg", ".png", ".md"))
 files.append(root / "design/make_icons_014.py")

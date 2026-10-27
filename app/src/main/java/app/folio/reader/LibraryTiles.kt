@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.sp
 @Composable
 internal fun LibraryCoverTile(title: String,badge: String,progress: Float,prefs: HomePreferences,
     selected: Boolean=false,click: ()->Unit,longClick: ()->Unit,actionLabel: String,action: ()->Unit,
-    cover: @Composable BoxScope.()->Unit) {
+    folioBook:Boolean=false,cover: @Composable BoxScope.()->Unit) {
     Column(Modifier.clip(RoundedCornerShape(6.dp)).background(if(selected)MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
         .combinedClickable(onClick=click,onLongClick=longClick).padding(if(selected)3.dp else 0.dp)) {
         Box(Modifier.fillMaxWidth().aspectRatio(.68f).clip(RoundedCornerShape(6.dp))) {
@@ -32,7 +32,7 @@ internal fun LibraryCoverTile(title: String,badge: String,progress: Float,prefs:
                 .padding(top=28.dp,start=6.dp,end=6.dp,bottom=7.dp)) {
                 Text(title,color=Color.White,maxLines=2,overflow=TextOverflow.Ellipsis,fontSize=13.sp,fontWeight=FontWeight.Medium)
             }
-            if(prefs.showProgress)Surface(Modifier.align(Alignment.TopStart).padding(4.dp),shape=RoundedCornerShape(4.dp),color=MaterialTheme.colorScheme.primaryContainer) {
+            if(prefs.showProgress && badge.isNotBlank() && badge!="New")Surface(Modifier.align(Alignment.TopStart).padding(start=4.dp,top=if(folioBook)34.dp else 4.dp),shape=RoundedCornerShape(4.dp),color=MaterialTheme.colorScheme.primaryContainer) {
                 Text(badge,Modifier.padding(horizontal=5.dp,vertical=2.dp),fontSize=10.sp)
             }
             if(selected)Icon(Icons.Outlined.CheckCircle,"Selected $title",Modifier.align(Alignment.TopEnd).padding(5.dp),tint=MaterialTheme.colorScheme.primary)
@@ -41,6 +41,9 @@ internal fun LibraryCoverTile(title: String,badge: String,progress: Float,prefs:
                 Icon(Icons.Outlined.PlayArrow,actionLabel,tint=MaterialTheme.colorScheme.onPrimaryContainer)
             }
             if(prefs.showProgress && progress>0)LinearProgressIndicator(progress={progress.coerceIn(0f,1f)},modifier=Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp))
+            if(folioBook)Surface(Modifier.align(Alignment.TopStart).padding(4.dp),shape=RoundedCornerShape(5.dp),color=MaterialTheme.colorScheme.secondaryContainer) {
+                Icon(Icons.Outlined.Headphones,"FolioBook · eBook and audiobook",Modifier.padding(4.dp).size(18.dp))
+            }
         }
         if(prefs.layout=="Comfortable")Text(title,Modifier.padding(horizontal=2.dp,vertical=6.dp),maxLines=2,overflow=TextOverflow.Ellipsis,fontSize=13.sp,fontWeight=FontWeight.Medium)
     }
@@ -48,15 +51,18 @@ internal fun LibraryCoverTile(title: String,badge: String,progress: Float,prefs:
 
 @Composable
 internal fun LibraryTitleRow(title: String,author: String,status: String,selected: Boolean=false,
-    click: ()->Unit,longClick: ()->Unit,actionLabel: String,action: ()->Unit,cover: @Composable ()->Unit) {
+    click: ()->Unit,longClick: ()->Unit,actionLabel: String,action: ()->Unit,folioBook:Boolean=false,cover: @Composable ()->Unit) {
     Row(Modifier.fillMaxWidth().background(if(selected)MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
         .combinedClickable(onClick=click,onLongClick=longClick).padding(horizontal=16.dp,vertical=8.dp),verticalAlignment=Alignment.CenterVertically) {
         Box(Modifier.width(54.dp).height(78.dp).clip(RoundedCornerShape(4.dp))) { cover() }
         Column(Modifier.weight(1f).padding(horizontal=16.dp)) {
-            Text(title,maxLines=2,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.titleMedium)
+            Row(verticalAlignment=Alignment.CenterVertically) {
+                Text(title,Modifier.weight(1f),maxLines=2,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.titleMedium)
+                if(folioBook)Icon(Icons.Outlined.Headphones,"FolioBook · eBook and audiobook",Modifier.padding(start=5.dp).size(18.dp))
+            }
             Text(author.ifBlank{"Unknown author"},maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-            if(status.isNotBlank())Text(status,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.primary)
+            if(status.isNotBlank() && status!="New")Text(status,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.primary)
         }
-        IconButton(onClick=action) { Icon(Icons.Outlined.PlayArrow,actionLabel) }
+        FilledTonalIconButton(onClick=action,modifier=Modifier.size(56.dp)) { Icon(Icons.Outlined.PlayArrow,actionLabel,Modifier.size(30.dp)) }
     }
 }

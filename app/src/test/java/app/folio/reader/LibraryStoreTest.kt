@@ -19,6 +19,16 @@ import org.robolectric.annotation.Config
 @Config(sdk = [28])
 @OptIn(org.readium.r2.shared.ExperimentalReadiumApi::class)
 class LibraryStoreTest {
+    @Test fun recordedCursorRejectsStaleCheckpoint()=runBlocking {
+        val book=store.importSample();val publication=store.engine.open(store.file(book.id));val positions=publication.positions();publication.close()
+        store.cacheRecordedPositions(book.id,positions)
+        val anchor=positions.last();val at=System.currentTimeMillis()-100
+        store.queueRecordedProgress(book.id,anchor,at)
+        kotlinx.coroutines.withTimeout(5000){while(store.books.value.single().position()?.href!=anchor.href)kotlinx.coroutines.delay(10)}
+        val manual=positions.first();store.progress(book.id,manual)
+        store.queueRecordedProgress(book.id,anchor,at);kotlinx.coroutines.delay(150)
+        assertEquals(manual,store.books.value.single().position())
+    }
     private lateinit var context: Context
     private lateinit var store: LibraryStore
     @Before fun setup() {

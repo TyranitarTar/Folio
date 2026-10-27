@@ -5,6 +5,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AudioFolder015Test {
+    @Test fun shared_folder_m4bs_use_their_own_named_artwork_and_single_unknown_cover_is_supported()=runBlocking {
+        val entries=listOf(audio("a","Red Mars.m4b"),audio("b","Green Mars.m4b"),
+            AudioSourceEntry("red","Red Mars.jpg","image/jpeg",100,10),AudioSourceEntry("green","Green Mars cover.png","image/png",100,10))
+        val books=discoverAudioBooks("root","Root"){entries}
+        assertEquals(listOf("red","green"),books.map{it.cover?.id})
+        val single=discoverAudioBooks("root","Root"){listOf(audio("a","First.m4b"),AudioSourceEntry("art","random-number-123.jpg","image/jpeg",100,10))}
+        assertEquals("art",single.single().cover?.id)
+    }
     private fun dir(id:String,name:String)=AudioSourceEntry(id,name,"vnd.android.document/directory")
     private fun audio(id:String,name:String)=AudioSourceEntry(id,name,"audio/mp4",100,10)
     @Test fun author_series_book_and_cd_trees_produce_separate_books()=runBlocking {

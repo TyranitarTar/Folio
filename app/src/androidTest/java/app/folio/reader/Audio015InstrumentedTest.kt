@@ -59,7 +59,7 @@ class Audio015InstrumentedTest {
             AudiobookController.previous(app);waitFor{kotlin.math.abs(AudiobookController.state.value.positionMs-6000)<300}
             assertFalse(AudiobookController.state.value.playing)
             ActivityScenario.launch<AudiobookActivity>(Intent(app,AudiobookActivity::class.java).putExtra("audiobook",book.id)).use {
-                assertTrue(device.wait(Until.hasObject(By.desc("Chapter position")),15000))
+                assertTrue(device.wait(Until.hasObject(By.desc("Chapter progress · locked")),15000))
                 assertTrue(device.hasObject(By.desc("Book position")))
                 assertTrue(device.hasObject(By.desc("Player menu")))
                 device.takeScreenshot(File(app.filesDir,"v015-m4b-player.png"))
@@ -87,8 +87,8 @@ class Audio015InstrumentedTest {
     @Test fun both_libraries_swipe_status_and_about_contains_version_history()=runBlocking {
         HomePreferences().save(app);HomePreferences().save(app,"audioHome")
         ActivityScenario.launch<MainActivity>(Intent(app,MainActivity::class.java)).use {
-            assertTrue(device.wait(Until.hasObject(By.desc("Reading library")),15000))
-            for((navigation,pref) in listOf("Reading library" to "home","Audiobooks tab" to "audioHome")) {
+            assertTrue(device.wait(Until.hasObject(By.desc("eBooks library")),15000))
+            for((navigation,pref) in listOf("eBooks library" to "home","Audiobooks tab" to "audioHome")) {
                 device.findObject(By.desc(navigation)).click();device.waitForIdle()
                 for(expected in listOf("New","Reading","Finished")) {
                     device.swipe(device.displayWidth*9/10,device.displayHeight/2,device.displayWidth/10,device.displayHeight/2,30)

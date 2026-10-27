@@ -23,6 +23,8 @@ import kotlinx.coroutines.launch
             libraryStatuses.forEachIndexed { i,label -> Tab(selected=pager.currentPage==i,enabled=enabled,modifier=Modifier.semantics{contentDescription="$label filter"},
                 onClick={scope.launch{pager.animateScrollToPage(i)}},text={Text(label)}) }
         }
-        HorizontalPager(state=pager,key={libraryStatuses[it]},userScrollEnabled=enabled,modifier=Modifier.weight(1f)) { page -> content(libraryStatuses[page]) }
+        HorizontalPager(state=pager,key={libraryStatuses[it]},userScrollEnabled=enabled,verticalAlignment=androidx.compose.ui.Alignment.Top,modifier=Modifier.weight(1f)) { page ->
+            Box(Modifier.fillMaxSize(),contentAlignment=androidx.compose.ui.Alignment.TopStart){content(libraryStatuses[page])}
+        }
     }
 }

@@ -52,7 +52,7 @@ class CafeInstrumentedTest {
     }
     private fun click(text: String) {
         if(text=="Reading") {
-            device.wait(Until.findObject(By.desc("Reading library")),10000).click();device.waitForIdle();return
+            device.wait(Until.findObject(By.desc("eBooks library")),10000).click();device.waitForIdle();return
         }
         find(text); Thread.sleep(500)
         val target = device.findObject(By.text(text)) ?: find(text)

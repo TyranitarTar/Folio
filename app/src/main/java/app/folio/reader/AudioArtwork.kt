@@ -28,7 +28,7 @@ internal fun audioChapters(context:Context,uri:Uri):List<AudioChapter> = runCatc
     }.orEmpty()
 }.getOrDefault(emptyList())
 internal fun thumbnail(data:ByteArray):ByteArray? = runCatching {
-    require(data.size in 1..8_000_000)
+    require(data.size in 1..16_000_000)
     val bounds=BitmapFactory.Options().apply{inJustDecodeBounds=true}
     BitmapFactory.decodeByteArray(data,0,data.size,bounds)
     require(bounds.outWidth in 1..30000 && bounds.outHeight in 1..30000 && bounds.outWidth.toLong()*bounds.outHeight<=100_000_000)

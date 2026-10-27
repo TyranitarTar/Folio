@@ -5,6 +5,17 @@ import org.readium.r2.shared.publication.Locator
 
 /** Source locators address the unchanged EPUB, never estimated words-per-minute time. */
 internal object RecordedNarration {
+    fun readingLocator(source:Locator,positions:List<Locator>):Locator {
+        val href=source.href.removeFragment()
+        val first=positions.indexOfFirst{it.href.removeFragment()==href}
+        if(first<0 || positions.isEmpty())return source
+        val next=(first+1 until positions.size).firstOrNull{positions[it].href.removeFragment()!=href} ?: positions.size
+        val start=positions[first].locations.totalProgression ?: first.toDouble()/positions.size
+        val end=positions.getOrNull(next)?.locations?.totalProgression ?: next.toDouble()/positions.size
+        val local=source.locations.progression ?: 0.0
+        return source.copy(locations=source.locations.copy(totalProgression=(start+(end-start)*local.coerceIn(0.0,1.0)).coerceIn(0.0,1.0)))
+    }
+
     fun locator(cue: AudioCue): Locator? = runCatching {
         val locations = JSONObject()
         cue.fragment?.takeIf { it.isNotBlank() }?.let { locations.put("fragments", org.json.JSONArray().put(it)) }

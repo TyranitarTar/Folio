@@ -84,6 +84,7 @@ object AudiobookController {
     fun previous(context: Context) = command(context, AudiobookService.PREVIOUS)
     fun rewind(context:Context)=command(context,AudiobookService.REWIND)
     fun forward(context:Context)=command(context,AudiobookService.FORWARD)
+    fun skip(context:Context,seconds:Int)=command(context,AudiobookService.SKIP){putExtra("seconds",seconds.coerceIn(-3600,3600))}
     fun seek(context: Context, positionMs: Long) = command(context, AudiobookService.SEEK) { putExtra("position", positionMs) }
     fun seekTrack(context: Context, track: Int, positionMs: Long) = command(context, AudiobookService.SEEK_TRACK) {
         putExtra("track", track).putExtra("position", positionMs)
@@ -110,6 +111,9 @@ class AudiobookService : Service() {
     private lateinit var session: MediaSession
     private lateinit var wakeLock: PowerManager.WakeLock
     private var focusHeld = false
+    private var focusInterrupted=false
+    private var ducked=false
+    private val interruption=AudioInterruptionGate()
     private var player: MediaPlayer? = null
     private var prepared = false
     private var seekInFlight = false
@@ -129,7 +133,10 @@ class AudiobookService : Service() {
     private var pendingSpeed: Float? = null
     private val noisyReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) pausePlayback()
+            if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
+                interruption.cancel()
+                if(AudioPreferences.load(this@AudiobookService).pauseOnDisconnect)pausePlayback()
+            }
         }
     }
 
@@ -145,8 +152,8 @@ class AudiobookService : Service() {
                 override fun onPlay() = resumePlayback()
                 override fun onPause() = pausePlayback()
                 override fun onStop() = stopPlayback()
-                override fun onSkipToNext() = skipSeconds(AudioPreferences.load(this@AudiobookService).forwardSeconds)
-                override fun onSkipToPrevious() = skipSeconds(-AudioPreferences.load(this@AudiobookService).backSeconds)
+                override fun onSkipToNext() {val p=AudioPreferences.load(this@AudiobookService);if(p.headsetChapters)nextTrack() else skipSeconds(p.forwardSeconds)}
+                override fun onSkipToPrevious() {val p=AudioPreferences.load(this@AudiobookService);if(p.headsetChapters)previousTrack() else skipSeconds(-p.backSeconds)}
                 override fun onRewind() = skipSeconds(-AudioPreferences.load(this@AudiobookService).backSeconds)
                 override fun onFastForward() = skipSeconds(AudioPreferences.load(this@AudiobookService).forwardSeconds)
                 override fun onSeekTo(pos: Long) = seekTo(pos)
@@ -180,6 +187,7 @@ class AudiobookService : Service() {
             PREVIOUS -> previousTrack()
             REWIND -> skipSeconds(-AudioPreferences.load(this).backSeconds)
             FORWARD -> skipSeconds(AudioPreferences.load(this).forwardSeconds)
+            SKIP -> skipSeconds(intent.getIntExtra("seconds",0).coerceIn(-3600,3600))
             SEEK -> seekTo(intent.getLongExtra("position", 0L))
             SEEK_TRACK -> seekTrack(intent.getIntExtra("track", -1), intent.getLongExtra("position", 0L))
             SPEED -> setSpeed(intent.getFloatExtra("speed", 1f))
@@ -278,6 +286,7 @@ class AudiobookService : Service() {
         val media = target ?: return
         if (!accepts(ticket, media) || !prepared || seekInFlight) return
         if (!requestFocus()) {
+            pendingAutoplay=false
             AudiobookController.mutable.value = AudiobookController.mutable.value.copy(playing = false, loading = false,
                 error = "Another app is using audio. Pause it, then try again.")
             publish(); return
@@ -295,16 +304,34 @@ class AudiobookService : Service() {
     }
 
     private fun requestFocus(): Boolean {
-        if (focusHeld) return true
+        if (focusHeld) return !focusInterrupted
         val ticket = generation
         val token = ++focusToken
         val attributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()
         val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-            .setAudioAttributes(attributes).setWillPauseWhenDucked(true)
+            .setAudioAttributes(attributes).setWillPauseWhenDucked(AudioPreferences.load(this).pauseForNotifications)
             .setOnAudioFocusChangeListener { change ->
-                if (change != AudioManager.AUDIOFOCUS_GAIN) scope.launch {
-                    if (focusHeld && generation == ticket && focusGeneration == ticket && focusToken == token) pausePlayback()
+                scope.launch {
+                    if(!focusHeld || generation!=ticket || focusGeneration!=ticket || focusToken!=token)return@launch
+                    val options=AudioPreferences.load(this@AudiobookService)
+                    when(change) {
+                        AudioManager.AUDIOFOCUS_GAIN -> {
+                            focusInterrupted=false
+                            if(ducked){runCatching{player?.setVolume(1f,1f)};ducked=false}
+                            if(interruption.regain(ticket) && options.resumeAfterInterruption)resumePlayback(fromFocus=true)
+                        }
+                        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                            if(change==AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK && !options.pauseForNotifications) {
+                                runCatching{player?.setVolume(.2f,.2f)};ducked=true
+                            } else {
+                                val wasPlaying=AudiobookController.mutable.value.playing || pendingAutoplay
+                                if(!focusInterrupted)interruption.interrupt(ticket,wasPlaying,options.resumeAfterInterruption)
+                                focusInterrupted=true;pausePlayback(keepFocus=true)
+                            }
+                        }
+                        AudioManager.AUDIOFOCUS_LOSS -> pausePlayback()
+                    }
                 }
             }.build()
         focusRequest = request
@@ -318,7 +345,8 @@ class AudiobookService : Service() {
         return focusHeld
     }
 
-    private fun resumePlayback() {
+    private fun resumePlayback(fromFocus:Boolean=false) {
+        if(!fromFocus)interruption.cancel()
         val current = AudiobookController.mutable.value
         if (current.id == null) return
         pendingAutoplay = true
@@ -331,7 +359,8 @@ class AudiobookService : Service() {
         } else if (!current.loading) requestStart(current.id, current.trackIndex, current.positionMs, true)
     }
 
-    private fun pausePlayback() {
+    private fun pausePlayback(keepFocus:Boolean=false) {
+        if(!keepFocus)interruption.cancel()
         val media = player
         val current = AudiobookController.mutable.value
         pendingAutoplay = false
@@ -346,7 +375,7 @@ class AudiobookService : Service() {
         } else if (current.id != null) {
             AudiobookController.mutable.value = current.copy(playing = false)
         }
-        releaseFocusAndWake()
+        if(keepFocus){if(wakeLock.isHeld)runCatching{wakeLock.release()}} else releaseFocusAndWake()
         checkpoint()
         if(current.id!=null && (current.playing || current.loading)) {
             getSharedPreferences("audiobook-pauses",0).edit().putLong(current.id,System.currentTimeMillis()).apply()
@@ -549,10 +578,11 @@ class AudiobookService : Service() {
         } ?: current.positionMs
         val track = current.trackIndex
         val speed = currentBook?.speed ?: current.speed
+        val observedAt=System.currentTimeMillis()
         lastCheckpointAt = SystemClock.elapsedRealtime()
         checkpointJob = scope.launch {
             try {
-                checkpointMutex.withLock { store.savePosition(id, track, position, speed) }
+                checkpointMutex.withLock { store.savePosition(id, track, position, speed,observedAt) }
             } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
             catch (_: Exception) {
                 if (AudiobookController.mutable.value.id == id) {
@@ -575,6 +605,8 @@ class AudiobookService : Service() {
     }
 
     private fun releaseFocusAndWake() {
+        interruption.cancel();focusInterrupted=false;ducked=false
+        runCatching{player?.setVolume(1f,1f)}
         if (wakeLock.isHeld) runCatching { wakeLock.release() }
         focusToken++
         focusRequest?.let { request -> runCatching { audio.abandonAudioFocusRequest(request) } }
@@ -725,6 +757,7 @@ class AudiobookService : Service() {
         const val PREVIOUS = "folio.audiobook.PREVIOUS"
         const val REWIND="folio.audiobook.REWIND"
         const val FORWARD="folio.audiobook.FORWARD"
+        const val SKIP="folio.audiobook.SKIP"
         const val SEEK = "folio.audiobook.SEEK"
         const val SEEK_TRACK = "folio.audiobook.SEEK_TRACK"
         const val SPEED = "folio.audiobook.SPEED"

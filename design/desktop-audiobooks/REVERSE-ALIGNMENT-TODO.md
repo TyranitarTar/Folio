@@ -1,8 +1,32 @@
 # Future: existing audiobook + EPUB → synchronized FolioBook
 
-25 October 2026. User-requested feasibility/todo only. Do not implement,
-download models or run benchmarks during Android 0.15 work. Other Studio work
-remains deferred. This is not a request to restore cancelled phone TTS research.
+**Next-session plan, saved 25 October for 26 October:** expose preparation as
+Studio's **Combine EPUB + audiobook** mode, alongside **Create narration from
+EPUB (text to speech)**. Include an assisted, exportable diagnostic/review package
+for ChatGPT and add English recognition/alignment alongside Danish. Automatic
+background processing is feasible and already exists in the standalone Danish
+worker; uncertain correspondence still needs review. A chat is not required to
+keep a prepared conversion running. No upload or new implementation is requested
+by this planning item. See [Studio checklist](../../../tools/studio/TODO.md),
+master E11/E12, and the separate current full Danish job.
+
+25 October 2026. Android 0.15 work is finished. The user has now authorized
+desktop recognition/alignment evaluation and benchmarks on the existing complete
+Pico Silvercloak – Profetien recording and its embedded, hash-matching EPUB.
+Other Studio work remains deferred. This does not restore cancelled phone TTS research.
+
+Current preference: **CPU-first speech recognition**, with optional partial GPU
+acceleration only if needed later. Do not run full-GPU benchmarks during this pilot.
+The existing FolioBook has 54 completed chapters, 11,717 passages and about 17.03
+hours of audio. Original cue times are evaluation ground truth only; the reverse
+matcher must use independently extracted EPUB text and audio, not copy old cues.
+Benchmark inputs/transcripts stay under output/FolioAlignment-data/private.
+
+The first CPU comparison and independent prologue pilot are complete. See
+[measured results](../../../tools/alignment/BENCHMARK-2026-10-25.md) and
+[prototype scope](../../../tools/alignment/README.md). The full 17-hour book has
+not been realigned; 27/182 prologue passages still require review. Existing audio
+and EPUB bytes are reused unchanged in the experimental preview.
 
 ## Feasibility
 

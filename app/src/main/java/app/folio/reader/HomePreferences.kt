@@ -8,7 +8,7 @@ data class HomePreferences(val layout: String = "Comfortable", val columns: Int 
     val annotated: Boolean = false, val showProgress: Boolean = true, val theme: String = "System",
     val shelves: List<String> = emptyList()) {
     fun save(context: Context, preferenceName: String = "home") = context.getSharedPreferences(preferenceName, Context.MODE_PRIVATE).edit()
-        .putString("layout", layout).putInt("columns", columns.coerceIn(2, 6)).putString("sort", sort)
+        .putString("layout", layout).putInt("columns", columns.coerceIn(2, 4)).putString("sort", sort)
         .putBoolean("descending", descending).putString("status",libraryStatus(status)).putInt("statusSchema",3).putBoolean("annotated", annotated)
         .putBoolean("showProgress", showProgress).putString("theme", theme)
         .putString("shelves", JSONArray(shelves).toString()).apply()
@@ -20,7 +20,7 @@ data class HomePreferences(val layout: String = "Comfortable", val columns: Int 
                 (0 until a.length()).map { a.getString(it).trim() }.filter { it.isNotEmpty() && it.length <= 40 && it != "All books" }.distinct()
             } }.getOrDefault(emptyList())
             return HomePreferences(choice("layout", "Comfortable", listOf("Comfortable", "Compact", "List")),
-                p.getInt("columns", 3).coerceIn(2, 6), choice("sort", "Last read", listOf("Last read", "Date added", "Title", "Author")),
+                p.getInt("columns", 3).coerceIn(2, 4), choice("sort", "Last read", listOf("Last read", "Date added", "Title", "Author")),
                 p.getBoolean("descending", true), if(p.getInt("statusSchema",1)<2 && p.getString("status","All")=="Unread")"New" else libraryStatus(p.getString("status","All").orEmpty()),
                 p.getBoolean("annotated", false), p.getBoolean("showProgress", true),
                 choice("theme", "System", listOf("System", "Light", "Dark")), shelves)
@@ -28,9 +28,9 @@ data class HomePreferences(val layout: String = "Comfortable", val columns: Int 
     }
 }
 
-internal fun HomePreferences.visibleAudiobooks(books: List<Audiobook>, query: String): List<Audiobook> {
+internal fun HomePreferences.visibleAudiobooks(books: List<Audiobook>, query: String,shelf:String="All books"): List<Audiobook> {
     val selected=books.filter { book ->
-        (query.isBlank() || "${book.title} ${book.author}".contains(query,true)) && when(status) {
+        (shelf=="All books" || shelf in book.shelves) && (query.isBlank() || "${book.title} ${book.author}".contains(query,true)) && when(status) {
             "New" -> !book.started && !book.isRead
             "Unread" -> !book.isRead
             "Reading" -> book.started && !book.isRead

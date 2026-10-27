@@ -11,6 +11,16 @@ import org.readium.r2.shared.publication.Locator
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class RecordedNarrationTest {
+    @Test fun audio_cue_uses_the_reading_resource_weights_instead_of_audio_percentage() {
+        fun point(href:String,total:Double,local:Double=0.0)=checkNotNull(Locator.fromJSON(JSONObject().put("href",href).put("type","application/xhtml+xml")
+            .put("locations",JSONObject().put("totalProgression",total).put("progression",local))))
+        val source=point("b.xhtml",0.0,.5)
+        val positions=listOf(point("a.xhtml",0.0),point("b.xhtml",.25),point("b.xhtml",.5,.5),point("c.xhtml",.75))
+        val resolved=RecordedNarration.readingLocator(source,positions)
+        assertEquals(.5,resolved.locations.totalProgression!!,0.00001)
+        assertEquals(source.href,resolved.href);assertEquals(source.text,resolved.text)
+        assertEquals(source,RecordedNarration.readingLocator(source,emptyList()))
+    }
     private fun source(before: String = "", after: String = "", fragment: String = "p1"): Locator =
         Locator.fromJSON(JSONObject().put("href", "EPUB/chapter1.xhtml").put("type", "application/xhtml+xml")
             .put("locations", JSONObject().put("cssSelector", "#$fragment"))

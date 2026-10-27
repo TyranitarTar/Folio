@@ -189,10 +189,10 @@ class AudiobookInstrumentedTest {
         assertTrue(device.wait(Until.hasObject(By.text(book.title)), 10000))
         device.takeScreenshot(File(app.filesDir, "v013-audiobook-library.png"))
         activity.onActivity { openAudiobook(it, book.id) }
-        assertTrue(device.wait(Until.hasObject(By.text("Read book")), 10000))
+        assertTrue(device.wait(Until.hasObject(By.text("Read FolioBook")), 10000))
         assertTrue(device.hasObject(By.desc("Play audiobook")))
         device.takeScreenshot(File(app.filesDir, "v013-audiobook-player.png"))
-        device.wait(Until.findObject(By.text("Read book")), 10000).click()
+        device.wait(Until.findObject(By.text("Read FolioBook")), 10000).click()
         assertTrue(device.wait(Until.hasObject(By.desc("Listen from here")), 20000))
     }
 
@@ -217,7 +217,7 @@ class AudiobookInstrumentedTest {
             waitFor { AudiobookController.state.value.positionMs > 300 }
             assertTrue(device.wait(Until.hasObject(By.text("Preview recording")), 10000))
             device.takeScreenshot(File(app.filesDir, "v013-private-narration-player.png"))
-            device.wait(Until.findObject(By.text("Read book")), 10000).click()
+            device.wait(Until.findObject(By.text("Read FolioBook")), 10000).click()
             assertTrue(device.wait(Until.hasObject(By.desc("Stop recorded narration")), 20000))
             File(app.filesDir,"v015-recorded-fixture.json").writeText(JSONObject().put("passed",true).put("realGeneratedAudioPlayed",true)
                 .put("hybridTextLinked",true).put("privateFixtureSupplied",true).toString(2))

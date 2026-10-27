@@ -34,7 +34,7 @@ class HomeInstrumentedTest {
         }
         repeat(3) { attempt ->
             device.waitForIdle()
-            val item = device.wait(Until.findObject(if(text=="Reading")By.desc("Reading library") else By.text(text)), 15000)
+            val item = device.wait(Until.findObject(if(text=="Reading")By.desc("eBooks library") else By.text(text)), 15000)
             assertNotNull("Missing $text", item)
             try { item.click(); device.waitForIdle(); return }
             catch (stale: StaleObjectException) { if (attempt == 2) throw stale }

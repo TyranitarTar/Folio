@@ -22,7 +22,7 @@ class Interface014InstrumentedTest {
     private val instrumentation=InstrumentationRegistry.getInstrumentation()
     private val app=instrumentation.targetContext.applicationContext as FolioApp
     private val device=UiDevice.getInstance(instrumentation)
-    private fun click(text:String) { val node=device.wait(Until.findObject(if(text=="Reading")By.desc("Reading library") else By.text(text)),15000);assertNotNull("Missing $text",node);node.click();device.waitForIdle() }
+    private fun click(text:String) { val node=device.wait(Until.findObject(if(text=="Reading")By.desc("eBooks library") else By.text(text)),15000);assertNotNull("Missing $text",node);node.click();device.waitForIdle() }
     private fun guide(a:ReaderActivity)=(ReaderActivity::class.java.getDeclaredField("guided$"+"delegate").apply { isAccessible=true }.get(a) as androidx.compose.runtime.State<*>).value as GuidedReading
     private fun nav(a:ReaderActivity)=ReaderActivity::class.java.getDeclaredField("navigator").apply { isAccessible=true }.get(a) as EpubNavigatorFragment
     private fun sheet(a:ReaderActivity,name:String)=ReaderActivity::class.java.getDeclaredMethod("openSheet",String::class.java).apply { isAccessible=true }.invoke(a,name)

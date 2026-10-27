@@ -210,13 +210,13 @@ class LibraryBackup(private val context: Context, private val store: LibraryStor
             values.keys().forEach { key ->
                 require(key.length <= 128)
                 val v = values.get(key)
-                if(name=="audiobook-playback")require(key in setOf("backSeconds","forwardSeconds","autoRewind","rewindSeconds","afterMinutes"))
+                if(name=="audiobook-playback")require(key in setOf("backSeconds","forwardSeconds","autoRewind","rewindSeconds","afterMinutes","headsetChapters","pauseForNotifications","resumeAfterInterruption","pauseOnDisconnect","sleepMinutes"))
                 val numeric = when (name) {
                     "appearance" -> key in setOf("fontSize", "lineHeight", "margins", "awakeMinutes")
                     "pace" -> key in setOf("speed", "focusWords", "countdown", "practiceMinutes")
                     "speech" -> key in setOf("rate", "aiVoice", "supertonicVoice", "picoVoice", "picoThreads", "plapre3Voice", "plapre3Threads", "sentencePauseMillis", "paragraphPauseMillis", "passageTargetWords", "lookaheadPassages", "startBufferSeconds")
                     "home", "audioHome" -> key in setOf("columns","statusSchema")
-                    "audiobook-playback" -> key in setOf("backSeconds","forwardSeconds","rewindSeconds","afterMinutes")
+                    "audiobook-playback" -> key in setOf("backSeconds","forwardSeconds","rewindSeconds","afterMinutes","sleepMinutes")
                     else -> false
                 }
                 val boolean = when (name) {
@@ -224,7 +224,7 @@ class LibraryBackup(private val context: Context, private val store: LibraryStor
                     "pace" -> key in setOf("punctuation", "longWords", "gradualIncrease")
                     "speech" -> key == "follow"
                     "home", "audioHome" -> key in setOf("descending", "annotated", "showProgress")
-                    "audiobook-playback" -> key=="autoRewind"
+                    "audiobook-playback" -> key in setOf("autoRewind","headsetChapters","pauseForNotifications","resumeAfterInterruption","pauseOnDisconnect")
                     else -> false
                 }
                 require(if (numeric) v is Number else if (boolean) v is Boolean else v is String) { "A backup setting has an invalid type." }
@@ -236,7 +236,7 @@ class LibraryBackup(private val context: Context, private val store: LibraryStor
                         "focusWords" -> 1.0..8.0; "countdown" -> 0.0..5.0; "practiceMinutes" -> 0.0..30.0;
                         "sentencePauseMillis", "paragraphPauseMillis" -> 0.0..5000.0; "speed" -> 1.0..1200.0; "fontSize" -> .5..3.0; "lineHeight" -> .8..3.0; "margins" -> .0..3.0; else -> .0..10000.0 }
                     require(number in range) { "A backup setting is outside its supported range." }
-                    if(name=="audiobook-playback")require(number==number.toInt().toDouble() && when(key){"backSeconds","forwardSeconds"->number.toInt() in setOf(5,10,15,30,60);"rewindSeconds"->number.toInt() in setOf(3,5,10,15);"afterMinutes"->number.toInt() in setOf(1,5,15);else->false})
+                    if(name=="audiobook-playback")require(number==number.toInt().toDouble() && when(key){"backSeconds","forwardSeconds"->number.toInt() in setOf(5,10,15,30,60);"rewindSeconds"->number.toInt() in setOf(3,5,10,15);"afterMinutes"->number.toInt() in setOf(1,5,15);"sleepMinutes"->number.toInt() in setOf(5,15,30,45,60,90);else->false})
                     if(key in setOf("statusSchema","passageTargetWords","lookaheadPassages","startBufferSeconds")) require(number==number.toInt().toDouble()) { "A whole-number backup setting is invalid." }
                     if (name == "appearance" && key == "awakeMinutes") require(number in setOf(2.0, 5.0, 10.0, 15.0, 30.0))
                 }

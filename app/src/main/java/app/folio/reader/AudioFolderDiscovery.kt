@@ -16,8 +16,20 @@ internal suspend fun discoverAudioBooks(root:String,title:String,skipped:(AudioS
     val directory="vnd.android.document/directory"
     val disc=Regex("(?i)(cd|disc|disk)[ _-]*\\d+.*")
     fun audio(e:AudioSourceEntry)=audioExtensionOrNull(e.name,e.type)!=null
-    fun cover(entries:List<AudioSourceEntry>)=entries.filter{it.name.matches(Regex("(?i)(cover|folder|front|book)\\.(jpe?g|png|webp)"))}
-        .minByOrNull{listOf("cover","folder","front","book").indexOf(it.name.substringBeforeLast('.').lowercase())}
+    fun cover(entries:List<AudioSourceEntry>,name:String=""):AudioSourceEntry? {
+        val images=entries.filter{it.name.substringAfterLast('.').lowercase() in setOf("jpg","jpeg","png","webp") && it.bytes<=16_000_000}
+        fun normalized(value:String)=value.lowercase().filter{it.isLetterOrDigit()}
+        val title=normalized(name)
+        fun rank(e:AudioSourceEntry):Int {
+            val stem=normalized(e.name.substringBeforeLast('.'))
+            if(title.length>=3 && (stem==title || stem.removeSuffix("cover")==title))return 0
+            val standard=listOf("cover","folder","front","book").indexOf(stem)
+            if(standard>=0)return standard+1
+            if(stem.matches(Regex("(cover|folder|front)[0-9]+")))return 6
+            return if(images.size==1)10 else 100
+        }
+        return images.minByOrNull(::rank)?.takeIf{rank(it)<100}
+    }
     fun add(key:String,name:String,tracks:List<AudioSourceEntry>,art:AudioSourceEntry?) {
         if(tracks.isEmpty())return
         require(tracks.size<=256){"A book has more than 256 tracks; choose a smaller folder."}
@@ -37,11 +49,11 @@ internal suspend fun discoverAudioBooks(root:String,title:String,skipped:(AudioS
     }
     suspend fun visit(id:String,name:String,depth:Int,isRoot:Boolean=false) {
         require(depth<=8 && seen.add(id)){"Folder nesting is too deep or contains a cycle."}
-        val items=children(id);val folders=items.filter{it.type==directory};val art=cover(items)
+        val items=children(id);val folders=items.filter{it.type==directory};val art=cover(items,name)
         items.filter{it.type.startsWith("audio/") && !audio(it)}.forEach(skipped)
         items.filter{it.name.endsWith(".foliobook",true)}.forEach{add(it.id,it.name.substringBeforeLast('.'),listOf(it),art)}
         val standalone=items.filter{it.name.endsWith(".m4b",true)}
-        standalone.forEach{add(if(!isRoot && standalone.size==1 && folders.isEmpty())id else it.id,if(!isRoot && standalone.size==1 && folders.isEmpty())name else it.name.substringBeforeLast('.'),listOf(it),art)}
+        standalone.forEach{add(if(!isRoot && standalone.size==1 && folders.isEmpty())id else it.id,if(!isRoot && standalone.size==1 && folders.isEmpty())name else it.name.substringBeforeLast('.'),listOf(it),cover(items,it.name.substringBeforeLast('.')) ?: art)}
         val tracks=items.filter{audio(it) && !it.name.endsWith(".m4b",true)}.toMutableList()
         val discs=folders.filter{disc.matches(it.name)}
         discs.forEach{tracks+=collect(it.id,"${it.name}/",depth+1)}

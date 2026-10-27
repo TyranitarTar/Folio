@@ -16,8 +16,24 @@ internal class AudiobookSources(private val context: Context, private val store:
     private val lock=Mutex()
     fun roots(): List<Uri> = preferences.all.keys.filter { it.startsWith("root:") }.map { Uri.parse(it.removePrefix("root:")) }
     fun forget(uri: Uri) { preferences.edit().remove("root:$uri").apply() }
+    fun bookFolder(book:Audiobook):Uri?=runCatching {
+        val tree=Uri.parse(book.sourceRoot ?: return@runCatching null)
+        val saved=JSONObject(preferences.getString("root:$tree","{}") ?: "{}")
+        val key=saved.keys().asSequence().singleOrNull{saved.optJSONObject(it)?.optString("book")==book.id} ?: return@runCatching null
+        if(key=="@root" || key==D.getTreeDocumentId(tree) || book.tracks.any{it.sourceUri?.let(Uri::parse)?.let(D::getDocumentId)==key})return@runCatching null
+        D.buildDocumentUriUsingTree(tree,key)
+    }.getOrNull()
+    suspend fun splitFiles(book:Audiobook)=withContext(Dispatchers.IO){lock.withLock {
+        val tree=checkNotNull(book.sourceRoot){"This entry is not linked to a library root."}
+        val saved=JSONObject(preferences.getString("root:$tree","{}") ?: "{}")
+        val key=saved.keys().asSequence().singleOrNull{saved.optJSONObject(it)?.optString("book")==book.id}
+            ?: error("Rescan this library root before changing its grouping.")
+        val flag="split:$tree:$key";val previous=preferences.getBoolean(flag,false)
+        check(preferences.edit().putBoolean(flag,true).commit())
+        try{store.splitFilesIntoBooks(book.id)}catch(e:Throwable){preferences.edit().putBoolean(flag,previous).commit();throw e}
+    }}
     suspend fun add(uri: Uri) = withContext(Dispatchers.IO) {
-        context.contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        persistDocumentAccess(context,uri)
         if(!preferences.contains("root:$uri")) check(preferences.edit().putString("root:$uri","{}").commit())
     }
     private fun children(tree: Uri,id: String): List<AudioSourceEntry> {
@@ -35,10 +51,15 @@ internal class AudiobookSources(private val context: Context, private val store:
         var visited=0
         fun entries(id:String)=children(tree,id).also { visited+=it.size;require(visited<=50000) { "This library contains too many files; choose a smaller root folder." } }
         var unsupported=0
-        val groups=discoverAudioBooks(D.getTreeDocumentId(tree),D.getTreeDocumentId(tree).substringAfterLast('/').substringAfterLast(':'),{unsupported++}) { id ->
+        val discovered=discoverAudioBooks(D.getTreeDocumentId(tree),D.getTreeDocumentId(tree).substringAfterLast('/').substringAfterLast(':'),{unsupported++}) { id ->
             currentCoroutineContext().ensureActive()
             withContext(Dispatchers.Main){progress("Scanning ${id.substringAfterLast('/').take(80)}")}
             entries(id)
+        }
+        val groups=discovered.flatMap{group->
+            if(preferences.getBoolean("split:$tree:${group.key}",false) && group.tracks.size>1)
+                group.tracks.map{track->AudioSourceGroup(track.id,track.name.substringAfterLast('/').substringBeforeLast('.'),listOf(track),group.cover)}
+            else listOf(group)
         }
         fun identity(uri:Uri)=uri.authority+"/"+D.getDocumentId(uri)
         val recordings=store.books.value.filter{it.sourceRoot!=null && it.tracks.all{track->track.sourceUri!=null}}
