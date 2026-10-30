@@ -10,6 +10,10 @@ import androidx.compose.ui.unit.dp
 
 internal data class VersionNote(val version: String, val changes: List<String>)
 internal val versionHistory = listOf(
+    VersionNote("0.16.1",listOf("Larger audiobook controls, an explicit player lock and a dedicated playback-speed dialog with presets, fine adjustment and Apply.",
+        "Chapter positioning moves into Chapters & position. Unlock the slider, adjust, then use the same button to Apply; redundant filenames are removed from the player.",
+        "FolioBook passages remain visible between cues and across file transitions in a stable, scrollable text area. Screen-awake protection follows reader settings during read-along and after pause.",
+        "Sleep tools add stop after chapter/passage, optional timed fade and timer extension. Saved highlights & quotes groups existing eBook highlights and saved FolioBook passages by book, with text/audio links.")),
     VersionNote("0.16.0",listOf("Safer audiobook controls: read-only book progress, speed-adjusted time remaining and separate 10-second/1-minute skip buttons. Chapter seeking requires Adjust and Apply.",
         "Chapters and bookmarks open on demand. Position recovery, sleep timer and extra tools move to the player menu; the current passage remains visible.",
         "Bluetooth/headset and interruption settings, with guarded resume after temporary audio-focus loss. Manual pause, stop and headphone disconnection cancel automatic resume.",

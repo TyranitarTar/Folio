@@ -104,6 +104,7 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
         var readerSettings by remember { mutableStateOf(false) }
         var about by remember { mutableStateOf(false) }
         var historyNotes by rememberSaveable { mutableStateOf(false) }
+        var savedQuotes by rememberSaveable { mutableStateOf(false) }
         var updates by rememberSaveable { mutableStateOf(false) }
         var speechSettings by rememberSaveable { mutableStateOf(false) }
         var audioSettings by rememberSaveable { mutableStateOf(false) }
@@ -252,6 +253,7 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
                     tab == "Café" -> CafeScreen()
                     else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
                         HomeAction("Reading history", "Your recently opened books", Icons.Outlined.History, { tab = "History" })
+                        HomeAction("Saved highlights & quotes", "Passages saved from your books", Icons.Outlined.FormatQuote, { savedQuotes = true })
                         HomeAction("Reader settings", "Typography, page turns and tap zones", Icons.Outlined.MenuBook, { readerSettings = true })
                         HomeAction("Speech settings", "Offline voices and playback speed", Icons.Outlined.RecordVoiceOver, { speechSettings = true })
                         HomeAction("Voice packs", "Listen to samples and download offline voices", Icons.Outlined.Download, { voicePacks = true })
@@ -269,6 +271,7 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
             }
         }
         if (historyNotes) VersionHistorySheet { historyNotes = false;about=true }
+        if (savedQuotes) SavedQuotesSheet(model.store,open) { savedQuotes=false }
         if(audioSettings)AudioSettingsSheet{audioSettings=false}
         if (updates) AppUpdatesSheet(close = { updates = false })
         if (voicePacks) VoicePacksPanel(close = { voicePacks = false })

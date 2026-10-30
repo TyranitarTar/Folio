@@ -31,10 +31,14 @@ class AudiobookInstrumentedTest {
     private val device = UiDevice.getInstance(instrumentation)
     private val created = mutableListOf<String>()
     private lateinit var activity: ActivityScenario<MainActivity>
+    private lateinit var homeBefore: HomePreferences
+    private lateinit var audioHomeBefore: HomePreferences
     private val temp get() = File(app.cacheDir, "v013-audio-test").apply { mkdirs() }
 
     @Before fun setup() = runBlocking {
         AudiobookController.stop(app); SpeechController.stop(app)
+        homeBefore=HomePreferences.load(app);audioHomeBefore=HomePreferences.load(app,"audioHome")
+        HomePreferences().save(app);HomePreferences().save(app,"audioHome")
         activity = ActivityScenario.launch(Intent(app, MainActivity::class.java))
         app.audiobooks.load(); Unit
     }
@@ -42,7 +46,8 @@ class AudiobookInstrumentedTest {
         AudiobookController.stop(app)
         waitFor { AudiobookController.state.value.id == null }
         created.forEach { app.audiobooks.remove(it) }
-        activity.close(); temp.deleteRecursively(); Unit
+        activity.close(); temp.deleteRecursively()
+        homeBefore.save(app);audioHomeBefore.save(app,"audioHome"); Unit
     }
     private fun waitFor(timeout: Long = 12_000, predicate: () -> Boolean) {
         val end = SystemClock.elapsedRealtime() + timeout

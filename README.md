@@ -1,6 +1,16 @@
 # Folio
 Folio is a vibe-coded Android reader with Danish and English TTS.
 
+Version **0.16.1** adds larger audiobook transport controls, a player lock and a
+speed-settings pop-up with presets, fine adjustment and Apply/Cancel. Chapter
+selection and position share a separate sheet with **Unlock → Apply** seeking;
+redundant filenames are removed. FolioBook text remains visible between cues in
+a stable, scrollable passage area. Screen-awake behavior follows reader settings.
+The sleep menu adds chapter/passage stopping, gentle timed fade and extension.
+**More → Saved highlights & quotes** groups highlights and saved FolioBook
+passages by book, with text/audio links. See
+[implementation and verification limits](IMPLEMENTATION-v0.16.1.md).
+
 Version **0.16.0** redesigns the audiobook player around protected navigation:
 read-only book progress, listening time remaining at the current speed, four
 10-second/1-minute skip controls and a smaller chapter bar with explicit Apply.
@@ -72,7 +82,7 @@ Version 0.9.0 adds optional voice-pack downloads with authentic pre-download sam
 
 ## Install and use
 
-Copy `Folio-0.15.0.apk` to your Android phone, open it, and allow installation from that source if Android asks. Install over the earlier signed Folio release to retain your library, annotations and saved positions. Minimum supported version: Android 8.0 (API 26). Emulator checks do not establish physical-phone performance.
+Copy `Folio-0.16.1.apk` to your Android phone, open it, and allow installation from that source if Android asks. Install over the earlier signed Folio release to retain your library, annotations and saved positions. Minimum supported version: Android 8.0 (API 26). Emulator checks do not establish physical-phone performance.
 
 Choose **Read aloud → Supertonic 3 → English / Dansk**, then choose one of ten voices. **Kokoro · English** retains British Emma and American Heart for comparison; **Android speech** uses installed offline English voices. Choose **Resume listening** for the saved listening position or **Read from here** for the first visible word on the current page. Download a neural voice pack once in **More → Voice packs**. Reading then works offline; Android speech uses its already installed voices.
 

@@ -37,12 +37,17 @@ import org.readium.r2.shared.util.http.DefaultHttpClient
 import org.readium.r2.streamer.PublicationOpener
 import org.readium.r2.streamer.parser.DefaultPublicationParser
 
-data class Mark(val id: String, val locator: String, val label: String, val note: String = "") {
+data class Mark(val id: String, val locator: String, val label: String, val note: String = "",
+    val audioId: String? = null, val audioTrack: Int? = null, val audioPositionMs: Long? = null) {
     val quote: String get() = position()?.text?.highlight?.takeIf { it.isNotBlank() } ?: label
     fun json() = JSONObject().put("id", id).put("locator", JSONObject(locator)).put("label", label).put("note", note)
+        .put("audioId", audioId).put("audioTrack", audioTrack).put("audioPositionMs", audioPositionMs)
     fun position(): Locator? = runCatching { Locator.fromJSON(JSONObject(locator)) }.getOrNull()
     companion object {
-        fun from(j: JSONObject) = Mark(j.getString("id"), j.getJSONObject("locator").toString(), j.getString("label"), j.optString("note"))
+        fun from(j: JSONObject) = Mark(j.getString("id"), j.getJSONObject("locator").toString(), j.getString("label"), j.optString("note"),
+            j.optString("audioId").takeIf { it.isNotBlank() },
+            if(j.has("audioTrack") && !j.isNull("audioTrack")) j.getInt("audioTrack").takeIf { it>=0 } else null,
+            if(j.has("audioPositionMs") && !j.isNull("audioPositionMs")) j.getLong("audioPositionMs").takeIf { it>=0 } else null)
     }
 }
 
@@ -381,10 +386,15 @@ class LibraryStore(private val context: Context, val engine: BookEngine) {
             _books.value = _books.value.map { if (it.id == id) updated else it }
         }
     }
-    suspend fun addMark(id: String, locator: Locator, highlight: Boolean, note: String = "") {
+    suspend fun addMark(id: String, locator: Locator, highlight: Boolean, note: String = "",
+        audioId: String? = null, audioTrack: Int? = null, audioPositionMs: Long? = null) {
         val label = locator.text.highlight?.takeIf { it.isNotBlank() }?.take(200)
             ?: locator.title ?: "${((locator.locations.totalProgression ?: 0.0) * 100).toInt()}% into the book"
-        val mark = Mark(UUID.randomUUID().toString(), locator.toJSON().toString(), label, note)
+        val recording=if(highlight && audioId==null)(context.applicationContext as? FolioApp)?.audiobooks?.books?.value
+            ?.let { RecordedNarration.preferred(it,id,AudiobookController.state.value.id) } else null
+        val target=recording?.let { RecordedNarration.find(it,locator) }
+        val mark = Mark(UUID.randomUUID().toString(), locator.toJSON().toString(), label, note,
+            audioId ?: recording?.id?.takeIf { target!=null }, audioTrack ?: target?.track, audioPositionMs ?: target?.positionMs)
         update(id) { book ->
             if (highlight) book.copy(highlights = book.highlights + mark)
             else if (book.bookmarks.any { it.locator == mark.locator }) book

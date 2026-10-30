@@ -38,7 +38,7 @@ class Audio016InstrumentedTest {
             putInt(16000);putInt(32000);putShort(2);putShort(16);put("data".toByteArray());putInt(count*2)
         }.array()
     }
-    private fun fixture():File {
+    internal fun fixture(gaps:Boolean=false):File {
         val identity=UUID.randomUUID().toString();val text="First test passage. Second test passage."
         val epub=ByteArrayOutputStream().also{out->ZipOutputStream(out).use{z->
             fun entry(name:String,data:String){z.putNextEntry(ZipEntry(name));z.write(data.toByteArray());z.closeEntry()}
@@ -50,7 +50,7 @@ class Audio016InstrumentedTest {
         val chapters=JSONArray()
         listOf("Opening","Second section").forEachIndexed{i,title->
             val cues=JSONArray()
-            repeat(2){n->cues.put(JSONObject().put("startMs",n*30000).put("endMs",(n+1)*30000)
+            repeat(2){n->cues.put(JSONObject().put("startMs",n*30000+if(gaps && n==1)5000 else 0).put("endMs",(n+1)*30000)
                 .put("href",if(i==0)"one.xhtml" else "two.xhtml").put("fragment","p${n+1}").put("cssSelector","#p${n+1}")
                 .put("progression",n*.5).put("text",if(n==0)"First test passage." else "Second test passage."))}
             chapters.put(JSONObject().put("file","audio/$i.wav").put("title",title).put("durationMs",60000).put("cues",cues))
@@ -84,16 +84,16 @@ class Audio016InstrumentedTest {
                     assertFalse(AudiobookController.state.value.playing)
                 }
                 assertFalse(device.hasObject(By.text("Second section")))
-                text("1.0× speed");text("2.0×");waitFor{AudiobookController.state.value.speed==2f}
+                text("1.0× speed");text("2.0×");text("Apply speed");waitFor{AudiobookController.state.value.speed==2f}
                 assertTrue(device.wait(Until.hasObject(By.textContains("left at 2.0")),5000))
-                text("Chapters");text("Second section");assertTrue(device.wait(Until.hasObject(By.text("Jump to chapter 2?")),5000));text("Cancel")
+                scrollToText("Chapters & position");text("Chapters & position");text("Second section");assertTrue(device.wait(Until.hasObject(By.text("Jump to chapter 2?")),5000));text("Cancel")
                 assertEquals(0,AudiobookController.state.value.trackIndex);device.waitForIdle();delay(600)
-                text("Adjust");delay(400);val slider=device.wait(Until.findObject(By.desc("Chapter position")),5000);assertNotNull(slider)
+                text("Chapters & position");text("Unlock");delay(400);val slider=device.wait(Until.findObject(By.desc("Chapter position")),5000);assertNotNull(slider)
                 device.takeScreenshot(File(app.filesDir,"v016-seek-adjust.png"))
                 val area=slider.visibleBounds;device.swipe(area.left+area.width()/3,area.centerY(),area.right-30,area.centerY(),25);delay(300)
                 device.takeScreenshot(File(app.filesDir,"v016-seek-drag.png"));device.dumpWindowHierarchy(File(app.filesDir,"v016-seek-drag.xml"))
                 assertTrue(kotlin.math.abs(AudiobookController.state.value.positionMs-45000)<300)
-                scrollToText("Apply position");text("Apply position");waitFor{kotlin.math.abs(AudiobookController.state.value.positionMs-45000)>3000}
+                text("Apply");waitFor{kotlin.math.abs(AudiobookController.state.value.positionMs-45000)>3000}
                 assertFalse(AudiobookController.state.value.playing)
                 assertTrue(device.wait(Until.hasObject(By.desc("Chapter progress · locked")),5000));delay(250)
                 device.takeScreenshot(File(app.filesDir,"v016-player.png"))

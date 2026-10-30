@@ -51,7 +51,8 @@ data class AudioPlaybackState(
     val error: String? = null,
     val cue: AudioCue? = null,
     val sleepRemainingSeconds: Long? = null,
-    val seekRevision: Long = 0L
+    val seekRevision: Long = 0L,
+    val sleepLabel: String? = null
 )
 
 /** Process-local playback controls. Progress and bookmarks are owned by AudiobookStore. */
@@ -90,7 +91,9 @@ object AudiobookController {
         putExtra("track", track).putExtra("position", positionMs)
     }
     fun speed(context: Context, speed: Float) = command(context, AudiobookService.SPEED) { putExtra("speed", speed) }
-    fun sleep(context: Context, minutes: Int) = command(context, AudiobookService.SLEEP) { putExtra("minutes", minutes) }
+    fun sleep(context: Context, minutes: Int, fade: Boolean=false) = command(context, AudiobookService.SLEEP) { putExtra("minutes", minutes);putExtra("fade",fade) }
+    fun sleepBoundary(context: Context, passage: Boolean) = command(context,AudiobookService.SLEEP_BOUNDARY) { putExtra("passage",passage) }
+    fun extendSleep(context: Context) = command(context,AudiobookService.EXTEND_SLEEP)
     fun clearSleep(context: Context) = command(context, AudiobookService.CLEAR_SLEEP)
 
     private inline fun command(context: Context, action: String, extras: Intent.() -> Unit = {}) {
@@ -129,6 +132,10 @@ class AudiobookService : Service() {
     private var lastCheckpointAt = 0L
     private var sleepEndElapsed: Long? = null
     private var sleepJob: Job? = null
+    private var sleepBoundary: AudioSleepBoundary? = null
+    private var sleepFade = false
+    private var sleepVolume = 1f
+    private var boundaryResume: AudioPosition? = null
     private var currentBook: Audiobook? = null
     private var pendingSpeed: Float? = null
     private val noisyReceiver = object : BroadcastReceiver() {
@@ -191,7 +198,11 @@ class AudiobookService : Service() {
             SEEK -> seekTo(intent.getLongExtra("position", 0L))
             SEEK_TRACK -> seekTrack(intent.getIntExtra("track", -1), intent.getLongExtra("position", 0L))
             SPEED -> setSpeed(intent.getFloatExtra("speed", 1f))
-            SLEEP -> setSleep(intent.getIntExtra("minutes", 0))
+            SLEEP -> setSleep(intent.getIntExtra("minutes", 0),intent.getBooleanExtra("fade",false))
+            SLEEP_BOUNDARY -> setSleepBoundary(intent.getBooleanExtra("passage",false))
+            EXTEND_SLEEP -> {
+                sleepEndElapsed?.let { sleepEndElapsed=maxOf(it,SystemClock.elapsedRealtime())+5*60_000L;sleepVolume=1f;applyVolume() }
+            }
             CLEAR_SLEEP -> setSleep(0)
         }
         return START_NOT_STICKY
@@ -199,12 +210,13 @@ class AudiobookService : Service() {
 
     private fun requestStart(id: String, requestedTrack: Int?, requestedPosition: Long?, autoplay: Boolean) {
         checkpoint()
+        boundaryResume=null
         pendingSpeed = null
         val ticket = ++generation
         loadingJob?.cancel()
         releasePlayer()
         releaseFocusAndWake()
-        sleepJob?.cancel(); sleepJob = null; sleepEndElapsed = null
+        setSleep(0)
         currentBook = null
         pendingAutoplay = autoplay
         AudiobookController.mutable.value = AudioPlaybackState(id = id, loading = true, playing = false)
@@ -248,7 +260,7 @@ class AudiobookService : Service() {
         seekRetries = 0
         val initial = AudioPlaybackState(book.id, book.bookId, book.title, index, track.title, targetPosition,
             track.durationMs, false, true, book.speed, null, cueAt(track, targetPosition), AudiobookController.mutable.value.sleepRemainingSeconds,
-            AudiobookController.mutable.value.seekRevision)
+            AudiobookController.mutable.value.seekRevision, AudiobookController.mutable.value.sleepLabel)
         AudiobookController.mutable.value = initial
         lastObservedPosition = targetPosition
         lastCheckpointAt = SystemClock.elapsedRealtime()
@@ -292,6 +304,7 @@ class AudiobookService : Service() {
             publish(); return
         }
         runCatching {
+            applyVolume()
             if (!media.isPlaying) media.start()
             media.setPlaybackParams(PlaybackParams().setSpeed((currentBook?.speed ?: AudiobookController.mutable.value.speed).coerceIn(.5f, 3f)))
             if (!wakeLock.isHeld) wakeLock.acquire()
@@ -318,12 +331,12 @@ class AudiobookService : Service() {
                     when(change) {
                         AudioManager.AUDIOFOCUS_GAIN -> {
                             focusInterrupted=false
-                            if(ducked){runCatching{player?.setVolume(1f,1f)};ducked=false}
+                            if(ducked){ducked=false;applyVolume()}
                             if(interruption.regain(ticket) && options.resumeAfterInterruption)resumePlayback(fromFocus=true)
                         }
                         AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
                             if(change==AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK && !options.pauseForNotifications) {
-                                runCatching{player?.setVolume(.2f,.2f)};ducked=true
+                                ducked=true;applyVolume()
                             } else {
                                 val wasPlaying=AudiobookController.mutable.value.playing || pendingAutoplay
                                 if(!focusInterrupted)interruption.interrupt(ticket,wasPlaying,options.resumeAfterInterruption)
@@ -349,6 +362,11 @@ class AudiobookService : Service() {
         if(!fromFocus)interruption.cancel()
         val current = AudiobookController.mutable.value
         if (current.id == null) return
+        boundaryResume?.let { next ->
+            boundaryResume=null
+            transitionTrack(next.track,next.positionMs,true)
+            return
+        }
         pendingAutoplay = true
         val rewind=rewoundPosition(current.id,current.positionMs)
         if(rewind!=current.positionMs){seekTo(rewind);return}
@@ -431,6 +449,7 @@ class AudiobookService : Service() {
     }
 
     private fun transitionTrack(index: Int, position: Long, autoplay: Boolean, explicit: Boolean = false) {
+        boundaryResume=null
         val book = currentBook ?: return
         if (index !in book.tracks.indices) return
         checkpoint()
@@ -446,6 +465,10 @@ class AudiobookService : Service() {
         val wasPlaying = AudiobookController.mutable.value.playing && !seekInFlight
         if (!wasPlaying) return
         val duration = AudiobookController.mutable.value.durationMs
+        if(sleepBoundary?.reached(index,duration)==true) {
+            finishSleepBoundary(index,duration)
+            return
+        }
         AudiobookController.mutable.value = AudiobookController.mutable.value.copy(positionMs = duration, playing = false, loading = false,
             cue = cueAt(book.tracks[index], duration))
         lastObservedPosition = duration
@@ -462,6 +485,7 @@ class AudiobookService : Service() {
     }
 
     private fun seekTo(positionMs: Long) {
+        boundaryResume=null
         val current = AudiobookController.mutable.value
         val book = currentBook ?: return
         val track = book.tracks.getOrNull(current.trackIndex) ?: return
@@ -520,30 +544,79 @@ class AudiobookService : Service() {
         publish()
     }
 
-    private fun setSleep(minutes: Int) {
-        sleepJob?.cancel(); sleepJob = null
-        sleepEndElapsed = null
-        if (minutes == 0) {
-            AudiobookController.mutable.value = AudiobookController.mutable.value.copy(sleepRemainingSeconds = null)
-            publish(); return
-        }
-        if (minutes !in 1..240 || AudiobookController.mutable.value.id == null) return
-        sleepEndElapsed = SystemClock.elapsedRealtime() + minutes * 60_000L
-        sleepJob = scope.launch {
-            while (isActive) {
-                val remaining = ((sleepEndElapsed ?: break) - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
-                AudiobookController.mutable.value = AudiobookController.mutable.value.copy(sleepRemainingSeconds = remaining / 1000L)
-                publish()
-                if (remaining <= 0L) break
-                delay(minOf(1000L, remaining))
+    private fun applyVolume() {
+        val volume=sleepVolume*(if(ducked).2f else 1f)
+        runCatching { player?.setVolume(volume,volume) }
+    }
+
+    private fun setSleep(minutes: Int, fade: Boolean=false) {
+        if(minutes!=0 && (minutes !in 1..240 || AudiobookController.mutable.value.id==null))return
+        sleepJob?.cancel();sleepJob=null;sleepEndElapsed=null;sleepBoundary=null
+        sleepFade=fade;sleepVolume=1f;applyVolume()
+        AudiobookController.mutable.value=AudiobookController.mutable.value.copy(sleepRemainingSeconds=null,sleepLabel=null)
+        if(minutes==0){publish();return}
+        sleepEndElapsed=SystemClock.elapsedRealtime()+minutes*60_000L
+        sleepJob=scope.launch {
+            while(isActive) {
+                val remaining=((sleepEndElapsed ?: break)-SystemClock.elapsedRealtime()).coerceAtLeast(0)
+                AudiobookController.mutable.value=AudiobookController.mutable.value.copy(sleepRemainingSeconds=(remaining+999)/1000,
+                    sleepLabel=if(sleepFade)"Timed stop · gentle fade" else "Timed stop")
+                sleepVolume=if(sleepFade)(remaining/10_000f).coerceIn(0f,1f) else 1f
+                applyVolume();publish()
+                if(remaining<=0) {
+                    sleepEndElapsed=null
+                    pausePlayback()
+                    sleepVolume=1f;applyVolume()
+                    AudiobookController.mutable.value=AudiobookController.mutable.value.copy(sleepRemainingSeconds=null,sleepLabel=null)
+                    publish();break
+                }
+                delay(minOf(250L,remaining))
             }
-            if (sleepEndElapsed != null && AudiobookController.mutable.value.id != null) {
-                sleepEndElapsed = null
-                pausePlayback()
-                AudiobookController.mutable.value = AudiobookController.mutable.value.copy(sleepRemainingSeconds = 0L)
-                publish()
+        }
+        publish()
+    }
+
+    private fun setSleepBoundary(passage: Boolean) {
+        val current=AudiobookController.mutable.value
+        val book=latestBook() ?: return
+        if(current.loading)return
+        val target=if(passage) {
+            val cue=current.cue ?: return
+            if(cue.endMs<=current.positionMs)return
+            AudioSleepBoundary(current.trackIndex,cue.endMs,"Stop after this passage")
+        } else {
+            val chapters=book.listeningChapters()
+            val chapter=chapters[chapters.currentChapter(current.trackIndex,current.positionMs)]
+            val end=if(chapter.endMs>0)chapter.endMs else current.durationMs
+            if(end<=current.positionMs)return
+            AudioSleepBoundary(current.trackIndex,end,"Stop after this chapter")
+        }
+        setSleep(0);sleepBoundary=target
+        AudiobookController.mutable.value=AudiobookController.mutable.value.copy(sleepLabel=target.label)
+        sleepJob=scope.launch {
+            while(isActive && sleepBoundary==target) {
+                val now=AudiobookController.mutable.value
+                if(now.playing && prepared && !seekInFlight) {
+                    val at=runCatching { player?.currentPosition?.toLong() }.getOrNull() ?: now.positionMs
+                    if(target.reached(now.trackIndex,at)) {finishSleepBoundary(now.trackIndex,at);break}
+                }
+                delay(50)
             }
         }
+        publish()
+    }
+
+    private fun finishSleepBoundary(track:Int,position:Long) {
+        val target=sleepBoundary ?: return
+        // Clear first so completion cannot automatically advance through the stop.
+        sleepBoundary=null
+        sleepJob?.cancel();sleepJob=null
+        pausePlayback()
+        AudiobookController.mutable.value=AudiobookController.mutable.value.copy(sleepLabel=null,sleepRemainingSeconds=null)
+        if(track==target.track && position>target.positionMs)seekTo(target.positionMs)
+        val book=latestBook()
+        if(book!=null && target.track<book.tracks.lastIndex && target.positionMs>=book.tracks[target.track].durationMs)
+            boundaryResume=AudioPosition(target.track+1,0)
         publish()
     }
 
@@ -606,7 +679,7 @@ class AudiobookService : Service() {
 
     private fun releaseFocusAndWake() {
         interruption.cancel();focusInterrupted=false;ducked=false
-        runCatching{player?.setVolume(1f,1f)}
+        applyVolume()
         if (wakeLock.isHeld) runCatching { wakeLock.release() }
         focusToken++
         focusRequest?.let { request -> runCatching { audio.abandonAudioFocusRequest(request) } }
@@ -763,6 +836,8 @@ class AudiobookService : Service() {
         const val SPEED = "folio.audiobook.SPEED"
         const val SLEEP = "folio.audiobook.SLEEP"
         const val CLEAR_SLEEP = "folio.audiobook.CLEAR_SLEEP"
+        const val SLEEP_BOUNDARY = "folio.audiobook.SLEEP_BOUNDARY"
+        const val EXTEND_SLEEP = "folio.audiobook.EXTEND_SLEEP"
         private const val CHANNEL = "audiobook-playback"
         private const val NOTIFICATION = 420
         private const val CHECKPOINT_INTERVAL_MS = 10_000L

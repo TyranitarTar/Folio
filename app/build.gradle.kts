@@ -24,8 +24,8 @@ android {
         applicationId = "app.folio.reader"
         minSdk = 26
         targetSdk = 35
-        versionCode = 21
-        versionName = "0.16.0"
+        versionCode = 22
+        versionName = "0.16.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_static" } }
     }
