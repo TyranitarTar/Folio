@@ -1,6 +1,18 @@
 # Folio
 Folio is a vibe-coded Android reader with Danish and English TTS.
 
+Version **0.17.0** puts chapter progress below the Current passage. Its shared lock
+protects chapter seeking while playback, skips, speed and settings remain available.
+Tap the passage or open **More → Current passage settings** to shift displayed
+passages earlier or later by up to 30 seconds per recording. Positive values show
+passages later. Audio timing, sleep boundaries and saved playback position are unchanged.
+See [implementation notes](IMPLEMENTATION-v0.17.md).
+
+Studio snapshots now update an existing FolioBook edition while preserving its
+listening position, bookmarks, quotes and settings. New chapters can be added as
+they are produced. Stop that recording before importing a newer snapshot.
+Unsafe or ambiguous updates keep the previous edition; older FolioBooks still work.
+
 Version **0.16.1** adds larger audiobook transport controls, a player lock and a
 speed-settings pop-up with presets, fine adjustment and Apply/Cancel. Chapter
 selection and position share a separate sheet with **Unlock → Apply** seeking;
@@ -160,7 +172,7 @@ Native binaries and model weights remain unchanged; model data has moved from AP
 
 Open this directory in Android Studio. Use JDK 17 or 21, install SDK platform 35, and let Android Studio create `local.properties` pointing to your SDK. The Gradle wrapper is included and pins Gradle 8.11.1.
 
-Run `python bootstrap_ai.py` and `python bootstrap_supertonic.py` first (Python 3.10+). It downloads SHA-256-pinned sherpa-onnx 1.13.8 Android libraries, the Kokoro v1.0 FP32 model and the exact Kotlin JNI API. The second script restores the pinned Supertonic INT8 model pack with SHA-256 checks. Large model/native binaries are deliberately excluded from the application source ZIP and restored by this script. License texts are already included. `collect_ai_sources.py` collects exact native sources and their licenses; `Folio-native-source-0.9.0.zip` accompanies this release with native build scripts and source dependencies. Application code is distributed under GPL-3.0-or-later because the bundled phonemizer includes eSpeak NG; individual components retain their own licenses. Kokoro weights use Apache-2.0; Supertonic 3 weights by Supertone use OpenRAIL-M (including its use restrictions), with separate MIT conversion licensing. Full texts and attribution are bundled under Licenses and in the source archive.
+Run `python bootstrap_ai.py` and `python bootstrap_supertonic.py` first (Python 3.10+). It downloads SHA-256-pinned sherpa-onnx 1.13.8 Android libraries, the Kokoro v1.0 FP32 model and the exact Kotlin JNI API. The second script restores the pinned Supertonic INT8 model pack with SHA-256 checks. For the core APK and CI only, `python bootstrap_ai.py --runtime-only` restores the pinned JNI libraries and Kotlin API without downloading models or changing voice provenance. Large model/native binaries are deliberately excluded from the application source ZIP and restored by this script. License texts are already included. `collect_ai_sources.py` collects exact native sources and their licenses; `Folio-native-source-0.9.0.zip` accompanies this release with native build scripts and source dependencies. Application code is distributed under GPL-3.0-or-later because the bundled phonemizer includes eSpeak NG; individual components retain their own licenses. Kokoro weights use Apache-2.0; Supertonic 3 weights by Supertone use OpenRAIL-M (including its use restrictions), with separate MIT conversion licensing. Full texts and attribution are bundled under Licenses and in the source archive.
 
 ```powershell
 .\gradlew.bat assembleDebug

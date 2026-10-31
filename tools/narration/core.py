@@ -1041,7 +1041,39 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
             previous_start = start
 
 
-def write_bundle(job_dir: Path, job: dict[str, Any], progress: dict[str, Any], output_dir: Path, partial: bool) -> Path:
+def snapshot_metadata(manifest: dict[str, Any], target: Path, edition_key: str, audio_paths: dict[str, Path], incomplete: bool, state_path: Path) -> bool:
+    """Attach identity only after hashing the exact content to be published."""
+    manifest['editionId'] = 'folio-' + hashlib.sha256(edition_key.encode('utf-8')).hexdigest()
+    manifest['incomplete'] = incomplete
+    for chapter in manifest['chapters']:
+        chapter['chapterId'] = chapter.get('chapterId') or chapter['file']
+        chapter['audioSha256'] = sha256_file(audio_paths[chapter['file']])
+    saved = load_json(state_path) if state_path.exists() else {}
+    revision = int(saved.get('revision', 0)) if saved.get('editionId') == manifest['editionId'] else 0
+    old = {}
+    if target.exists():
+        try:
+            with zipfile.ZipFile(target) as previous:
+                old = json.loads(previous.read('manifest.json'))
+            legacy_match = (not old.get('editionId') and old.get('sourceSha256') == manifest.get('sourceSha256')
+                            and old.get('model', {}).get('repository') == manifest.get('model', {}).get('repository')
+                            and old.get('model', {}).get('revision') == manifest.get('model', {}).get('revision')
+                            and old.get('model', {}).get('sampling') == manifest.get('model', {}).get('sampling')
+                            and old.get('model', {}).get('voiceReferenceSha256') == manifest.get('model', {}).get('voiceReferenceSha256')
+                            and old.get('alignmentModel', {}).get('sourceAudioSha256') == manifest.get('alignmentModel', {}).get('sourceAudioSha256'))
+            if old.get('editionId') != manifest['editionId'] and not legacy_match:
+                raise NarrationError('Output already belongs to another edition; choose a different output path')
+            revision = max(revision, int(old.get('revision', 0)))
+        except (zipfile.BadZipFile, KeyError, ValueError) as exc:
+            raise NarrationError('Existing output cannot be verified; refusing to replace it') from exc
+    manifest['revision'] = revision + 1
+    content = dict(manifest)
+    content.pop('revision', None)
+    manifest['revisionId'] = hashlib.sha256(json.dumps(content, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')).hexdigest()
+    return bool(old.get('revisionId') == manifest['revisionId'] and old.get('editionId') == manifest['editionId'] and int(old.get('revision',0)) == revision)
+
+
+def write_bundle(job_dir: Path, job: dict[str, Any], progress: dict[str, Any], output_dir: Path, partial: bool, incomplete: bool | None = None) -> Path:
     manifest = _compose_manifest(job, progress, partial)
     validate_manifest(manifest)
     export_dir = output_dir / "exports"
@@ -1049,6 +1081,11 @@ def write_bundle(job_dir: Path, job: dict[str, Any], progress: dict[str, Any], o
     slug = re.sub(r"[^A-Za-z0-9._-]+", "-", job["title"]).strip("-._") or "narrated-book"
     suffix = ".preview.foliobook" if partial else ".foliobook"
     output = export_dir / f"{slug}{suffix}"
+    revision_state = job_dir / 'snapshot.json'
+    unchanged = snapshot_metadata(manifest, output, 'narration:' + job['jobId'],
+                      {c['file']: job_dir / c['file'] for c in manifest['chapters']},
+                      partial if incomplete is None else incomplete, revision_state)
+    if unchanged:return output
     temp_output = output.with_suffix(output.suffix + ".tmp")
     source = Path(job["sourcePath"])
     with zipfile.ZipFile(temp_output, "w", compression=zipfile.ZIP_STORED, allowZip64=True) as bundle:
@@ -1067,9 +1104,14 @@ def write_bundle(job_dir: Path, job: dict[str, Any], progress: dict[str, Any], o
             raise NarrationError("The newly written audiobook bundle failed ZIP validation")
         if bundle.read("manifest.json") != (json.dumps(manifest, ensure_ascii=False, indent=2) + "\n").encode("utf-8"):
             raise NarrationError("The newly written audiobook manifest did not round-trip")
-        if bundle.getinfo("book.epub").file_size != source.stat().st_size:
-            raise NarrationError("The source EPUB size changed during export")
+        for name, expected in [('book.epub', job['sourceSha256'])] + [(c['file'], c['audioSha256']) for c in manifest['chapters']]:
+            digest = hashlib.sha256()
+            with bundle.open(name) as stream:
+                while block := stream.read(1024 * 1024):digest.update(block)
+            if digest.hexdigest() != expected:
+                raise NarrationError(f"Bundle member changed during export: {name}")
     _atomic_replace(temp_output,output)
+    save_json(revision_state, {'editionId': manifest['editionId'], 'revision': manifest['revision']})
     return output
 
 
@@ -1302,6 +1344,8 @@ def generate_job(
                 })
             progress["chapters"][state_key] = {"file": chapter_rel, "durationMs": duration_ms, "cues": cue_timing}
             save_json(state_path, progress)
+            if max_chapters is None and max_sentences is None and through_sentences is None and selected_chapters is None:
+                write_bundle(job_dir, job, progress, output_dir, False, incomplete=not _status_rates(job, progress)['completed'])
             checkpoint_control(chapter_boundary=True)
             progress['phase'] = 'generating'
             if max_chapters is not None and chapter_index >= max_chapters and chapter_index < len(job["chapters"]):

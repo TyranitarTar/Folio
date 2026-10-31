@@ -63,6 +63,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -149,7 +150,7 @@ class ReaderModel(app: Application) : AndroidViewModel(app) {
                         if(audio!=null && (audio.lastPlayed>book.lastRead || active?.playing==true)) {
                             val index=active?.trackIndex ?: audio.positionTrack
                             val at=active?.positionMs ?: audio.positionMs
-                            val cue=active?.cue ?: audio.tracks.getOrNull(index)?.cues?.firstOrNull{at>=it.startMs && at<it.endMs}
+                            val cue=displayedCue(audio,displayPassage(audio,index,at))
                             cue?.let(RecordedNarration::locator)?.let { source -> location.value=RecordedNarration.readingLocator(source,positions) }
                         }
                     }.onFailure{notice.value="The recording position could not be restored; your saved reading page is available."}
@@ -571,10 +572,13 @@ class ReaderActivity : FragmentActivity() {
             var openingFromRecording = intent.getBooleanExtra("recordedFollow", false)
             intent.removeExtra("recordedFollow")
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                AudiobookController.state.distinctUntilChangedBy { listOf(it.id, it.bookId, it.playing, it.loading, it.cue, it.seekRevision) }.collectLatest { state ->
+                combine(AudiobookController.state, (application as FolioApp).audiobooks.books) { state, books ->
+                    val audio=books.firstOrNull { it.id==state.id }
+                    state to audio?.let { displayedCue(it,displayPassage(it,state.trackIndex,state.positionMs)) }
+                }.distinctUntilChangedBy { (state,cue) -> listOf(state.id, state.bookId, state.playing, state.loading, cue, state.seekRevision) }.collectLatest { (state,displayCue) ->
                     val explicitSeek = state.seekRevision != seenRevision || openingFromRecording
                     seenRevision = state.seekRevision
-                    val locator = state.cue?.let(RecordedNarration::locator)
+                    val locator = displayCue?.let(RecordedNarration::locator)
                     if (state.bookId != model.bookId || locator == null) {
                         fragment.commitDecorations(emptyList(), "recorded-audio"); return@collectLatest
                     }

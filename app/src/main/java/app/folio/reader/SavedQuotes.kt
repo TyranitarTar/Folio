@@ -35,7 +35,9 @@ import kotlinx.coroutines.withTimeout
                     val recording=audio.firstOrNull { it.id==mark.audioId }
                         ?: RecordedNarration.preferred(audio,book.id)
                     val audioTarget=if(recording?.id==mark.audioId && mark.audioTrack!=null && mark.audioPositionMs!=null)
-                        RecordedNarration.Target(mark.audioTrack,mark.audioPositionMs)
+                        recording?.quoteTargets?.get(mark.id)?.let{RecordedNarration.Target(it.track,it.positionMs)}
+                            ?: recording?.takeIf{it.editionRevision>1}?.let{RecordedNarration.find(it,mark.position())}
+                            ?: RecordedNarration.Target(mark.audioTrack,mark.audioPositionMs)
                         else recording?.let { RecordedNarration.find(it,mark.position()) }
                     OutlinedCard(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(14.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {

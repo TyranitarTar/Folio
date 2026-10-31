@@ -23,9 +23,9 @@ jobs:
       - name: Desktop narration format and resume tests
         run: python3 -m unittest discover -s tools/narration -p 'test_*.py' -v
       - name: Restore checksum-pinned speech dependencies
-        run: |
-          python3 bootstrap_ai.py
-          python3 bootstrap_supertonic.py
+        run: python3 bootstrap_ai.py --runtime-only
+      - name: Test speech bootstrap modes
+        run: python3 -m unittest test_bootstrap_ai -v
       - name: JVM tests, lint and debug build
         run: |
           chmod +x gradlew

@@ -1,5 +1,6 @@
 """Fetch pinned AI voice artifacts, verify release hashes, and install offline APK assets."""
 from pathlib import Path
+import argparse
 import concurrent.futures
 import hashlib
 import json
@@ -48,29 +49,36 @@ def extract(path, destination):
                 members.append(member)
         archive.extractall(destination, members=members)
 
-if __name__ == "__main__":
+def main(argv=None):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--runtime-only", action="store_true", help="Install pinned JNI runtime and Kotlin API without model weights or source archives")
+    args = parser.parse_args(argv)
+    selected = {name: ARTIFACTS[name] for name in ("runtime.tar.bz2", "Tts.kt")} if args.runtime_only else ARTIFACTS
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-        inventory = list(pool.map(fetch, ARTIFACTS.items()))
-    (CACHE / "artifacts.json").write_text(json.dumps(inventory, indent=2), encoding="utf-8")
+        inventory = list(pool.map(fetch, selected.items()))
+    if not args.runtime_only:
+        (CACHE / "artifacts.json").write_text(json.dumps(inventory, indent=2), encoding="utf-8")
     extract(CACHE / "runtime.tar.bz2", CACHE / "runtime")
-    extract(CACHE / "model.tar.bz2", CACHE / "model")
-    extract(CACHE / "sherpa-source.tar.gz", CACHE / "source")
-    with zipfile.ZipFile(CACHE / "espeak-source.zip") as archive:
-        for member in archive.infolist():
-            if not (CACHE / "source" / member.filename).resolve().is_relative_to((CACHE / "source").resolve()):
-                raise ValueError("Archive path escapes destination")
-        archive.extractall(CACHE / "source")
-    model = next((CACHE / "model").glob("kokoro-multi-lang-v1_0"))
-    assets = ROOT / "app/src/main/assets/kokoro"
-    assets.mkdir(parents=True, exist_ok=True)
-    for name in ("model.onnx", "voices.bin", "tokens.txt", "LICENSE", "README.md"):
-        shutil.copy2(model / name, assets / name)
-    shutil.copytree(model / "espeak-ng-data", assets / "espeak-ng-data", dirs_exist_ok=True)
+    if not args.runtime_only:
+        extract(CACHE / "model.tar.bz2", CACHE / "model")
+        extract(CACHE / "sherpa-source.tar.gz", CACHE / "source")
+        with zipfile.ZipFile(CACHE / "espeak-source.zip") as archive:
+            for member in archive.infolist():
+                if not (CACHE / "source" / member.filename).resolve().is_relative_to((CACHE / "source").resolve()):
+                    raise ValueError("Archive path escapes destination")
+            archive.extractall(CACHE / "source")
+        model = next((CACHE / "model").glob("kokoro-multi-lang-v1_0"))
+        assets = ROOT / "app/src/main/assets/kokoro"
+        assets.mkdir(parents=True, exist_ok=True)
+        for name in ("model.onnx", "voices.bin", "tokens.txt", "LICENSE", "README.md"):
+            shutil.copy2(model / name, assets / name)
+        shutil.copytree(model / "espeak-ng-data", assets / "espeak-ng-data", dirs_exist_ok=True)
     jni = ROOT / "app/src/main/jniLibs"
     for abi in ("arm64-v8a", "armeabi-v7a", "x86", "x86_64"):
         libraries = list((CACHE / "runtime").rglob(f"{abi}/*.so"))
-        if not libraries:
-            raise ValueError(f"No native libraries for {abi}")
+        required = {"libonnxruntime.so", "libsherpa-onnx-jni.so"}
+        if not required.issubset({library.name for library in libraries}):
+            raise ValueError(f"Missing required native libraries for {abi}")
         (jni / abi).mkdir(parents=True, exist_ok=True)
         for library in libraries:
             if library.name not in ("libonnxruntime.so", "libsherpa-onnx-jni.so"):
@@ -80,5 +88,10 @@ if __name__ == "__main__":
     kotlin = ROOT / "app/src/main/java/com/k2fsa/sherpa/onnx/Tts.kt"
     kotlin.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(CACHE / "Tts.kt", kotlin)
-    (assets / "artifacts.json").write_text(json.dumps(inventory[:2], indent=2), encoding="utf-8")
-    print("Offline AI assets installed.", flush=True)
+    if not args.runtime_only:
+        (assets / "artifacts.json").write_text(json.dumps(inventory[:2], indent=2), encoding="utf-8")
+    print("Pinned speech runtime installed." if args.runtime_only else "Offline AI assets installed.", flush=True)
+
+
+if __name__ == "__main__":
+    main()

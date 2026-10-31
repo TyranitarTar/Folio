@@ -86,16 +86,18 @@ class Audio016InstrumentedTest {
                 assertFalse(device.hasObject(By.text("Second section")))
                 text("1.0× speed");text("2.0×");text("Apply speed");waitFor{AudiobookController.state.value.speed==2f}
                 assertTrue(device.wait(Until.hasObject(By.textContains("left at 2.0")),5000))
-                scrollToText("Chapters & position");text("Chapters & position");text("Second section");assertTrue(device.wait(Until.hasObject(By.text("Jump to chapter 2?")),5000));text("Cancel")
+                click("Unlock chapter seeking");click("Player menu");text("Chapters & position")
+                assertTrue(device.wait(Until.hasObject(By.text("Chapters")),5000))
+                text("Second section");assertTrue(device.wait(Until.hasObject(By.text("Jump to chapter 2?")),5000));text("Cancel")
                 assertEquals(0,AudiobookController.state.value.trackIndex);device.waitForIdle();delay(600)
-                text("Chapters & position");text("Unlock");delay(400);val slider=device.wait(Until.findObject(By.desc("Chapter position")),5000);assertNotNull(slider)
+                scrollToText("Chapters & position");delay(400);val slider=device.wait(Until.findObject(By.desc("Chapter position")),5000);assertNotNull(slider)
                 device.takeScreenshot(File(app.filesDir,"v016-seek-adjust.png"))
                 val area=slider.visibleBounds;device.swipe(area.left+area.width()/3,area.centerY(),area.right-30,area.centerY(),25);delay(300)
                 device.takeScreenshot(File(app.filesDir,"v016-seek-drag.png"));device.dumpWindowHierarchy(File(app.filesDir,"v016-seek-drag.xml"))
                 assertTrue(kotlin.math.abs(AudiobookController.state.value.positionMs-45000)<300)
                 text("Apply");waitFor{kotlin.math.abs(AudiobookController.state.value.positionMs-45000)>3000}
                 assertFalse(AudiobookController.state.value.playing)
-                assertTrue(device.wait(Until.hasObject(By.desc("Chapter progress · locked")),5000));delay(250)
+                click("Lock chapter seeking");assertTrue(device.wait(Until.hasObject(By.desc("Chapter progress · locked")),5000));delay(250)
                 device.takeScreenshot(File(app.filesDir,"v016-player.png"))
             }
             AudiobookController.seekTrack(app,1,45000);waitFor{AudiobookController.state.value.trackIndex==1 && !AudiobookController.state.value.loading}

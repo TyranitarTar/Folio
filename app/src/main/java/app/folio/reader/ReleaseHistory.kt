@@ -10,6 +10,7 @@ import androidx.compose.ui.unit.dp
 
 internal data class VersionNote(val version: String, val changes: List<String>)
 internal val versionHistory = listOf(
+    VersionNote("0.17.0", listOf("Chapter progress returns to the player; the shared chapter seek lock toggles immediately while transport remains available.", "Tap Current passage or use the player menu to adjust passage timing earlier or later for this recording, without changing audio playback.")),
     VersionNote("0.16.1",listOf("Larger audiobook controls, an explicit player lock and a dedicated playback-speed dialog with presets, fine adjustment and Apply.",
         "Chapter positioning moves into Chapters & position. Unlock the slider, adjust, then use the same button to Apply; redundant filenames are removed from the player.",
         "FolioBook passages remain visible between cues and across file transitions in a stable, scrollable text area. Screen-awake protection follows reader settings during read-along and after pause.",

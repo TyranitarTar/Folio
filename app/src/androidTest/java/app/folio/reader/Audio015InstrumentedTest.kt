@@ -62,7 +62,7 @@ class Audio015InstrumentedTest {
                 assertTrue(device.wait(Until.hasObject(By.desc("Book position")),15000))
                 val chapters=device.wait(Until.findObject(By.text("Chapters & position")),10000)
                 assertNotNull(chapters);chapters.click()
-                assertTrue(device.wait(Until.hasObject(By.desc("Chapter progress · locked")),10000))
+                assertTrue(device.wait(Until.hasObject(By.text("Chapters")),10000))
                 device.pressBack();device.waitForIdle()
                 assertTrue(device.hasObject(By.desc("Player menu")))
                 device.takeScreenshot(File(app.filesDir,"v015-m4b-player.png"))

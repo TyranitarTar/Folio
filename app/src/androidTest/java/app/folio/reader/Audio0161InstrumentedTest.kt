@@ -47,17 +47,35 @@ class Audio0161InstrumentedTest {
             text("1.0× speed");text("2.0×");assertEquals(1f,AudiobookController.state.value.speed)
             text("Cancel");assertEquals(1f,AudiobookController.state.value.speed)
             text("1.0× speed");text("1.5×");text("Apply speed");waitFor{AudiobookController.state.value.speed==1.5f}
-            click("Lock player controls");click("Forward 10 seconds");delay(250)
-            assertTrue(AudiobookController.state.value.positionMs<11000)
-            assertFalse(device.findObject(By.desc("Play audiobook")).isEnabled)
+            assertTrue(device.findObject(By.desc("Play audiobook")).isEnabled)
+            click("Forward 10 seconds");waitFor{AudiobookController.state.value.positionMs in 19800..20200}
             scenario.recreate()
-            assertTrue(device.wait(Until.hasObject(By.desc("Unlock player controls")),10000))
-            click("Unlock player controls");text("Keep locked")
-            assertFalse(device.findObject(By.desc("Play audiobook")).isEnabled)
-            click("Unlock player controls");text("Unlock");click("Forward 10 seconds")
-            waitFor{AudiobookController.state.value.positionMs in 19800..20200}
+            assertTrue(device.wait(Until.hasObject(By.desc("Unlock chapter seeking")),10000))
+            assertTrue(device.findObject(By.desc("Play audiobook")).isEnabled)
+            click("Unlock chapter seeking")
+            assertTrue(device.wait(Until.hasObject(By.desc("Lock chapter seeking")),5000))
+            click("Lock chapter seeking")
+            click("Player menu");text("Current passage settings")
+            assertTrue(device.wait(Until.hasObject(By.desc("Passage timing offset")),5000));text("Later 0.1 s");text("Cancel")
+            repeat(4){if(!device.hasObject(By.text("Current passage"))) device.swipe(device.displayWidth/2,device.displayHeight*4/5,device.displayWidth/2,device.displayHeight/3,25)}
+            text("Current passage");assertTrue(device.wait(Until.hasObject(By.desc("Passage timing offset")),5000));text("Reset");text("Cancel")
             device.takeScreenshot(File(app.filesDir,"v0161-player.png"))
         }
+    }
+
+    @Test fun passage_offset_survives_catalog_reload_and_reimport()=runBlocking {
+        val input=Audio016InstrumentedTest().fixture(gaps=true)
+        val book=app.audiobooks.importBundle(Uri.fromFile(input))
+        try {
+            assertEquals(0L,book.passageOffsetMs)
+            app.audiobooks.setPassageOffset(book.id,2500L)
+            val fresh=AudiobookStore(app);fresh.load()
+            assertEquals(2500L,fresh.books.value.first{it.id==book.id}.passageOffsetMs)
+            assertEquals(2500L,app.audiobooks.importBundle(Uri.fromFile(input)).passageOffsetMs)
+            app.audiobooks.savePosition(book.id,0,10000,1f)
+            val saved=app.audiobooks.books.value.first{it.id==book.id}
+            assertEquals(10000L,saved.positionMs);assertEquals(2500L,saved.passageOffsetMs)
+        } finally { app.audiobooks.remove(book.id);book.bookId?.let{app.library.removeBook(it)};input.delete() }
     }
 
     @Test fun retained_gap_passage_can_be_saved_with_audio_and_screen_awake_respects_lifecycle()=runBlocking {

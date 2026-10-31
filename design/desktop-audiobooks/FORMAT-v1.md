@@ -48,6 +48,35 @@ sentences only. There is no word-level alignment. A reader can locate a cue usin
 then the existing fragment, quote plus context, and finally the CSS selector or progression as
 fallbacks. It should retain the cue text as the source quote and not rewrite the original EPUB.
 
+## Incremental editions (Studio 0.6 / Folio 0.17)
+
+The additive version-1 snapshot fields are `editionId` (`folio-` followed by a
+64-character lowercase hexadecimal digest), positive integer `revision`,
+`revisionId` (a 64-character hexadecimal producer content identifier), and
+Boolean `incomplete`. An edition keeps the same source EPUB bytes. Every chapter
+has a stable, unique `chapterId` and an `audioSha256` verified against its actual
+file. Publish a complete, validated ZIP with atomic replacement, never a growing
+ZIP that another process could import halfway through.
+
+`generatedSentenceCount` / `totalSentenceCount` report passage-link coverage;
+`generatedChapterCount` / `totalChapterCount` report audio coverage. A matched
+original audiobook can have all its audio and only some linked passages.
+Finishing the available audio of a partial generated book does not mean the
+whole book is finished. `incomplete` and `preview` have separate purposes.
+
+Revisions increase monotonically within an edition; old revisions are ignored
+and conflicting data at the same revision is rejected. `revisionId` is opaque
+to readers: JSON number canonicalization is not specified across languages.
+Readers must still verify EPUB/audio digests and detect conflicting metadata.
+
+Folio keeps the existing edition, annotations and listening settings. Stop
+playback before updating that edition. Unchanged audio keeps its audio cursor;
+corrected cues can update saved quote targets. Changed audio requires unique
+source-passage anchors for every used cursor, bookmark, history or quote target.
+Unmappable positions or removed/reordered chapters reject the update and retain
+the previous edition. Durable rollback receipts protect interrupted imports.
+Legacy bundles without edition fields remain readable as independent imports.
+
 ## Model metadata and privacy
 
 `model` records the public model repository and pinned revision, the SHA-256 of the local model

@@ -61,10 +61,11 @@ object AudiobookController {
     val state = mutable.asStateFlow()
     @Volatile internal var serviceRunning = false
     @Volatile internal var startPending = false
+    internal val snapshotSwapLock = Any()
 
     private fun intent(context: Context, action: String) = Intent(context, AudiobookService::class.java).setAction(action)
 
-    fun start(context: Context, id: String, track: Int? = null, positionMs: Long? = null, autoplay: Boolean = true) {
+    fun start(context: Context, id: String, track: Int? = null, positionMs: Long? = null, autoplay: Boolean = true): Unit = synchronized(snapshotSwapLock) {
         val previous = mutable.value
         // Preserve the current ID and position until the service checkpoints them.
         mutable.value = previous.copy(loading = true, playing = false, error = null)
@@ -76,6 +77,7 @@ object AudiobookController {
             startPending = false
             mutable.value = previous.copy(error = "The audiobook could not start. Open Folio and try again.")
         }
+        Unit
     }
 
     fun play(context: Context) = command(context, AudiobookService.PLAY)
@@ -479,7 +481,7 @@ class AudiobookService : Service() {
             // Completion is the sole automatic track-advance path.
             openTrack(book, index + 1, 0L, true)
         } else {
-            scope.launch{runCatching{store.markCompleted(book.id)}}
+            if(!book.audioIncomplete)scope.launch{runCatching{store.markCompleted(book.id,book.editionRevision,book.tracks.size)}}
             publish()
         }
     }

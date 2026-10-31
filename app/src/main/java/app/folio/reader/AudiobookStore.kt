@@ -51,12 +51,25 @@ data class Audiobook(
     val history: List<AudioHistory> = emptyList(),
     val completed: Boolean? = null,
     val shelves:List<String> = emptyList(),
-    val originalSources:List<String> = emptyList()
+    val originalSources:List<String> = emptyList(),
+    val passageOffsetMs: Long = 0L,
+    val editionId: String? = null,
+    val editionSourceSha256: String? = null,
+    val editionRevision: Long = 0L,
+    val editionRevisionId: String? = null,
+    val editionIncomplete: Boolean = false,
+    val generatedSentenceCount: Int = 0,
+    val totalSentenceCount: Int = 0,
+    val quoteTargets: Map<String, AudioQuoteTarget> = emptyMap(),
+    val editionManifestSha256: String? = null,
+    val generatedChapterCount: Int = 0,
+    val totalChapterCount: Int = 0
 ) {
     val elapsedMs: Long get() = tracks.take(positionTrack).sumOf { it.durationMs } + positionMs
     val totalMs: Long get() = tracks.sumOf { it.durationMs }
     val durationKnown: Boolean get() = tracks.all { it.durationMs>0 }
-    val isRead: Boolean get() = if(readState=="Read") true else if(readState=="Unread") false
+    val audioIncomplete: Boolean get() = editionId!=null && if(totalChapterCount>0) generatedChapterCount<totalChapterCount else editionIncomplete
+    val isRead: Boolean get() = if(readState=="Read") true else if(readState=="Unread" || audioIncomplete) false
         else completed ?: (durationKnown && totalMs>0 && positionMs>=tracks.last().durationMs && positionTrack==tracks.lastIndex)
 }
 
@@ -67,7 +80,8 @@ data class AudioTrack(
     val cues: List<AudioCue> = emptyList(),
     val sourceUri: String? = null,
     val chapters: List<AudioChapter> = emptyList(),
-    val metadataVersion: Int = 0
+    val metadataVersion: Int = 0,
+    val chapterId: String? = null
 )
 
 data class AudioCue(
@@ -142,6 +156,10 @@ class AudiobookStore(private val context: Context) {
     suspend fun load() = withContext(Dispatchers.IO) {
         mutex.withLock {
             if (loaded) return@withLock
+            recoverSnapshotSwap()
+            // A missing receipt means the catalog commit succeeded; leftover backups are obsolete.
+            root.listFiles()?.filter { it.isDirectory && it.name.matches(Regex("\\.snapshot-backup-[a-f0-9]{64}")) }?.forEach { it.deleteRecursively() }
+            File(root,".snapshot-catalog-backup").delete()
             // Remove imports interrupted by process death on the first catalog load.
             root.listFiles()?.filter { it.isDirectory && (it.name.startsWith(".stage-") || it.name.startsWith(".removed-")) }
                 ?.forEach { it.deleteRecursively() }
@@ -312,6 +330,7 @@ class AudiobookStore(private val context: Context) {
             var epubPath: File? = null
             var epubDigest: String? = null
             var linkedBookId: String? = null
+            var snapshot: Snapshot? = null
             limited.use { raw ->
                 ZipInputStream(BufferedInputStream(raw, 64 * 1024)).use { zip ->
                     val manifestEntry = zip.nextEntry ?: throw IllegalArgumentException("The audiobook bundle is empty.")
@@ -332,11 +351,30 @@ class AudiobookStore(private val context: Context) {
                     author = cleanText(manifest.optString("author", ""), 500)
                     val sourceSha = manifest.optString("sourceSha256", "").takeIf { it.isNotBlank() }
                     require(sourceSha == null || sourceSha.matches(SHA256_PATTERN)) { "The bundle source checksum is invalid." }
+                    if(manifest.has("editionId")) {
+                        val edition=manifest.getString("editionId")
+                        val revision=manifest.getLong("revision")
+                        val revisionId=manifest.getString("revisionId")
+                        require(edition.matches(Regex("folio-[a-f0-9]{64}")) && revision>0 && revisionId.matches(SHA256_PATTERN) && sourceSha!=null && manifest.opt("incomplete") is Boolean) { "The snapshot identity is invalid." }
+                        val generated=manifest.optInt("generatedSentenceCount",0);val total=manifest.optInt("totalSentenceCount",0)
+                        require(generated>=0 && total>=0 && (total==0 || generated<=total)) { "The snapshot coverage is invalid." }
+                        val generatedChapters=manifest.optInt("generatedChapterCount",0);val totalChapters=manifest.optInt("totalChapterCount",0)
+                        require(generatedChapters>=0 && totalChapters>=0 && (totalChapters==0 || generatedChapters<=totalChapters)) { "The snapshot chapter coverage is invalid." }
+                        val manifestHash=hex(MessageDigest.getInstance("SHA-256").digest(manifestBytes))
+                        snapshot=Snapshot(edition,sourceSha,revision,revisionId,manifest.getBoolean("incomplete"),generated,total,generatedChapters,totalChapters,manifestHash)
+                        mutex.withLock {
+                            mutableBooks.value.firstOrNull{it.editionId==edition}?.let { old ->
+                                require(old.editionSourceSha256==sourceSha) { "This edition belongs to a different EPUB." }
+                            }
+                        }
+                    } else require(!manifest.has("revision") && !manifest.has("revisionId")) { "The snapshot identity is incomplete." }
                     val epubName = manifest.optString("epub", "").takeIf { it.isNotBlank() }
                     require(epubName == null || epubName == "book.epub") { "The bundle has an unsupported EPUB path." }
+                    if(snapshot!=null) require(epubName!=null && sourceSha!=null) { "A snapshot must include its original EPUB." }
                     val chapterArray = manifest.optJSONArray("chapters") ?: JSONArray()
                     require(chapterArray.length() in 1..MAX_TRACKS) { "The bundle must contain between 1 and $MAX_TRACKS chapters." }
                     val chapters = (0 until chapterArray.length()).map { parseChapter(chapterArray.getJSONObject(it), it) }
+                    if(snapshot!=null) require(chapters.all{it.chapterId!=null && it.audioSha256!=null} && chapters.map{it.chapterId}.distinct().size==chapters.size) { "The snapshot chapter identities are invalid." }
                     require(chapters.map { it.archivePath }.distinct().size == chapters.size) { "The bundle lists a chapter more than once." }
                     require(chapters.sumOf { it.cues.size } <= MAX_CUES) { "The bundle contains too many text cues." }
                     val expected = chapters.mapIndexed { index, chapter -> chapter.archivePath to index }.toMap()
@@ -377,6 +415,7 @@ class AudiobookStore(private val context: Context) {
                         if (isEpub) { epubPath = target; epubDigest = checksum }
                         else {
                             val chapter = chapters[chapterIndex!!]
+                            if(snapshot!=null) require(checksum==chapter.audioSha256) { "A snapshot audio checksum does not match." }
                             val metadata = readMetadata(target)
                             require(metadata.durationMs <= MAX_TRACK_DURATION_MS) { "An audio chapter exceeds the supported duration." }
                             val actualDuration = metadata.durationMs.takeIf { it > 0L } ?: chapter.durationMs
@@ -386,7 +425,7 @@ class AudiobookStore(private val context: Context) {
                                 target.name,
                                 chapter.title.ifBlank { metadata.title?.takeIf { it.isNotBlank() } ?: "Chapter ${chapterIndex + 1}" },
                                 actualDuration,
-                                chapter.cues
+                                chapter.cues, chapterId=chapter.chapterId
                             )
                         }
                         zip.closeEntry()
@@ -407,7 +446,8 @@ class AudiobookStore(private val context: Context) {
                     }
                 }
             }
-            val result=publish(stage, title, author, linkedBookId, tracks, digests, preview)
+            val result=if(snapshot!=null) publishSnapshot(stage,title,author,linkedBookId,tracks,digests,preview,checkNotNull(snapshot))
+                else publish(stage, title, author, linkedBookId, tracks, digests, preview)
             if(uri.scheme=="content") {
                 persistDocumentAccess(context,uri)
                 mutex.withLock{result.copy(originalSources=(result.originalSources+uri.toString()).distinct()).also{replaceLocked(it)}}
@@ -444,7 +484,7 @@ class AudiobookStore(private val context: Context) {
             updated
         }
         val linked=saved?.bookId
-        val cue=saved?.tracks?.getOrNull(track)?.cues?.firstOrNull{positionMs>=it.startMs && positionMs<it.endMs}
+        val cue=saved?.let{displayedCue(it,displayPassage(it,track,positionMs))}
         if(linked!=null && cue!=null)RecordedNarration.locator(cue)?.let{(context.applicationContext as? FolioApp)?.library?.queueRecordedProgress(linked,it,observedAt)}
     }
 
@@ -510,6 +550,10 @@ class AudiobookStore(private val context: Context) {
             mutableBooks.value.firstOrNull { it.id==id }?.let { replaceLocked(it.copy(readState=if(read) "Read" else "Unread")) }
         }
     }
+    internal suspend fun setPassageOffset(id:String, offsetMs:Long)=withContext(Dispatchers.IO) {
+        require(offsetMs in -30_000L..30_000L)
+        load();mutex.withLock{mutableBooks.value.firstOrNull{it.id==id}?.let{replaceLocked(it.copy(passageOffsetMs=offsetMs))}}
+    }
     internal suspend fun setPlaybackSpeed(id:String,speed:Float)=withContext(Dispatchers.IO) {
         require(speed.isFinite() && speed in .5f..3f)
         load();mutex.withLock{mutableBooks.value.firstOrNull{it.id==id}?.let{replaceLocked(it.copy(speed=speed))}}
@@ -564,12 +608,137 @@ class AudiobookStore(private val context: Context) {
             children
         }
     }
-    internal suspend fun markCompleted(id:String)=withContext(Dispatchers.IO) { mutex.withLock {
-        mutableBooks.value.firstOrNull{it.id==id}?.let{replaceLocked(it.copy(completed=true))}
+    internal suspend fun markCompleted(id:String,revision:Long,trackCount:Int)=withContext(Dispatchers.IO) { mutex.withLock {
+        mutableBooks.value.firstOrNull{it.id==id && !it.audioIncomplete && it.editionRevision==revision && it.tracks.size==trackCount}?.let{replaceLocked(it.copy(completed=true))}
     } }
     internal suspend fun markStarted(id:String)=withContext(Dispatchers.IO) { mutex.withLock {
         mutableBooks.value.firstOrNull{it.id==id && !it.started}?.let{replaceLocked(it.copy(started=true))}
     } }
+
+    private fun beginSnapshotTransaction(id:String, isNew:Boolean):AtomicFile {
+        val receipt=AtomicFile(File(root,".snapshot-receipt.json"))
+        check(!receipt.baseFile.exists() && !File(receipt.baseFile.path+".bak").exists()) { "An earlier snapshot update needs recovery; restart Folio and retry." }
+        val hadCatalog=catalog.baseFile.exists() || File(catalog.baseFile.path+".bak").exists()
+        check(isNew || hadCatalog) { "The existing audiobook catalog is unavailable; the previous edition was kept." }
+        if(hadCatalog) {
+            val oldCatalog=catalog.openRead().use{readLimited(it,MAX_CATALOG_BYTES)}
+            File(root,".snapshot-catalog-backup").outputStream().use{it.write(oldCatalog);it.fd.sync()}
+        }
+        DurableJson.write(receipt,JSONObject().put("id",id).put("new",isNew).put("hadCatalog",hadCatalog).toString().toByteArray(Charsets.UTF_8))
+        return receipt
+    }
+
+    /** Roll back a swap interrupted at any point before its receipt was removed. */
+    private fun recoverSnapshotSwap() {
+        val receipt=AtomicFile(File(root,".snapshot-receipt.json"))
+        if(!receipt.baseFile.exists() && !File(receipt.baseFile.path+".bak").exists()) return
+        val data=receipt.openRead().use{BoundedJson.objectFrom(readLimited(it,4096),4096,8,64)}
+        val id=data.getString("id");require(id.matches(ID_PATTERN))
+        val backup=File(root,".snapshot-backup-$id")
+        val destination=File(root,id)
+        if(data.optBoolean("new",false)) {
+            if(destination.exists()) check(destination.deleteRecursively()) { "Could not remove an interrupted snapshot import." }
+        } else {
+            if(backup.exists()) {
+                if(destination.exists()) check(destination.deleteRecursively()) { "Could not recover the previous audiobook files." }
+                check(backup.renameTo(destination)) { "Could not restore the previous audiobook files." }
+            }
+            check(destination.isDirectory) { "The previous audiobook files are unavailable for recovery." }
+        }
+        if(data.optBoolean("hadCatalog",true)) {
+            val prior=File(root,".snapshot-catalog-backup").inputStream().use{readLimited(it,MAX_CATALOG_BYTES)}
+            val out=catalog.startWrite()
+            try { out.write(prior);catalog.finishWrite(out) } catch(e:Throwable) { catalog.failWrite(out);throw e }
+        } else catalog.delete()
+        DurableJson.delete(receipt)
+        File(root,".snapshot-catalog-backup").delete()
+    }
+
+    private suspend fun publishSnapshot(stage:File,title:String,author:String,bookId:String?,tracks:List<AudioTrack>,checksums:List<String>,preview:Boolean,snapshot:Snapshot):Audiobook = mutex.withLock {
+        require(bookId!=null && tracks.size==checksums.size && tracks.isNotEmpty())
+        val id=hex(MessageDigest.getInstance("SHA-256").digest(("folio-edition-v1\n${snapshot.editionId}\n${snapshot.sourceSha}").toByteArray(Charsets.UTF_8)))
+        val existing=mutableBooks.value.firstOrNull{it.editionId==snapshot.editionId}
+        require(existing==null || (existing.id==id && existing.editionSourceSha256==snapshot.sourceSha && existing.bookId==bookId)) { "This edition does not match the previously imported EPUB." }
+        if(existing==null) {
+            val book=Audiobook(id,title,author,bookId,tracks,preview=preview,completed=false,editionId=snapshot.editionId,
+                editionSourceSha256=snapshot.sourceSha,editionRevision=snapshot.revision,editionRevisionId=snapshot.revisionId,editionIncomplete=snapshot.incomplete,generatedSentenceCount=snapshot.generated,totalSentenceCount=snapshot.total,
+                generatedChapterCount=snapshot.generatedChapters,totalChapterCount=snapshot.totalChapters,editionManifestSha256=snapshot.manifestHash)
+            val destination=File(root,id)
+            require(!destination.exists()) { "The snapshot destination already exists; the original files were kept." }
+            val receipt=beginSnapshotTransaction(id,true)
+            try {
+                check(stage.renameTo(destination)) { "The snapshot files could not be committed." }
+                hashes[id]=checksums;writeCursor(book)
+                val next=mutableBooks.value+book;persistLocked(next)
+                DurableJson.delete(receipt)
+                mutableBooks.value=next.sortedByDescending{it.lastPlayed}
+            } catch(e:Throwable) { hashes.remove(id);recoverSnapshotSwap();throw e }
+            File(root,".snapshot-catalog-backup").delete()
+            return@withLock book
+        }
+        if(snapshot.revision<=existing.editionRevision) {
+            if(snapshot.revision==existing.editionRevision) {
+                require(snapshot.revisionId==existing.editionRevisionId &&
+                    (existing.editionManifestSha256==snapshot.manifestHash || (existing.editionManifestSha256==null &&
+                        existing.tracks.size==tracks.size && existing.tracks.indices.all { existing.tracks[it].chapterId==tracks[it].chapterId && existing.tracks[it].cues==tracks[it].cues })) &&
+                    hashes[id]==checksums) { "Different snapshot data already uses this revision number." }
+            }
+            return@withLock existing
+        }
+        require(tracks.size>=existing.tracks.size && existing.tracks.indices.all{existing.tracks[it].chapterId==tracks[it].chapterId}) {
+            "This update changes the order or removes a chapter; the previous edition was kept."
+        }
+        synchronized(AudiobookController.snapshotSwapLock) {
+            check(AudiobookController.state.value.id!=id && !AudiobookController.startPending) { "Stop playback before updating this edition, then retry." }
+        }
+        val priorHashes=hashes[id].orEmpty()
+        val mappings=arrayOfNulls<SnapshotTrackMapping>(existing.tracks.size)
+        fun mapped(track:Int,at:Long,force:Boolean=false):Long {
+            require(track in existing.tracks.indices) { "An existing audio position has an invalid chapter." }
+            if(!force && priorHashes.getOrNull(track)==checksums.getOrNull(track)) return at
+            // An untouched recording at its beginning needs no source anchor.
+            if(!force && !existing.started && at==0L)return 0L
+            val mapping=mappings[track] ?: SnapshotTrackMapping(existing.tracks[track],tracks[track]).also{mappings[track]=it}
+            return mapping.remap(at) ?: throw IllegalArgumentException("This update cannot uniquely map a saved audio position; the previous edition was kept.")
+        }
+        val quotes=(context.applicationContext as FolioApp).library.books.value.firstOrNull{it.id==bookId}
+            ?.let{it.highlights+it.bookmarks}.orEmpty().filter{it.audioId==id && it.audioTrack!=null && it.audioPositionMs!=null}
+        require(quotes.size<=MAX_BOOKMARKS) { "Too many saved audio quotes to update safely." }
+        val quoteTargets=quotes.associate { mark ->
+            val old=existing.quoteTargets[mark.id] ?: AudioQuoteTarget(checkNotNull(mark.audioTrack),checkNotNull(mark.audioPositionMs))
+            mark.id to AudioQuoteTarget(old.track,mapped(old.track,old.positionMs,force=true))
+        }
+        val updated=existing.copy(tracks=tracks,preview=preview,editionRevision=snapshot.revision,
+            editionRevisionId=snapshot.revisionId,editionIncomplete=snapshot.incomplete,generatedSentenceCount=snapshot.generated,totalSentenceCount=snapshot.total,
+            generatedChapterCount=snapshot.generatedChapters,totalChapterCount=snapshot.totalChapters,editionManifestSha256=snapshot.manifestHash,
+            completed=if(tracks.size>existing.tracks.size || (snapshot.totalChapters>0 && snapshot.generatedChapters<snapshot.totalChapters)) false else existing.completed,
+            positionMs=mapped(existing.positionTrack,existing.positionMs),
+            bookmarks=existing.bookmarks.map{it.copy(positionMs=mapped(it.track,it.positionMs))},
+            history=existing.history.map{it.copy(positionMs=mapped(it.track,it.positionMs))},quoteTargets=quoteTargets)
+        synchronized(AudiobookController.snapshotSwapLock) {
+            check(AudiobookController.state.value.id!=id && !AudiobookController.startPending) { "Stop playback before updating this edition, then retry." }
+            val destination=File(root,id);val backup=File(root,".snapshot-backup-$id")
+            check(!backup.exists() && !File(root,".snapshot-receipt.json").exists() && !File(root,".snapshot-receipt.json.bak").exists()) { "An earlier snapshot update needs recovery; restart Folio and retry." }
+            existing.artwork?.let { name -> val art=File(destination,name);if(art.isFile)art.copyTo(File(stage,name),overwrite=true) }
+            val receipt=beginSnapshotTransaction(id,false)
+            val oldHashes=hashes[id]
+            try {
+                check(destination.renameTo(backup)) { "The previous audio could not be secured." }
+                check(stage.renameTo(destination)) { "The new audio could not be committed." }
+                hashes[id]=checksums;writeCursor(updated)
+                val next=mutableBooks.value.map{if(it.id==id)updated else it}
+                persistLocked(next)
+                DurableJson.delete(receipt)
+                mutableBooks.value=next.sortedByDescending{it.lastPlayed}
+            } catch(e:Throwable) {
+                if(oldHashes==null)hashes.remove(id) else hashes[id]=oldHashes
+                recoverSnapshotSwap()
+                throw e
+            }
+            runCatching { backup.deleteRecursively();File(root,".snapshot-catalog-backup").delete() }
+        }
+        updated
+    }
 
     private suspend fun publish(
         stage: File,
@@ -814,7 +983,7 @@ class AudiobookStore(private val context: Context) {
             val chapters=(0 until chaptersJson.length()).map { c -> val chapter=chaptersJson.getJSONObject(c)
                 AudioChapter(cleanText(chapter.optString("title"),500),chapter.getLong("startMs")).also{require(it.startMs in 0..MAX_TRACK_DURATION_MS)}
             }.distinctBy{it.startMs}.sortedBy{it.startMs}
-            AudioTrack(fileName, cleanText(item.optString("title", ""), 500), duration, cues,sourceUri,chapters,item.optInt("metadataVersion",0))
+            AudioTrack(fileName, cleanText(item.optString("title", ""), 500), duration, cues,sourceUri,chapters,item.optInt("metadataVersion",0),item.optString("chapterId","").takeIf{it.isNotBlank() && safeArchivePath(it)})
         }
         val bookmarkJson = json.optJSONArray("bookmarks") ?: JSONArray()
         require(bookmarkJson.length() <= MAX_BOOKMARKS)
@@ -838,7 +1007,18 @@ class AudiobookStore(private val context: Context) {
             json.optString("artwork","").takeIf{it.matches(Regex("cover-[a-f0-9]{16}\\.jpg"))},
             json.optString("sourceCover","").takeIf{it.isNotBlank() && tree!=null && validLinkedAudio(tree,Uri.parse(it))},history,json.opt("completed") as? Boolean,
             json.optJSONArray("shelves")?.let{a->(0 until minOf(a.length(),100)).map{cleanText(a.optString(it),40)}.filter{it.isNotBlank()}.distinct()}.orEmpty(),
-            json.optJSONArray("originalSources")?.let{a->require(a.length()<=256);(0 until a.length()).map{a.getString(it)}.filter{it.length<=8192 && Uri.parse(it).scheme=="content"}.distinct()}.orEmpty())
+            json.optJSONArray("originalSources")?.let{a->require(a.length()<=256);(0 until a.length()).map{a.getString(it)}.filter{it.length<=8192 && Uri.parse(it).scheme=="content"}.distinct()}.orEmpty(),
+            json.optLong("passageOffsetMs",0L).coerceIn(-30_000L,30_000L),
+            json.optString("editionId","").takeIf{it.matches(Regex("folio-[a-f0-9]{64}"))},
+            json.optString("editionSourceSha256","").takeIf{it.matches(SHA256_PATTERN)},
+            json.optLong("editionRevision",0).coerceAtLeast(0),
+            json.optString("editionRevisionId","").takeIf{it.matches(SHA256_PATTERN)},json.optBoolean("editionIncomplete",false),
+            json.optInt("generatedSentenceCount",0).coerceAtLeast(0),json.optInt("totalSentenceCount",0).coerceAtLeast(0),
+            json.optJSONArray("quoteTargets")?.let { a -> require(a.length()<=MAX_BOOKMARKS);(0 until a.length()).associate { i ->
+                val q=a.getJSONObject(i);val key=q.getString("id");val track=q.getInt("track");val at=q.getLong("positionMs")
+                require(key.length in 1..100 && track in tracks.indices && at>=0);key to AudioQuoteTarget(track,at)
+            } }.orEmpty(),json.optString("editionManifestSha256","").takeIf{it.matches(SHA256_PATTERN)},
+            json.optInt("generatedChapterCount",0).coerceAtLeast(0),json.optInt("totalChapterCount",0).coerceAtLeast(0))
     }
 
     private fun parseChapter(json: JSONObject, index: Int): BundleChapter {
@@ -852,7 +1032,11 @@ class AudiobookStore(private val context: Context) {
         require(cueArray.length() <= MAX_CUES)
         // The declared duration is untrusted; validate cues again against decoded media duration.
         val cues = (0 until cueArray.length()).map { parseCue(cueArray.getJSONObject(it), 0L) }.sortedBy { it.startMs }
-        return BundleChapter(archivePath, cleanText(json.optString("title", "Chapter ${index + 1}"), 500), duration, cues)
+        val chapterId=json.optString("chapterId","").takeIf{it.isNotBlank()}
+        val audioSha=json.optString("audioSha256","").takeIf{it.isNotBlank()}
+        require(chapterId==null || (chapterId==archivePath && safeArchivePath(chapterId)))
+        require(audioSha==null || audioSha.matches(SHA256_PATTERN))
+        return BundleChapter(archivePath, cleanText(json.optString("title", "Chapter ${index + 1}"), 500), duration, cues,chapterId,audioSha)
     }
 
     private fun parseCue(json: JSONObject, durationMs: Long): AudioCue {
@@ -881,9 +1065,12 @@ class AudiobookStore(private val context: Context) {
         .put("history",JSONArray(book.history.map{JSONObject().put("track",it.track).put("positionMs",it.positionMs).put("at",it.at).put("reason",it.reason)}))
         .put("completed",book.completed ?: book.isRead)
         .put("shelves",JSONArray(book.shelves))
-        .put("originalSources",JSONArray(book.originalSources))
+        .put("originalSources",JSONArray(book.originalSources)).put("passageOffsetMs",book.passageOffsetMs)
+        .put("editionId",book.editionId).put("editionSourceSha256",book.editionSourceSha256).put("editionRevision",book.editionRevision).put("editionRevisionId",book.editionRevisionId).put("editionIncomplete",book.editionIncomplete).put("generatedSentenceCount",book.generatedSentenceCount).put("totalSentenceCount",book.totalSentenceCount)
+        .put("quoteTargets",JSONArray(book.quoteTargets.map{(id,target)->JSONObject().put("id",id).put("track",target.track).put("positionMs",target.positionMs)}))
+        .put("editionManifestSha256",book.editionManifestSha256).put("generatedChapterCount",book.generatedChapterCount).put("totalChapterCount",book.totalChapterCount)
         .put("tracks", JSONArray(book.tracks.map { track -> JSONObject().put("file", track.file).put("title", track.title)
-            .put("durationMs", track.durationMs).put("sourceUri",track.sourceUri).put("metadataVersion",track.metadataVersion)
+            .put("durationMs", track.durationMs).put("sourceUri",track.sourceUri).put("metadataVersion",track.metadataVersion).put("chapterId",track.chapterId)
             .put("chapters",JSONArray(track.chapters.map{JSONObject().put("title",it.title).put("startMs",it.startMs)})).put("cues", JSONArray(track.cues.map { cue -> JSONObject().put("startMs", cue.startMs)
                 .put("endMs", cue.endMs).put("href", cue.href).put("fragment", cue.fragment).put("text", cue.text)
                 .put("before", cue.before).put("after", cue.after).put("cssSelector", cue.cssSelector).put("progression", cue.progression) })) }))
@@ -913,7 +1100,8 @@ class AudiobookStore(private val context: Context) {
     private fun hex(bytes: ByteArray): String = bytes.joinToString("") { "%02x".format(it) }
 
     private data class AudioMetadata(val title: String?, val durationMs: Long, val artist: String?,val chapters:List<AudioChapter> = emptyList(),val picture:ByteArray?=null)
-    private data class BundleChapter(val archivePath: String, val title: String, val durationMs: Long, val cues: List<AudioCue>)
+    private data class BundleChapter(val archivePath: String, val title: String, val durationMs: Long, val cues: List<AudioCue>,val chapterId:String?,val audioSha256:String?)
+    private data class Snapshot(val editionId:String,val sourceSha:String,val revision:Long,val revisionId:String,val incomplete:Boolean,val generated:Int,val total:Int,val generatedChapters:Int,val totalChapters:Int,val manifestHash:String)
 
     private class CompressedLimitInputStream(source: InputStream, private val limit: Long) : java.io.FilterInputStream(source) {
         private var total = 0L
