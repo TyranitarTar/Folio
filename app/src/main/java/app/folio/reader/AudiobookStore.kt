@@ -147,6 +147,8 @@ class AudiobookStore(private val context: Context) {
     }
     private val root = File(context.filesDir, "audiobooks").apply { mkdirs() }
     private val catalog = AtomicFile(File(root, "audiobooks.json"))
+    internal val journal = AudioJournalStore(root)
+    private val cursorGate = AudioCursorGate()
     private val mutex = Mutex()
     private var loaded = false
     private val hashes = mutableMapOf<String, List<String>>()
@@ -469,17 +471,18 @@ class AudiobookStore(private val context: Context) {
         return target
     }
 
-    suspend fun savePosition(id: String, track: Int, positionMs: Long, speed: Float,observedAt:Long=System.currentTimeMillis()) = withContext(Dispatchers.IO) {
+    suspend fun savePosition(id: String, track: Int, positionMs: Long, speed: Float,observedAt:Long=System.currentTimeMillis(),observation:Long=AudioCursorOrder.next()) = withContext(Dispatchers.IO) {
         load()
         val saved=mutex.withLock {
             val old = mutableBooks.value.firstOrNull { it.id == id } ?: return@withLock null
-            if(old.lastPlayed>observedAt)return@withLock null
+            if(!cursorGate.accepts(id,observation))return@withLock null
             require(track in old.tracks.indices)
             val duration = old.tracks[track].durationMs
-            val position = positionMs.coerceAtLeast(0L).let { if (duration > 0L) it.coerceAtMost(duration) else it }
+            val position = positionMs.coerceIn(0L,MAX_TRACK_DURATION_MS)
             val updated = old.copy(positionTrack = track, positionMs = position, speed = speed.takeIf { it.isFinite() }?.coerceIn(.5f, 3f) ?: 1f,
-                lastPlayed = observedAt, started=old.started || track>0 || position>0)
+                lastPlayed = maxOf(old.lastPlayed,observedAt), started=old.started || track>0 || position>0)
             writeCursor(updated)
+            cursorGate.committed(id,observation)
             mutableBooks.value = mutableBooks.value.map { if (it.id == updated.id) updated else it }.sortedByDescending { it.lastPlayed }
             updated
         }
@@ -536,6 +539,7 @@ class AudiobookStore(private val context: Context) {
                 val next = mutableBooks.value.filterNot { it.id == id }
                 persistLocked(next)
                 hashes.remove(id)
+                journal.forget(id)
                 mutableBooks.value = next
             } catch (error: Throwable) {
                 if (removed.exists()) removed.renameTo(directory)
@@ -599,6 +603,7 @@ class AudiobookStore(private val context: Context) {
                 val child=base.copy(bookmarks=(base.bookmarks+marks).distinctBy{it.id},history=(base.history+history).distinct().takeLast(50),shelves=(base.shelves+old.shelves).distinct())
                 val folder=File(root,childId).apply{mkdirs()}
                 old.artwork?.let{art->val from=File(root,"$id/$art");if(from.isFile && !File(folder,art).exists())from.copyTo(File(folder,art))}
+                journal.splitTrack(id,childId,index)
                 writeCursor(child);child
             }
             require(children.map{it.id}.distinct().size==children.size){"Some files repeat in this playlist; resolve duplicates before splitting."}
@@ -672,6 +677,7 @@ class AudiobookStore(private val context: Context) {
                 val next=mutableBooks.value+book;persistLocked(next)
                 DurableJson.delete(receipt)
                 mutableBooks.value=next.sortedByDescending{it.lastPlayed}
+                journal.forget(id)
             } catch(e:Throwable) { hashes.remove(id);recoverSnapshotSwap();throw e }
             File(root,".snapshot-catalog-backup").delete()
             return@withLock book
@@ -720,6 +726,7 @@ class AudiobookStore(private val context: Context) {
             val destination=File(root,id);val backup=File(root,".snapshot-backup-$id")
             check(!backup.exists() && !File(root,".snapshot-receipt.json").exists() && !File(root,".snapshot-receipt.json.bak").exists()) { "An earlier snapshot update needs recovery; restart Folio and retry." }
             existing.artwork?.let { name -> val art=File(destination,name);if(art.isFile)art.copyTo(File(stage,name),overwrite=true) }
+            journal.stageMapped(id,stage){track,at->mapped(track,at)}
             val receipt=beginSnapshotTransaction(id,false)
             val oldHashes=hashes[id]
             try {
@@ -730,6 +737,7 @@ class AudiobookStore(private val context: Context) {
                 persistLocked(next)
                 DurableJson.delete(receipt)
                 mutableBooks.value=next.sortedByDescending{it.lastPlayed}
+                journal.forget(id)
             } catch(e:Throwable) {
                 if(oldHashes==null)hashes.remove(id) else hashes[id]=oldHashes
                 recoverSnapshotSwap()
@@ -818,7 +826,7 @@ class AudiobookStore(private val context: Context) {
         require(track in book.tracks.indices)
         val rawPosition = json.getLong("positionMs").coerceAtLeast(0L)
         val duration = book.tracks[track].durationMs
-        book.copy(positionTrack = track, positionMs = if (duration > 0L) rawPosition.coerceAtMost(duration) else rawPosition,
+        book.copy(positionTrack = track, positionMs = rawPosition.coerceAtMost(MAX_TRACK_DURATION_MS),
             speed = json.optDouble("speed", 1.0).toFloat().takeIf { it.isFinite() }?.coerceIn(.5f, 3f) ?: 1f,
             lastPlayed = json.optLong("lastPlayed", book.lastPlayed).coerceAtLeast(0L),
             started = json.optBoolean("started", book.started || track>0 || rawPosition>0))

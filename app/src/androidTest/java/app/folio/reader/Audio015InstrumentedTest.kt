@@ -60,7 +60,7 @@ class Audio015InstrumentedTest {
             assertFalse(AudiobookController.state.value.playing)
             ActivityScenario.launch<AudiobookActivity>(Intent(app,AudiobookActivity::class.java).putExtra("audiobook",book.id)).use {
                 assertTrue(device.wait(Until.hasObject(By.desc("Book position")),15000))
-                val chapters=device.wait(Until.findObject(By.text("Chapters & position")),10000)
+                val chapters=device.wait(Until.findObject(By.text("Chapters")),10000)
                 assertNotNull(chapters);chapters.click()
                 assertTrue(device.wait(Until.hasObject(By.text("Chapters")),10000))
                 device.pressBack();device.waitForIdle()

@@ -283,6 +283,8 @@ class AudiobookActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val id = intent.getStringExtra("audiobook") ?: run { finish(); return }
+        val playRequested = savedInstanceState == null && intent.getBooleanExtra("autoplay", false)
+        intent.removeExtra("autoplay")
         val store = (application as FolioApp).audiobooks
         setContent {
             val preferences = remember { HomePreferences.load(this) }
@@ -294,8 +296,8 @@ class AudiobookActivity : ComponentActivity() {
                 LaunchedEffect(id) {
                     try {
                         store.load(); loaded = true
-                        if (books.any { it.id == id } && (AudiobookController.state.value.id != id || intent.getBooleanExtra("autoplay", false)))
-                            AudiobookController.start(this@AudiobookActivity, id, autoplay = intent.getBooleanExtra("autoplay", false))
+                        if (books.any { it.id == id } && (AudiobookController.state.value.id != id || playRequested))
+                            AudiobookController.start(this@AudiobookActivity, id, autoplay = playRequested)
                     } catch (e: Exception) { error = e.message ?: "The audiobook could not open." }
                 }
                 val book = books.firstOrNull { it.id == id }

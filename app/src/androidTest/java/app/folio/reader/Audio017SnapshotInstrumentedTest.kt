@@ -58,6 +58,10 @@ class Audio017SnapshotInstrumentedTest {
         val store=app.audiobooks;val book=store.importBundle(Uri.fromFile(first))
         try {
             store.setPassageOffset(book.id,2500);store.savePosition(book.id,1,10000,1.5f)
+            val note=AudioJournalStore.newNote(1,10000).copy(text="Snapshot note")
+            store.journal.saveNote(book.id,note)
+            val clock=AudioSessionClock();clock.playing(1,10000,1.5f,10000,0);clock.playing(1,12000,1.5f,11000,1000)
+            store.journal.saveSession(book.id,clock.close()!!)
             store.addBookmark(book.id,1,12000,"saved");store.assignShelves(book.id,listOf("Shelf"))
             val cue=book.tracks[1].cues.first();app.library.addMark(checkNotNull(book.bookId),checkNotNull(RecordedNarration.locator(cue)),true,
                 audioId=book.id,audioTrack=1,audioPositionMs=cue.startMs)
@@ -78,6 +82,9 @@ class Audio017SnapshotInstrumentedTest {
             val remapped=store.importBundle(Uri.fromFile(changed))
             assertEquals(11000L,remapped.positionMs);assertEquals(13000L,remapped.bookmarks.single().positionMs)
             assertEquals(2000L,remapped.quoteTargets.getValue(quote.id).positionMs)
+            val journal=store.journal.load(book.id)
+            assertEquals(11000L,journal.notes.single().positionMs)
+            assertEquals(13000L,journal.sessions.single().endMs)
             assertTrue(runCatching{store.importBundle(Uri.fromFile(unsafe))}.isFailure)
             assertTrue(runCatching{store.importBundle(Uri.fromFile(corrupt))}.isFailure)
             val root=File(app.filesDir,"audiobooks");val destination=File(root,book.id);val backup=File(root,".snapshot-backup-${book.id}")

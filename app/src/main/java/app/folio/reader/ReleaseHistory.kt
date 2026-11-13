@@ -10,6 +10,7 @@ import androidx.compose.ui.unit.dp
 
 internal data class VersionNote(val version: String, val changes: List<String>)
 internal val versionHistory = listOf(
+    VersionNote("0.17.1", listOf("Audiobook positions use ordered two-second checkpoints and restore against decoded duration. Opening or recreating a paused player does not replay an old Play request.", "Chapter seeking uses preview and Apply without a lock. Notes retain their timestamp, and dated listening sessions are available in the player menu.", "Performance tests use narration chunk, lookahead and startup-buffer settings, with current-settings and thread-comparison modes and clearer loading progress.")),
     VersionNote("0.17.0", listOf("Chapter progress returns to the player; the shared chapter seek lock toggles immediately while transport remains available.", "Tap Current passage or use the player menu to adjust passage timing earlier or later for this recording, without changing audio playback.")),
     VersionNote("0.16.1",listOf("Larger audiobook controls, an explicit player lock and a dedicated playback-speed dialog with presets, fine adjustment and Apply.",
         "Chapter positioning moves into Chapters & position. Unlock the slider, adjust, then use the same button to Apply; redundant filenames are removed from the player.",

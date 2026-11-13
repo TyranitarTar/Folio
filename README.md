@@ -1,5 +1,11 @@
-# Folio
-Folio is a vibe-coded Android reader with Danish and English TTS.
+# Folio — Android EPUB reader
+
+Version **0.17.1** improves audiobook position retention and stops a consumed Play
+request from restarting a paused book after screen recreation. Chapter seeking
+uses preview and Apply without a lock. **Notes** retain an audio position;
+**Player menu → Listening history** shows dated listening sessions. Performance
+tests share narration's chunk, lookahead and startup-buffer choices and show
+loading stages. See [implementation and limits](IMPLEMENTATION-v0.17.1.md).
 
 Version **0.17.0** puts chapter progress below the Current passage. Its shared lock
 protects chapter seeking while playback, skips, speed and settings remain available.

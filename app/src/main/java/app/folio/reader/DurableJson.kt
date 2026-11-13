@@ -4,8 +4,8 @@ import android.util.AtomicFile
 
 /** AtomicFile logs certain rename failures without throwing; a checkpoint must prove its commit. */
 internal object DurableJson {
-    fun write(atomic: AtomicFile, bytes: ByteArray) {
-        require(bytes.size <= 65536) { "This saved position exceeds its safe size limit." }
+    fun write(atomic: AtomicFile, bytes: ByteArray, maxBytes:Int=65536) {
+        require(bytes.size <= maxBytes) { "This saved position exceeds its safe size limit." }
         val out = atomic.startWrite()
         try {
             out.write(bytes); atomic.finishWrite(out)

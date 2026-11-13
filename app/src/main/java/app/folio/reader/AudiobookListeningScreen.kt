@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package app.folio.reader
 
 import androidx.activity.compose.BackHandler
@@ -36,7 +36,7 @@ private data class AudioJump(val track:Int,val position:Long,val label:String)
     var section by rememberSaveable(book.id){mutableStateOf<String?>(null)}
     var menu by remember{mutableStateOf(false)}
     var speedMenu by remember{mutableStateOf(false)}
-    var locked by rememberSaveable(book.id){mutableStateOf(true)}
+    var journalSection by rememberSaveable(book.id){mutableStateOf<String?>(null)}
     var passageSettings by remember{mutableStateOf(false)}
     var quotes by remember{mutableStateOf(false)}
     var savedNotice by remember{mutableStateOf<String?>(null)}
@@ -80,17 +80,16 @@ private data class AudioJump(val track:Int,val position:Long,val label:String)
     }
     BackHandler(onBack=back)
     Scaffold(topBar={PublicationHeader(book.title,back,actions={
-        IconButton(onClick={locked=!locked}) {
-            Icon(if(locked)Icons.Outlined.Lock else Icons.Outlined.LockOpen,if(locked)"Unlock chapter seeking" else "Lock chapter seeking")
-        }
         Box {
             IconButton(onClick={menu=true}){Icon(Icons.Outlined.MoreVert,"Player menu")}
             DropdownMenu(menu,{menu=false}) {
                 DropdownMenuItem(text={Text("Current passage settings")},onClick={menu=false;passageSettings=true})
-                DropdownMenuItem(text={Text("Chapters & position")},onClick={menu=false;section="Chapters"})
+                DropdownMenuItem(text={Text("Chapters")},onClick={menu=false;section="Chapters"})
                 DropdownMenuItem(text={Text("Saved highlights & quotes")},onClick={menu=false;quotes=true})
                 if(linkedBook!=null && cue!=null)DropdownMenuItem(text={Text("Save passage as quote")},onClick={menu=false;saveQuote()})
                 linkedBook?.let{linked->DropdownMenuItem(text={Text("Read book")},onClick={menu=false;read(linked)})}
+                DropdownMenuItem(text={Text("Notes")},onClick={menu=false;journalSection="Notes"})
+                DropdownMenuItem(text={Text("Listening history")},onClick={menu=false;journalSection="Listening history"})
                 DropdownMenuItem(text={Text("Add bookmark")},onClick={menu=false;scope.launch{runCatching{store.addBookmark(book.id,index,position)}.onFailure{error=it.message}}})
                 DropdownMenuItem(text={Text("Sleep timer")},enabled=state!=null,onClick={menu=false;timer=true})
                 DropdownMenuItem(text={Text("Bluetooth & playback settings")},onClick={menu=false;settings=true})
@@ -139,7 +138,6 @@ private data class AudioJump(val track:Int,val position:Long,val label:String)
                     TextButton(onClick={AudiobookController.stop(context)},enabled=state!=null){Icon(Icons.Outlined.Stop,null,Modifier.size(20.dp));Text("Stop")}
                     state?.sleepRemainingSeconds?.let{seconds->TextButton(onClick={timer=true}){Icon(Icons.Outlined.Bedtime,null,Modifier.size(16.dp));Text(audioTime(seconds*1000))}}
                 }
-                if(locked)Text("Chapter seeking locked",style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.primary)
                 state?.sleepLabel?.let{Text(it,style=MaterialTheme.typography.labelMedium)}
                 savedNotice?.let{Text(it,style=MaterialTheme.typography.bodySmall)}
                 if(state?.loading==true){LinearProgressIndicator(Modifier.fillMaxWidth());Text("Loading audio…")}
@@ -161,12 +159,13 @@ private data class AudioJump(val track:Int,val position:Long,val label:String)
                 }
             }
             item {
-                ChapterPositionControl(chapterIndex,position-chapter.startMs,chapter.durationMs,locked,controlsEnabled,{locked=!locked}){seek(chapter.track,chapter.startMs+it)}
+                ChapterPositionControl(book.id,chapterIndex,position-chapter.startMs,chapter.durationMs,controlsEnabled){seek(chapter.track,chapter.startMs+it)}
             }
             item {
-                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceEvenly) {
-                    TextButton(onClick={section="Chapters"}){Icon(Icons.Outlined.List,null,Modifier.size(18.dp));Text("Chapters & position")}
+                FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick={section="Chapters"}){Icon(Icons.Outlined.List,null,Modifier.size(18.dp));Text("Chapters")}
                     TextButton(onClick={section="Bookmarks"}){Icon(Icons.Outlined.Bookmarks,null,Modifier.size(18.dp));Text("Bookmarks")}
+                    TextButton(onClick={journalSection="Notes"}){Icon(Icons.Outlined.Notes,null,Modifier.size(18.dp));Text("Notes")}
                 }
             }
         }
@@ -176,14 +175,10 @@ private data class AudioJump(val track:Int,val position:Long,val label:String)
             item{Text(title,Modifier.padding(horizontal=20.dp,vertical=12.dp),style=MaterialTheme.typography.headlineSmall)}
             when(title) {
                 "Chapters" -> {
-                    item { TextButton(onClick={locked=!locked},modifier=Modifier.padding(horizontal=20.dp)) {
-                        Icon(if(locked)Icons.Outlined.Lock else Icons.Outlined.LockOpen,null,Modifier.size(18.dp))
-                        Text(if(locked) "Unlock chapter seeking" else "Lock chapter seeking")
-                    } }
                     items(chapters.indices.toList()){i->val c=chapters[i]
                     ListItem(headlineContent={Text(c.title)},supportingContent={Text(if(c.durationMs>0)audioTime(c.durationMs) else "Duration pending")},
                         leadingContent={Text("${i+1}")},trailingContent={if(i==chapterIndex)Icon(Icons.Outlined.Headphones,"Current chapter")},
-                        modifier=Modifier.fillMaxWidth().clickable(enabled=!locked){jump=AudioJump(c.track,c.startMs,"chapter ${i+1}")})
+                        modifier=Modifier.fillMaxWidth().clickable(enabled=controlsEnabled){jump=AudioJump(c.track,c.startMs,"chapter ${i+1}")})
                 }
                 }
                 "Bookmarks" -> {
@@ -210,6 +205,7 @@ private data class AudioJump(val track:Int,val position:Long,val label:String)
         text={Text("Playback will move from its current position. The previous point stays available in position recovery.")},
         confirmButton={TextButton(onClick={jump=null;section=null;seek(target.track,target.position)}){Text("Jump")}},
         dismissButton={TextButton(onClick={jump=null;section=null}){Text("Cancel")}})}
+    journalSection?.let{AudioJournalSheet(book,store.journal,it=="Listening history"){journalSection=null}}
     if(speedMenu)AudioSpeedDialog(speed,{rate->
         if(state!=null)AudiobookController.speed(context,rate)
         else scope.launch{runCatching{store.setPlaybackSpeed(book.id,rate)}.onFailure{error=it.message}}
@@ -236,22 +232,16 @@ private data class AudioJump(val track:Int,val position:Long,val label:String)
     }
 }
 
-@Composable private fun ChapterPositionControl(chapter:Int,position:Long,duration:Long,locked:Boolean,enabled:Boolean,toggle:()->Unit,seek:(Long)->Unit) {
-    var proposed by rememberSaveable(chapter){mutableStateOf<Float?>(null)}
-    LaunchedEffect(locked,chapter) { proposed=null }
+@Composable private fun ChapterPositionControl(bookId:String,chapter:Int,position:Long,duration:Long,enabled:Boolean,seek:(Long)->Unit) {
+    var proposed by rememberSaveable(bookId,chapter){mutableStateOf<Float?>(null)}
     val fraction=proposed ?: if(duration>0)(position.toDouble()/duration).toFloat().coerceIn(0f,1f) else 0f
     Column {
-        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
-            Text(if(duration>0)"Chapter · ${audioTime(position.coerceAtLeast(0))} / ${audioTime(duration)}" else "Chapter duration loading",style=MaterialTheme.typography.bodySmall)
-            TextButton(onClick=toggle){Icon(if(locked)Icons.Outlined.Lock else Icons.Outlined.LockOpen,null,Modifier.size(14.dp));Text(if(locked)"Unlock" else "Lock")}
+        Text(if(duration>0)"Chapter · ${audioTime(position.coerceAtLeast(0))} / ${audioTime(duration)}" else "Chapter duration loading",style=MaterialTheme.typography.bodySmall)
+        Slider(fraction,{proposed=it},enabled=enabled && duration>0,valueRange=0f..1f,modifier=Modifier.semantics{contentDescription="Chapter position"})
+        if(proposed!=null) Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
+            Text("Move to ${audioTime((fraction*duration).toLong())}",style=MaterialTheme.typography.bodySmall)
+            Row { TextButton(onClick={proposed=null}){Text("Cancel")}; TextButton(onClick={seek((fraction*duration).toLong());proposed=null},enabled=enabled){Text("Apply")} }
         }
-        if(!locked) {
-            Slider(fraction,{proposed=it},enabled=enabled && duration>0,valueRange=0f..1f,modifier=Modifier.semantics{contentDescription="Chapter position"})
-            if(proposed!=null) Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
-                Text("Move to ${audioTime((fraction*duration).toLong())}",style=MaterialTheme.typography.bodySmall)
-                Row { TextButton(onClick={proposed=null}){Text("Cancel")}; TextButton(onClick={seek((fraction*duration).toLong());proposed=null},enabled=enabled){Text("Apply")} }
-            }
-        } else LinearProgressIndicator(progress={fraction},modifier=Modifier.fillMaxWidth().height(3.dp).semantics{contentDescription="Chapter progress · locked"})
     }
 }
 

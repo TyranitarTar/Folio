@@ -50,11 +50,9 @@ class Audio0161InstrumentedTest {
             assertTrue(device.findObject(By.desc("Play audiobook")).isEnabled)
             click("Forward 10 seconds");waitFor{AudiobookController.state.value.positionMs in 19800..20200}
             scenario.recreate()
-            assertTrue(device.wait(Until.hasObject(By.desc("Unlock chapter seeking")),10000))
+            assertTrue(device.wait(Until.hasObject(By.desc("Play audiobook")),10000))
             assertTrue(device.findObject(By.desc("Play audiobook")).isEnabled)
-            click("Unlock chapter seeking")
-            assertTrue(device.wait(Until.hasObject(By.desc("Lock chapter seeking")),5000))
-            click("Lock chapter seeking")
+            assertFalse(device.hasObject(By.desc("Unlock chapter seeking")))
             click("Player menu");text("Current passage settings")
             assertTrue(device.wait(Until.hasObject(By.desc("Passage timing offset")),5000));text("Later 0.1 s");text("Cancel")
             repeat(4){if(!device.hasObject(By.text("Current passage"))) device.swipe(device.displayWidth/2,device.displayHeight*4/5,device.displayWidth/2,device.displayHeight/3,25)}

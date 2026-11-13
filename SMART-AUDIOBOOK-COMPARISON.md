@@ -63,3 +63,13 @@ and checksums. No voice model, native speech runtime or existing EPUB is changed
 
 Raw static inspection is retained locally in `audit/smart-player-*`. Those
 reference disassemblies/APK are excluded from Folio source/release archives.
+# Future feature-parity review — requested 13 November 2026
+
+After 0.17.1, inspect the current Smart AudioBook Player experience and the
+supplied local APK where useful, then produce a feature-by-feature Folio matrix:
+playback/position reliability, folders and metadata, navigation, headset/calls,
+sleep tools, notes/bookmarks/history, offline behavior and accessibility.
+Distinguish shipped, missing, intentionally omitted and device-dependent features;
+prioritize useful gaps. This is a future review, not completed parity or part of
+0.17.1. Implement Folio's own code from observed behavior and public interfaces.
+

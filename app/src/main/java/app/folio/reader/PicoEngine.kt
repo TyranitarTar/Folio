@@ -23,7 +23,7 @@ internal object PicoNative {
 }
 
 /** Shared Kanade/HiFT pipeline; the larger model keeps its own pinned files and cache identity. */
-internal class PicoEngine(context: Context, requestedThreads: Int = 0, private val plapre3: Boolean = false) : LocalSpeechEngine {
+internal class PicoEngine(context: Context, requestedThreads: Int = 0, private val plapre3: Boolean = false, private val onPreparation:(String)->Unit = {}) : LocalSpeechEngine {
     val inferenceThreads = if (requestedThreads == 0) Runtime.getRuntime().availableProcessors().coerceIn(1,4) else requestedThreads.also { require(it in 1..8) }
     @Volatile var lastProfile: LongArray = LongArray(7); private set
     private var modelLease: java.io.Closeable? = null
@@ -43,9 +43,11 @@ internal class PicoEngine(context: Context, requestedThreads: Int = 0, private v
         if (prepared) return
         if(plapre3) check(android.os.Process.is64Bit()) { "Plapre 3 needs 64-bit Android. Pico remains available on this device." }
         synchronized(this) { check(!closed.get()) { "$label engine is closed." }; if (modelLease == null) modelLease = VoiceModelUse.acquire(app, modelVersion) }
+        onPreparation("Checking $label voice files…")
         val files = VerifiedSpeechAssets.prepare(app, backend, modelVersion, if(plapre3) Plapre3PackIdentity.files else PicoPackIdentity.files, closed::get)
         onWorker {
             if (native == 0L) {
+                onPreparation("Loading $label tokenizer and voice…")
                 val tokens = PicoTokenizer(File(files, "tokenizer.json").readText())
                 check(!plapre3 || tokens.audioEnd==21223) { "Plapre 3 tokenizer does not match this app." }
                 val metadata = JSONArray(File(files, "voices.json").readText())
@@ -59,9 +61,11 @@ internal class PicoEngine(context: Context, requestedThreads: Int = 0, private v
                     array("prefix", if(plapre3)960 else 576) to array("embedding", 128)
                 }
                 require(loaded.size == voiceNames.size)
+                onPreparation("Loading $label language model and audio decoders…")
                 val handle = if(plapre3) PicoNative.openPlapre3(files.absolutePath,inferenceThreads) else PicoNative.open(files.absolutePath, inferenceThreads)
                 if (closed.get()) { PicoNative.close(handle); throw CancellationException("Pico preparation cancelled") }
                 tokenizer = tokens; voices = loaded; native = handle; ready = true
+                onPreparation("$label loaded · preparing first audio…")
             }
         }
     }

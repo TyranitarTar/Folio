@@ -147,13 +147,13 @@ fun SpeechPanel(bookId: String, currentLocator: Locator?, settingsOnly: Boolean 
             if(advanced) {
                 if(state.playing || state.preparing) Text("Pause narration to change chunk and buffer settings.",style=MaterialTheme.typography.bodySmall)
                 else {
-                    ChoiceRow("Passage target (nearest sentence)",listOf("Default","10","20","30","35"),if(settings.passageTargetWords==0)"Default" else "${settings.passageTargetWords}") {
+                    ChoiceRow("Passage target (nearest sentence)",SpeechBufferConfiguration.words,if(settings.passageTargetWords==0)"Default" else "${settings.passageTargetWords}") {
                         settings=settings.copy(passageTargetWords=it.toIntOrNull() ?: 0);SpeechController.settings(context,settings)
                     }
-                    ChoiceRow("Lookahead passages",listOf("1","2","4","8","16","32"),"${settings.lookaheadPassages}") {
+                    ChoiceRow("Lookahead passages",SpeechBufferConfiguration.lookahead,"${settings.lookaheadPassages}") {
                         settings=settings.copy(lookaheadPassages=it.toInt());SpeechController.settings(context,settings)
                     }
-                    ChoiceRow("Startup buffer (seconds)",listOf("6","12","24","30"),"${settings.startBufferSeconds}") {
+                    ChoiceRow("Startup buffer (seconds)",SpeechBufferConfiguration.startup,"${settings.startBufferSeconds}") {
                         settings=settings.copy(startBufferSeconds=it.toInt());SpeechController.settings(context,settings)
                     }
                 }

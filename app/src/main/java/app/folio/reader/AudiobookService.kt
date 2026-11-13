@@ -68,7 +68,7 @@ object AudiobookController {
     fun start(context: Context, id: String, track: Int? = null, positionMs: Long? = null, autoplay: Boolean = true): Unit = synchronized(snapshotSwapLock) {
         val previous = mutable.value
         // Preserve the current ID and position until the service checkpoints them.
-        mutable.value = previous.copy(loading = true, playing = false, error = null)
+        mutable.value = previous.copy(loading = true, error = null)
         startPending = true
         SpeechController.stop(context)
         val request = intent(context, AudiobookService.START).putExtra("id", id).putExtra("track", track ?: -1)
@@ -132,6 +132,10 @@ class AudiobookService : Service() {
     private val checkpointMutex = Mutex()
     private var lastObservedPosition = 0L
     private var lastCheckpointAt = 0L
+    private val listeningClock=AudioSessionClock()
+    private var lastSessionSave=0L
+    private val journalWrites=mutableListOf<Job>()
+    private var openingStartedAt=0L
     private var sleepEndElapsed: Long? = null
     private var sleepJob: Job? = null
     private var sleepBoundary: AudioSleepBoundary? = null
@@ -211,7 +215,15 @@ class AudiobookService : Service() {
     }
 
     private fun requestStart(id: String, requestedTrack: Int?, requestedPosition: Long?, autoplay: Boolean) {
-        checkpoint()
+        if(currentBook?.id==id && prepared && requestedTrack==null && requestedPosition==null) {
+            AudiobookController.mutable.value=AudiobookController.mutable.value.copy(loading=false)
+            if(autoplay)resumePlayback() else publish()
+            return
+        }
+        sampleSession()
+        val previousSave=checkpoint()
+        finishSession()
+        openingStartedAt=SystemClock.elapsedRealtime()
         boundaryResume=null
         pendingSpeed = null
         val ticket = ++generation
@@ -225,12 +237,13 @@ class AudiobookService : Service() {
         publish()
         loadingJob = scope.launch {
             try {
+                previousSave?.join()
                 val stopDeadline = SystemClock.elapsedRealtime() + 3_000L
                 while (SpeechController.serviceRunning && SystemClock.elapsedRealtime() < stopDeadline) delay(50L)
                 if (SpeechController.serviceRunning) throw IllegalStateException("Speech playback is still stopping. Try again in a moment.")
                 store.load()
                 val beforeMetadata=store.books.value.firstOrNull{it.id==id} ?: throw IllegalArgumentException("This audiobook is no longer in your library.")
-                store.prepareTrack(id,requestedTrack?.coerceIn(0,beforeMetadata.tracks.lastIndex) ?: beforeMetadata.positionTrack)
+                android.util.Log.i("FolioAudioTiming","Catalog ready in ${SystemClock.elapsedRealtime()-openingStartedAt} ms")
                 val storedBook = store.books.value.firstOrNull { it.id == id }
                     ?: throw IllegalArgumentException("This audiobook is no longer in your library.")
                 if (ticket != generation) return@launch
@@ -256,7 +269,7 @@ class AudiobookService : Service() {
         pendingAutoplay = autoplay
         val track = book.tracks[index]
         if(track.metadataVersion<AUDIO_METADATA_VERSION)scope.launch{runCatching{store.prepareTrack(book.id,index)}}
-        val targetPosition = position.coerceAtLeast(0L).let { if (track.durationMs > 0L) it.coerceAtMost(track.durationMs) else it }
+        val targetPosition = position.coerceAtLeast(0L)
         seekInFlight = false
         seekTargetMs = targetPosition
         seekRetries = 0
@@ -313,6 +326,7 @@ class AudiobookService : Service() {
             pendingAutoplay = false
             lastObservedPosition = runCatching { media.currentPosition.toLong().coerceAtLeast(0L) }.getOrDefault(lastObservedPosition)
             AudiobookController.mutable.value = AudiobookController.mutable.value.copy(playing = true, loading = false, error = null)
+            sampleSession()
             currentBook?.id?.let{id->scope.launch{runCatching{store.markStarted(id)}}}
             publish()
         }.onFailure { handleMediaError(ticket) }
@@ -380,6 +394,7 @@ class AudiobookService : Service() {
     }
 
     private fun pausePlayback(keepFocus:Boolean=false) {
+        sampleSession()
         if(!keepFocus)interruption.cancel()
         val media = player
         val current = AudiobookController.mutable.value
@@ -395,6 +410,7 @@ class AudiobookService : Service() {
         } else if (current.id != null) {
             AudiobookController.mutable.value = current.copy(playing = false)
         }
+        finishSession()
         if(keepFocus){if(wakeLock.isHeld)runCatching{wakeLock.release()}} else releaseFocusAndWake()
         checkpoint()
         if(current.id!=null && (current.playing || current.loading)) {
@@ -405,6 +421,7 @@ class AudiobookService : Service() {
     }
 
     private fun stopPlayback() {
+        sampleSession();finishSession()
         checkpoint()
         pendingAutoplay = false
         generation++
@@ -454,6 +471,7 @@ class AudiobookService : Service() {
         boundaryResume=null
         val book = currentBook ?: return
         if (index !in book.tracks.indices) return
+        sampleSession();listeningClock.suspendClock()
         checkpoint()
         if (explicit) AudiobookController.mutable.value = AudiobookController.mutable.value.copy(seekRevision = AudiobookController.mutable.value.seekRevision + 1L)
         generation++
@@ -466,6 +484,7 @@ class AudiobookService : Service() {
         if (ticket != generation) return
         val wasPlaying = AudiobookController.mutable.value.playing && !seekInFlight
         if (!wasPlaying) return
+        sampleSession()
         val duration = AudiobookController.mutable.value.durationMs
         if(sleepBoundary?.reached(index,duration)==true) {
             finishSleepBoundary(index,duration)
@@ -481,6 +500,7 @@ class AudiobookService : Service() {
             // Completion is the sole automatic track-advance path.
             openTrack(book, index + 1, 0L, true)
         } else {
+            sampleSession();finishSession()
             if(!book.audioIncomplete)scope.launch{runCatching{store.markCompleted(book.id,book.editionRevision,book.tracks.size)}}
             publish()
         }
@@ -491,6 +511,7 @@ class AudiobookService : Service() {
         val current = AudiobookController.mutable.value
         val book = currentBook ?: return
         val track = book.tracks.getOrNull(current.trackIndex) ?: return
+        sampleSession();listeningClock.suspendClock()
         history("Before seek")
         getSharedPreferences("audiobook-pauses",0).edit().remove(book.id).apply()
         val position = positionMs.coerceAtLeast(0L).let { if (current.durationMs > 0L) it.coerceAtMost(current.durationMs) else it }
@@ -639,25 +660,27 @@ class AudiobookService : Service() {
                     AudiobookController.mutable.value = current.copy(positionMs = position, durationMs = duration,
                         cue = track?.let { cueAt(it, position) }, sleepRemainingSeconds = sleepEndElapsed?.let { ((it - SystemClock.elapsedRealtime()).coerceAtLeast(0L) / 1000L) })
                     if (current.playing && SystemClock.elapsedRealtime() - lastCheckpointAt >= CHECKPOINT_INTERVAL_MS) checkpoint()
+                    if(current.playing)sampleSession() else listeningClock.suspendClock()
                     publish()
                 }
             }
         }
     }
 
-    private fun checkpoint() {
+    private fun checkpoint():Job? {
         val current = AudiobookController.mutable.value
-        val id = current.id ?: return
+        val id = current.id ?: return null
         val position = if (seekInFlight) seekTargetMs else player?.let { media ->
             if (prepared) runCatching { media.currentPosition.toLong().coerceAtLeast(0L) }.getOrNull() else null
         } ?: current.positionMs
         val track = current.trackIndex
         val speed = currentBook?.speed ?: current.speed
         val observedAt=System.currentTimeMillis()
+        val observation=AudioCursorOrder.next()
         lastCheckpointAt = SystemClock.elapsedRealtime()
         checkpointJob = scope.launch {
             try {
-                checkpointMutex.withLock { store.savePosition(id, track, position, speed,observedAt) }
+                checkpointMutex.withLock { store.savePosition(id, track, position, speed,observedAt,observation) }
             } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
             catch (_: Exception) {
                 if (AudiobookController.mutable.value.id == id) {
@@ -666,9 +689,27 @@ class AudiobookService : Service() {
                 }
             }
         }
+        return checkpointJob
     }
 
+    private fun sampleSession() {
+        val current=AudiobookController.mutable.value
+        if(!current.playing || current.loading || seekInFlight)return
+        val actual=player?.let{if(prepared)runCatching{it.currentPosition.toLong()}.getOrNull() else null} ?: current.positionMs
+        val value=listeningClock.playing(current.trackIndex,actual,current.speed,System.currentTimeMillis(),SystemClock.elapsedRealtime())
+        if(SystemClock.elapsedRealtime()-lastSessionSave>=15_000L) {lastSessionSave=SystemClock.elapsedRealtime();saveSession(value)}
+    }
+    private fun saveSession(value:AudioListeningSession) {
+        val id=currentBook?.id ?: return
+        journalWrites.removeAll{it.isCompleted}
+        journalWrites+=scope.launch(Dispatchers.IO+kotlinx.coroutines.NonCancellable) {runCatching{store.journal.saveSession(id,value)}.onFailure {
+            AudiobookController.mutable.value=AudiobookController.mutable.value.copy(error="Listening history could not be saved.")
+        }}
+    }
+    private fun finishSession() {listeningClock.close()?.let{saveSession(it)};lastSessionSave=0L}
+
     private fun releasePlayer() {
+        listeningClock.suspendClock()
         player?.let { media ->
             player = null
             prepared = false
@@ -741,6 +782,7 @@ class AudiobookService : Service() {
         lastObservedPosition = actual
         AudiobookController.mutable.value = AudiobookController.mutable.value.copy(durationMs = duration,
             positionMs = actual, loading = false, cue = cueAt(track, actual), error = null)
+        if(openingStartedAt>0) {android.util.Log.i("FolioAudioTiming","Audio ready in ${SystemClock.elapsedRealtime()-openingStartedAt} ms");openingStartedAt=0L}
         if (pendingAutoplay) beginPlayback(ticket, media) else publish()
     }
 
@@ -806,9 +848,15 @@ class AudiobookService : Service() {
     override fun onDestroy() {
         val current = AudiobookController.mutable.value
         val media = player
-        val position = media?.let { if (prepared) runCatching { it.currentPosition.toLong().coerceAtLeast(0L) }.getOrNull() else null } ?: current.positionMs
+        val position = if(seekInFlight)seekTargetMs else media?.let { if (prepared) runCatching { it.currentPosition.toLong().coerceAtLeast(0L) }.getOrNull() else null } ?: current.positionMs
+        sampleSession()
+        val finalSession=listeningClock.close()
         if (current.id != null && currentBook != null) runCatching {
-            runBlocking { withContext(Dispatchers.IO) { store.savePosition(current.id, current.trackIndex, position, currentBook?.speed ?: current.speed) } }
+            runBlocking { withContext(Dispatchers.IO) {
+                journalWrites.toList().forEach{it.join()}
+                store.savePosition(current.id, current.trackIndex, position, currentBook?.speed ?: current.speed)
+                finalSession?.let{store.journal.saveSession(current.id,it)}
+            } }
         }
         pendingAutoplay = false
         generation++
@@ -842,7 +890,7 @@ class AudiobookService : Service() {
         const val EXTEND_SLEEP = "folio.audiobook.EXTEND_SLEEP"
         private const val CHANNEL = "audiobook-playback"
         private const val NOTIFICATION = 420
-        private const val CHECKPOINT_INTERVAL_MS = 10_000L
+        private const val CHECKPOINT_INTERVAL_MS = 2_000L
         private const val SEEK_TOLERANCE_MS = 250L
         private const val MAX_SEEK_RETRIES = 3
     }

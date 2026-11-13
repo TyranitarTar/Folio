@@ -604,7 +604,10 @@ class SpeechService : Service() {
         aiEngine?.takeIf { it.backend == selected.backend && (it !is PicoEngine || it.inferenceThreads == wantedThreads) }?.let { return it }
         // Release is queued before the new engine initializes on the same native worker.
         aiEngine?.close()
-        return createLocalSpeechEngine(applicationContext, selected.backend, selected.inferenceThreads).also { aiEngine = it }
+        return createLocalSpeechEngine(applicationContext, selected.backend, selected.inferenceThreads,onPreparation={message->scope.launch {
+            if(playRequested && state().preparing && settings.backend==selected.backend)
+                SpeechController.mutable.value=state().copy(preparation=message,preparationStage="loading")
+        }}).also { aiEngine = it }
     }
 
     private fun speakAi(message: String, id: String, position: ReadingCursor) {

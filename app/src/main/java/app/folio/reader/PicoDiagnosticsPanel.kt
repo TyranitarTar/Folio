@@ -25,8 +25,10 @@ import org.json.JSONObject
     var audible by remember { mutableStateOf(true) }
     val label=if(backend=="plapre3")"Plapre 3" else "Pico"
     var wordTarget by remember { mutableIntStateOf(SpeechSettings.load(context).passageTargetWords) }
-    var preload by remember { mutableIntStateOf(4) }
+    var preload by remember { mutableIntStateOf(SpeechSettings.load(context).lookaheadPassages) }
     var playback by remember { mutableFloatStateOf(SpeechSettings.load(context).rate) }
+    var startup by remember { mutableIntStateOf(SpeechSettings.load(context).startBufferSeconds) }
+    var compare by remember { mutableStateOf(false) }
     var elapsed by remember { mutableLongStateOf(0) }
     LaunchedEffect(backend) { PicoBenchmarks.loadReport(context,backend) }
     LaunchedEffect(state.running,state.startedAt) {
@@ -48,11 +50,14 @@ import org.json.JSONObject
     ModalBottomSheet(onDismissRequest={ if(state.running)PicoBenchmarks.cancel();close() },sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
             Text("$label performance test",style=MaterialTheme.typography.headlineSmall)
-            Text("Tests threads, passage size and buffering. The optional live trial plays audio while generating upcoming passages. Stop narration first; this may take several minutes.")
+            Text("Tests your passage size, lookahead and startup buffer; optional comparison tests threads. The optional live trial plays audio while generating upcoming passages. Stop narration first; this may take several minutes.")
             if(!state.running) {
-                ChoiceRow("Target words (nearest sentence)",listOf("Default","10","20","30","35"),if(wordTarget==0)"Default" else "$wordTarget") { wordTarget=it.toIntOrNull() ?: 0 }
-                ChoiceRow("Preloaded passages",listOf("1","2","4","8"),"$preload") { preload=it.toInt() }
-                ChoiceRow("Playback speed",listOf("1.0","1.5","2.0","3.0"),"$playback") { playback=it.toFloat() }
+                ChoiceRow("Target words (nearest sentence)",SpeechBufferConfiguration.words,if(wordTarget==0)"Default" else "$wordTarget") { wordTarget=it.toIntOrNull() ?: 0 }
+                ChoiceRow("Maximum lookahead passages",SpeechBufferConfiguration.lookahead,"$preload") { preload=it.toInt() }
+                ChoiceRow("Startup buffer (seconds)",SpeechBufferConfiguration.startup,"$startup") { startup=it.toInt() }
+                Text("Chunk size sets words per generated passage. Lookahead is a capacity limit; playback starts when the audio-time target or safe buffer limit is reached.",style=MaterialTheme.typography.bodySmall)
+                Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {Checkbox(compare,{compare=it});Text("Compare 1–8 threads (longer)")}
+                ChoiceRow("Playback speed",SpeechBufferConfiguration.speeds,"$playback") { playback=it.toFloat() }
             }
             if(!state.running)Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
                 Checkbox(checked=audible,onCheckedChange={audible=it})
@@ -65,11 +70,13 @@ import org.json.JSONObject
             }
             if(state.backend==backend && state.message.isNotBlank())Text(state.message)
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                Button(onClick={PicoBenchmarks.start(context,backend,wordTarget,preload,playback,audible)},enabled=!state.running) { Text("Run benchmark") }
+                Button(onClick={PicoBenchmarks.start(context,backend,wordTarget,preload,playback,audible,startup,compare)},enabled=!state.running) { Text(if(compare)"Compare settings" else "Test current settings") }
                 if(state.running)OutlinedButton(onClick={PicoBenchmarks.cancel()}) { Text("Cancel") }
             }
             state.report?.takeIf { state.backend==backend }?.let { report ->
                 val trials=remember(report){JSONObject(report).getJSONArray("trials")}
+                val actual=remember(report){JSONObject(report).optJSONArray("actualWordCounts")?.let{a->(0 until a.length()).map{a.getInt(it)}}.orEmpty()}
+                if(actual.isNotEmpty())Text("Actual chunks: ${actual.minOrNull()}–${actual.maxOrNull()} words (sentence and character bounds apply)",style=MaterialTheme.typography.bodySmall)
                 Text("Thread count · generation time · real-time factor",style=MaterialTheme.typography.titleSmall)
                 listOf(1,2,4,6,8).forEach { count ->
                     val items=(0 until trials.length()).map{trials.getJSONObject(it)}.filter{it.getInt("threads")==count}
@@ -79,12 +86,14 @@ import org.json.JSONObject
                 Text("A real-time factor below 1 keeps up at 1× playback; below 0.67 is needed at 1.5×. Results vary with heat, battery and the passage.",style=MaterialTheme.typography.bodySmall)
                 val simulation=remember(report) { JSONObject(report).optJSONObject("bufferSimulation") }
                 simulation?.let { row ->
-                    Text("${row.optInt("actualWords")} words · ${row.optInt("preloadedPassages")} preloaded · ${row.optDouble("playbackRate")}×")
+                    Text("${row.optInt("actualWords")} words · ${row.optInt("preloadedPassages")} maximum lookahead · ${row.optDouble("playbackRate")}×")
                     Text("Simulated buffering: ${row.optInt("simulatedStalls")} stalls · ${"%.1f".format(row.optDouble("simulatedStallSeconds"))} s")
+                    Text("Startup target: ${row.optInt("startupBufferSeconds")} seconds · ${row.optInt("initialPreloadedPassages")} passages initially prepared")
                     Text("Generation is measured; playback consumption is simulated. This does not test audio output or Bluetooth.",style=MaterialTheme.typography.bodySmall)
-                    OutlinedButton(onClick={SpeechController.settings(context,SpeechSettings.load(context).copy(passageTargetWords=row.optInt("requestedWords"),lookaheadPassages=row.optInt("preloadedPassages",4)))},enabled=!state.running) { Text("Use tested chunk / lookahead settings") }
+                    OutlinedButton(onClick={SpeechController.settings(context,SpeechSettings.load(context).copy(passageTargetWords=row.optInt("requestedWords"),lookaheadPassages=row.optInt("preloadedPassages",4),startBufferSeconds=row.optInt("startupBufferSeconds",12)))},enabled=!state.running) { Text("Use tested chunk and buffer settings") }
                 }
                 remember(report){JSONObject(report).optJSONObject("livePlayback")}?.let { row ->
+                    Text("Startup: ${"%.1f".format(row.optDouble("startupWallSeconds"))} s · ${row.optInt("preloadedPassages")} passages initially ready")
                     Text("Live audio: ${row.optDouble("appliedPlaybackRate")}× · ${row.optInt("queueWaits")} queue waits · ${"%.1f".format(row.optDouble("queueWaitSeconds"))} s")
                     Text("${row.optInt("generationOverlappedPlayback")} passages generated while playback was active. Completion callbacks measure queue starvation, not acoustic or Bluetooth delay.",style=MaterialTheme.typography.bodySmall)
                 }

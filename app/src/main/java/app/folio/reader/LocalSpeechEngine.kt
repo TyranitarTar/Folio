@@ -12,9 +12,9 @@ internal interface LocalSpeechEngine {
     fun close()
 }
 
-internal fun createLocalSpeechEngine(context: Context, backend: String, picoThreads: Int = 0): LocalSpeechEngine = when (backend) {
-    "pico" -> PicoEngine(context, picoThreads)
-    "plapre3" -> PicoEngine(context,picoThreads,plapre3=true)
+internal fun createLocalSpeechEngine(context: Context, backend: String, picoThreads: Int = 0,onPreparation:(String)->Unit = {}): LocalSpeechEngine = when (backend) {
+    "pico" -> PicoEngine(context, picoThreads,onPreparation=onPreparation)
+    "plapre3" -> PicoEngine(context,picoThreads,plapre3=true,onPreparation=onPreparation)
     "kokoro" -> object : LocalSpeechEngine {
         private val engine = KokoroEngine(context)
         override val backend = "kokoro"
