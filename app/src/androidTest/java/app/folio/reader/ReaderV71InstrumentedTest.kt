@@ -80,7 +80,7 @@ class ReaderV71InstrumentedTest {
             UiScrollable(UiSelector().scrollable(true)).scrollTextIntoView("About Folio")
             device.wait(Until.findObject(By.text("About Folio")),10000).click()
             device.wait(Until.findObject(By.text("Version history")),10000).click()
-            assertTrue(device.wait(Until.hasObject(By.text("Folio ${versionHistory.first().version}")),10000))
+            assertTrue(device.wait(Until.hasObject(By.textStartsWith("Folio ${ReleaseCatalog.history(app).first().version}")),10000))
             device.takeScreenshot(File(app.filesDir,"v71-version-history.png"))
             device.pressBack()
             device.pressBack()

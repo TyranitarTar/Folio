@@ -1,5 +1,12 @@
 # Smart AudioBook Player comparison and Folio adaptations
 
+**14 November 2026:** the current 0.17.1 baseline, fresh archived-APK inspection,
+official feature checks and visual references are assessed in
+[RESEARCH-0.17.2-PLAYER-PARITY.md](RESEARCH-0.17.2-PLAYER-PARITY.md).
+The 25 October implementation table and unchecked historical ideas below predate
+several shipped features; use the new matrix for remaining gaps. The proposed
+0.17.2 notebook/update-notes changes await user confirmation.
+
 25 October 2026. Reference: the user-supplied APK, package
 `ak.alizandro.smartaudiobookplayer`, version 11.9.0 / 301190. The APK was inspected
 statically, without installing it. Folio changes use its own implementation.

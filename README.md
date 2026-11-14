@@ -1,5 +1,15 @@
 # Folio — Android EPUB reader
 
+Version **0.17.2** makes **Notes** a direct, continuous book notebook. It opens
+with the keyboard ready on a new line and saves automatically. Copy all, undo/redo,
+.txt export, search and optional playback timestamps are included; old notes are
+migrated with a retained recovery copy. App updates keeps the latest notes after
+installation, and About Folio has a compact expandable version archive.
+See [implementation and limits](IMPLEMENTATION-v0.17.2.md).
+
+Earlier release descriptions below are historical; current 0.17.2 controls use
+chapter preview/Apply without a lock and the direct notebook rather than note cards.
+
 Version **0.17.1** improves audiobook position retention and stops a consumed Play
 request from restarting a paused book after screen recreation. Chapter seeking
 uses preview and Apply without a lock. **Notes** retain an audio position;

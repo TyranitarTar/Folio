@@ -88,7 +88,7 @@ private data class AudioJump(val track:Int,val position:Long,val label:String)
                 DropdownMenuItem(text={Text("Saved highlights & quotes")},onClick={menu=false;quotes=true})
                 if(linkedBook!=null && cue!=null)DropdownMenuItem(text={Text("Save passage as quote")},onClick={menu=false;saveQuote()})
                 linkedBook?.let{linked->DropdownMenuItem(text={Text("Read book")},onClick={menu=false;read(linked)})}
-                DropdownMenuItem(text={Text("Notes")},onClick={menu=false;journalSection="Notes"})
+                DropdownMenuItem(text={Text("Notes")},onClick={menu=false;openBookNotebook(context,book.id)})
                 DropdownMenuItem(text={Text("Listening history")},onClick={menu=false;journalSection="Listening history"})
                 DropdownMenuItem(text={Text("Add bookmark")},onClick={menu=false;scope.launch{runCatching{store.addBookmark(book.id,index,position)}.onFailure{error=it.message}}})
                 DropdownMenuItem(text={Text("Sleep timer")},enabled=state!=null,onClick={menu=false;timer=true})
@@ -165,7 +165,7 @@ private data class AudioJump(val track:Int,val position:Long,val label:String)
                 FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)) {
                     TextButton(onClick={section="Chapters"}){Icon(Icons.Outlined.List,null,Modifier.size(18.dp));Text("Chapters")}
                     TextButton(onClick={section="Bookmarks"}){Icon(Icons.Outlined.Bookmarks,null,Modifier.size(18.dp));Text("Bookmarks")}
-                    TextButton(onClick={journalSection="Notes"}){Icon(Icons.Outlined.Notes,null,Modifier.size(18.dp));Text("Notes")}
+                    TextButton(onClick={openBookNotebook(context,book.id)}){Icon(Icons.Outlined.Notes,null,Modifier.size(18.dp));Text("Notes")}
                 }
             }
         }
@@ -205,7 +205,7 @@ private data class AudioJump(val track:Int,val position:Long,val label:String)
         text={Text("Playback will move from its current position. The previous point stays available in position recovery.")},
         confirmButton={TextButton(onClick={jump=null;section=null;seek(target.track,target.position)}){Text("Jump")}},
         dismissButton={TextButton(onClick={jump=null;section=null}){Text("Cancel")}})}
-    journalSection?.let{AudioJournalSheet(book,store.journal,it=="Listening history"){journalSection=null}}
+    journalSection?.let{AudioJournalSheet(book,store.journal){journalSection=null}}
     if(speedMenu)AudioSpeedDialog(speed,{rate->
         if(state!=null)AudiobookController.speed(context,rate)
         else scope.launch{runCatching{store.setPlaybackSpeed(book.id,rate)}.onFailure{error=it.message}}

@@ -20,6 +20,7 @@
         <receiver android:name=".VoicePackCancelReceiver" android:exported="false"/>
         <activity android:name=".ReaderActivity" android:exported="false" android:configChanges="keyboardHidden"/>
         <activity android:name=".AudiobookActivity" android:exported="false"/>
+        <activity android:name=".BookNotebookActivity" android:exported="false" android:windowSoftInputMode="adjustResize"/>
         <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>

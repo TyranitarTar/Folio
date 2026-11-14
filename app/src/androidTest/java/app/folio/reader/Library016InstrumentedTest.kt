@@ -31,7 +31,11 @@ class Library016InstrumentedTest {
                         click(tab)
                         val tile=device.wait(Until.findObject(By.desc(action)),10000);assertNotNull(action,tile)
                         val filter=device.findObject(By.text("All"));assertNotNull(filter)
-                        val gap=tile.visibleBounds.top-filter.visibleBounds.bottom
+                        // The fixture need not sort first in a populated library. Measure the grid's first visible row.
+                        val prefix=if(tab.startsWith("eBooks"))"Read " else "Listen "
+                        val first=device.findObjects(By.descStartsWith(prefix)).filter{it.visibleBounds.height()>20}.minByOrNull{it.visibleBounds.top}
+                        assertNotNull(first)
+                        val gap=first!!.visibleBounds.top-filter.visibleBounds.bottom
                         assertTrue("$tab $columns columns: gap $gap",gap in 0..180)
                         tops.put("$tab-$columns",gap)
                         device.takeScreenshot(File(app.filesDir,"v016-library-${if(tab.startsWith("eBooks"))"ebooks" else "audio"}-$columns.png"))

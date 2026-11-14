@@ -24,6 +24,8 @@ class Audio0171ProcessDeathInstrumentedTest {
         suspend fun waitFor(test:()->Boolean)=withTimeout(20000){while(!test())delay(40)}
         if(phase=="setup") {
             val input=Audio016InstrumentedTest().fixture();val book=app.audiobooks.importBundle(Uri.fromFile(input))
+            app.audiobooks.notebooks.open(book)
+            app.audiobooks.notebooks.save(book.id,"- Notebook survives process loss: æøå 🐈",app.audiobooks.notebooks.nextOrder(book.id))
             app.audiobooks.setPlaybackSpeed(book.id,2f)
             AudiobookController.start(app,book.id,1,10000,true)
             waitFor{AudiobookController.state.value.id==book.id && AudiobookController.state.value.playing}
@@ -35,6 +37,7 @@ class Audio0171ProcessDeathInstrumentedTest {
         val row=JSONObject(receipt.readText());val id=row.getString("id")
         try {
             app.audiobooks.load();val saved=app.audiobooks.books.value.first{it.id==id}
+            assertEquals("- Notebook survives process loss: æøå 🐈",app.audiobooks.notebooks.open(saved).text)
             assertEquals(1,saved.positionTrack);assertEquals(2f,saved.speed)
             assertTrue("Crash loss must stay within ~2 seconds of wall time at 2x",saved.positionMs in (row.getLong("position")-5500)..(row.getLong("position")+1000))
             assertFalse(AudiobookController.state.value.playing)

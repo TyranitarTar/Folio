@@ -42,16 +42,17 @@ class Audio0171InstrumentedTest {
                     if(notes==null || notes.visibleBounds.height()<20)device.swipe(20,device.displayHeight*4/5,20,device.displayHeight/3,20)
                 }
                 device.waitForIdle();delay(1000)
-                text("Notes");text("Write a note")
+                text("Notes")
                 val field=device.wait(Until.findObject(By.clazz("android.widget.EditText")),5000);assertNotNull(field)
                 field.text="Remember this passage"
-                text("Save note")
-                waitFor{app.audiobooks.journal.state.value[book.id]?.notes?.size==1}
-                assertEquals(15000L,app.audiobooks.journal.state.value.getValue(book.id).notes.single().positionMs)
+                device.pressBack() // keyboard
+                device.pressBack() // editor flushes on leaving
+                waitFor{File(app.filesDir,"audiobooks/${book.id}/notebook.json").exists()}
+                assertTrue(app.audiobooks.notebooks.open(book).text.contains("Remember this passage"))
                 assertFalse(AudiobookController.state.value.playing)
                 assertTrue(kotlin.math.abs(AudiobookController.state.value.positionMs-15000)<300)
                 device.takeScreenshot(File(app.filesDir,"v0171-notes.png"))
-                device.pressBack();device.waitForIdle()
+                device.waitForIdle()
                 val menu=device.wait(Until.findObject(By.desc("Player menu")),8000);assertNotNull(menu);menu.click()
                 text("Listening history")
                 assertTrue(device.wait(Until.hasObject(By.textContains("No listening sessions yet")),5000))

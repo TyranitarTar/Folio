@@ -47,6 +47,23 @@ internal class AudioJournalStore(private val root:File) {
             old.copy(notes=(old.notes.filterNot{it.id==note.id}+note.copy(text=note.text.trim(),passage=note.passage.take(2000))).sortedByDescending{it.updatedAt})}
     }
     suspend fun removeNote(id:String,noteId:String)=change(id){it.copy(notes=it.notes.filterNot{n->n.id==noteId})}
+    /** Retain the original records before retiring their old editor. Consumer must be idempotent. */
+    fun retireNotes(id:String,consume:(List<AudioNote>)->Unit)=synchronized(lock) {
+        val old=read(id)
+        if(old.notes.isNotEmpty()) {
+            val archive=File(file(id).parentFile,"notes-legacy.json")
+            val previous=if(archive.exists() || File(archive.path+".bak").exists()) {
+                val bytes=AtomicFile(archive).openRead().use{it.takeBounded(MAX_BYTES+1)}
+                decode(BoundedJson.objectFrom(bytes,MAX_BYTES,12,100_000))
+            } else AudioJournal()
+            val notes=(previous.notes+old.notes).distinctBy{it.id}
+            require(notes.size<=100){"The original notes archive is full."}
+            write(archive,AudioJournal(notes=notes))
+            consume(old.notes)
+            val updated=old.copy(notes=emptyList())
+            write(file(id),updated);mutable.value=mutable.value+(id to updated)
+        }
+    }
     suspend fun saveSession(id:String,session:AudioListeningSession)=change(id){old->
         val previous=old.sessions.firstOrNull{it.id==session.id}
         if(session.id in old.clearedSessionIds || (previous!=null && (previous.listenedMs>session.listenedMs || (previous.closed && !session.closed))))old

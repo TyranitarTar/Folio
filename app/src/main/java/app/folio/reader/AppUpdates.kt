@@ -20,8 +20,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 
-internal data class GitHubRelease(val version: String, val tag: String, val url: String, val bytes: Long, val digest: String, val notes: String) {
-    fun json() = JSONObject().put("version", version).put("tag", tag).put("url", url).put("bytes", bytes).put("digest", digest).put("notes", notes)
+internal data class GitHubRelease(val version: String, val tag: String, val url: String, val bytes: Long, val digest: String, val notes: String,val publishedAt:String="") {
+    fun json() = JSONObject().put("version", version).put("tag", tag).put("url", url).put("bytes", bytes).put("digest", digest).put("notes", notes).put("publishedAt",publishedAt)
 }
 internal object UpdatePolicy {
     const val repository = "TyranitarTar/Folio"
@@ -46,10 +46,10 @@ internal object UpdatePolicy {
         val digest = asset.getString("digest").removePrefix("sha256:")
         require(digest.matches(Regex("[a-fA-F0-9]{64}"))) { "The release is missing its SHA-256 checksum." }
         val bytes = asset.getLong("size"); require(bytes in 1..maximumBytes) { "The APK size is outside the supported limit." }
-        return GitHubRelease(v, tag, url, bytes, digest.lowercase(), json.optString("body").take(50000))
+        return GitHubRelease(v, tag, url, bytes, digest.lowercase(), json.optString("body").take(50000),json.optString("published_at").take(40))
     }
     fun restore(j: JSONObject): GitHubRelease = parse(JSONObject().put("tag_name", j.getString("tag"))
-        .put("body", j.optString("notes")).put("assets", org.json.JSONArray().put(JSONObject()
+        .put("body", j.optString("notes")).put("published_at",j.optString("publishedAt")).put("assets", org.json.JSONArray().put(JSONObject()
             .put("name", "Folio-${j.getString("version")}.apk").put("browser_download_url", j.getString("url"))
             .put("size", j.getLong("bytes")).put("digest", "sha256:${j.getString("digest")}"))))
     fun validateIdentity(expectedPackage: String, installedCode: Long, actualPackage: String?, actualCode: Long,
@@ -66,8 +66,12 @@ internal data class UpdateState(val status: String = "Check for a new version wh
 internal class AppUpdateModel(application: Application) : AndroidViewModel(application) {
     private val context = application
     private val prefs = application.getSharedPreferences("app-updates", Context.MODE_PRIVATE)
+    private val notesPrefs = application.getSharedPreferences("app-release-notes", Context.MODE_PRIVATE)
     private val downloads = application.getSystemService(DownloadManager::class.java)
     val state = MutableStateFlow(UpdateState())
+    // Download eligibility is deliberately separate from cached release notes.
+    val latestRelease = MutableStateFlow(notesPrefs.getString("latest",null)?.let{runCatching{UpdatePolicy.restore(JSONObject(it))}.getOrNull()})
+    val lastChecked = MutableStateFlow(notesPrefs.getLong("checkedAt",0))
     private var job: Job? = null
     private var revision = 0L
     private var downloadId = prefs.getLong("id", -1)
@@ -104,11 +108,16 @@ internal class AppUpdateModel(application: Application) : AndroidViewModel(appli
                     } finally { connection.disconnect() }
                 }
                 ensureActive(); if (ticket != revision) return@launch
-                val available = UpdatePolicy.newer(release.version, installed.versionName.orEmpty())
-                state.value = UpdateState(if (available) "Folio ${release.version} is available." else "You have the latest published version.", release = release.takeIf { available })
+                recordRelease(release)
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { if (ticket == revision) state.value = UpdateState(e.message ?: "Could not check updates. Check your connection and retry.", error = true) }
         }
+    }
+    internal fun recordRelease(release:GitHubRelease) {
+        val available=UpdatePolicy.newer(release.version,installed.versionName.orEmpty())
+        latestRelease.value=release;lastChecked.value=System.currentTimeMillis()
+        notesPrefs.edit().putString("latest",release.json().toString()).putLong("checkedAt",lastChecked.value).apply()
+        state.value=UpdateState(if(available)"Folio ${release.version} is available." else "You have the latest published version.",release=release.takeIf{available})
     }
     private fun file(release: GitHubRelease) = File(requireNotNull(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)), "Folio-${release.version}.apk")
     fun download() {

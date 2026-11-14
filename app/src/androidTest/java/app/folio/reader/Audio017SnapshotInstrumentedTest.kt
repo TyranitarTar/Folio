@@ -57,6 +57,8 @@ class Audio017SnapshotInstrumentedTest {
         val conflict=snapshot(base,2,shift=1000)
         val store=app.audiobooks;val book=store.importBundle(Uri.fromFile(first))
         try {
+            store.notebooks.open(book)
+            store.notebooks.save(book.id,"- Plain text remains unchanged: æøå 🐈",store.notebooks.nextOrder(book.id))
             store.setPassageOffset(book.id,2500);store.savePosition(book.id,1,10000,1.5f)
             val note=AudioJournalStore.newNote(1,10000).copy(text="Snapshot note")
             store.journal.saveNote(book.id,note)
@@ -85,6 +87,9 @@ class Audio017SnapshotInstrumentedTest {
             val journal=store.journal.load(book.id)
             assertEquals(11000L,journal.notes.single().positionMs)
             assertEquals(13000L,journal.sessions.single().endMs)
+            assertTrue(store.notebooks.open(remapped).text.startsWith("- Plain text remains unchanged: æøå 🐈"))
+            val migrated=store.notebooks.open(remapped)
+            assertEquals(1,migrated.migratedIds.size)
             assertTrue(runCatching{store.importBundle(Uri.fromFile(unsafe))}.isFailure)
             assertTrue(runCatching{store.importBundle(Uri.fromFile(corrupt))}.isFailure)
             val root=File(app.filesDir,"audiobooks");val destination=File(root,book.id);val backup=File(root,".snapshot-backup-${book.id}")
@@ -95,6 +100,7 @@ class Audio017SnapshotInstrumentedTest {
             val restored=reopened.books.value.first{it.id==book.id}
             assertEquals(4L,restored.editionRevision);assertEquals(2500L,restored.passageOffsetMs)
             assertTrue(File(destination,restored.tracks.first().file).isFile)
+            assertEquals(migrated.text,reopened.notebooks.open(restored).text)
             val orphanId="f".repeat(64);val orphan=File(root,orphanId);assertFalse(orphan.exists());assertTrue(orphan.mkdir())
             File(root,"audiobooks.json").copyTo(File(root,".snapshot-catalog-backup"),overwrite=true)
             DurableJson.write(AtomicFile(File(root,".snapshot-receipt.json")),JSONObject().put("id",orphanId).put("new",true).put("hadCatalog",true).toString().toByteArray())

@@ -148,6 +148,7 @@ class AudiobookStore(private val context: Context) {
     private val root = File(context.filesDir, "audiobooks").apply { mkdirs() }
     private val catalog = AtomicFile(File(root, "audiobooks.json"))
     internal val journal = AudioJournalStore(root)
+    internal val notebooks = BookNotebookStore(root,journal)
     private val cursorGate = AudioCursorGate()
     private val mutex = Mutex()
     private var loaded = false
@@ -604,6 +605,7 @@ class AudiobookStore(private val context: Context) {
                 val folder=File(root,childId).apply{mkdirs()}
                 old.artwork?.let{art->val from=File(root,"$id/$art");if(from.isFile && !File(folder,art).exists())from.copyTo(File(folder,art))}
                 journal.splitTrack(id,childId,index)
+                notebooks.copyToSplit(id,childId)
                 writeCursor(child);child
             }
             require(children.map{it.id}.distinct().size==children.size){"Some files repeat in this playlist; resolve duplicates before splitting."}
@@ -727,6 +729,7 @@ class AudiobookStore(private val context: Context) {
             check(!backup.exists() && !File(root,".snapshot-receipt.json").exists() && !File(root,".snapshot-receipt.json.bak").exists()) { "An earlier snapshot update needs recovery; restart Folio and retry." }
             existing.artwork?.let { name -> val art=File(destination,name);if(art.isFile)art.copyTo(File(stage,name),overwrite=true) }
             journal.stageMapped(id,stage){track,at->mapped(track,at)}
+            notebooks.withSnapshot(id,stage) {
             val receipt=beginSnapshotTransaction(id,false)
             val oldHashes=hashes[id]
             try {
@@ -744,6 +747,7 @@ class AudiobookStore(private val context: Context) {
                 throw e
             }
             runCatching { backup.deleteRecursively();File(root,".snapshot-catalog-backup").delete() }
+            }
         }
         updated
     }

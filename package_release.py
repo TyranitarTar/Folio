@@ -42,7 +42,8 @@ for name in ("ROADMAP-0.14.md", "DESIGN-0.14.md", "IMPLEMENTATION-v0.14.md", "va
              "ROADMAP-0.16.md","IMPLEMENTATION-v0.16.md","validate_release_v016.py",
              "IMPLEMENTATION-v0.16.1.md","ENGLISH-LIVE-READALONG-IDEA.md","validate_release_v0161.py",
              "IMPLEMENTATION-v0.17.md","validate_release_v017.py","test_bootstrap_ai.py",
-             "IMPLEMENTATION-v0.17.1.md","ROADMAP-0.17.1.md","validate_release_v0171.py"):
+             "IMPLEMENTATION-v0.17.1.md","ROADMAP-0.17.1.md","validate_release_v0171.py",
+             "IMPLEMENTATION-v0.17.2.md","ROADMAP-0.17.2.md","RESEARCH-0.17.2-PLAYER-PARITY.md","validate_release_v0172.py","release_notes.py"):
     if (root / name).is_file(): files.append(root / name)
 files.extend(p for p in (root / "design/icons-0.14").glob("*") if p.is_file() and p.suffix in (".svg", ".png", ".md"))
 files.append(root / "design/make_icons_014.py")
