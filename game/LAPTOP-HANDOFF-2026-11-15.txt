@@ -1,0 +1,153 @@
+FOLIO / MISO - COMPLETE CONTINUATION HANDOFF
+Prepared 15 November 2026, Europe/Copenhagen
+
+THIS IS THE CURRENT BUILD
+=========================
+pixel-cat-experiment/production/playful-room-playable-v2/index.html
+
+It is the latest v2, revised IN PLACE after the user's review. The user said
+"Not a playable v3." Do not start from room-prototype/, the earlier v1 room,
+old Miso procedural studies, Shadow studies, or the old October handoff.
+Those are historical material, not the current implementation baseline.
+
+WHICH ZIP TO USE
+================
+FOLIO_MISO_IMPLEMENTATION.zip contains the complete independently rebuildable
+current playable project, canonical references, generated source images, exact
+prompts, tests, previews and these handoff documents. Use it for implementation.
+
+FOLIO_MISO_FULL_PROJECT.zip contains every file in pixel-cat-experiment/,
+including all historical experiments, animation revisions, concepts, research,
+reference press kits, downloaded editors, existing ZIPs and transient previews.
+Use it when you want the entire working archive. It contains the implementation
+kit's project content too; you do not have to extract both archives.
+
+Both extract under Folio_Miso_Handoff/, with the same authoritative project path.
+Keep the folder structure. Files under tools/vendor/ and research/ are archival;
+they are not needed to run the current room. Historical third-party press kits
+are reference material, not Miso runtime assets to import into Folio.
+
+Each ZIP has TRANSFER_MANIFEST.json with per-file SHA-256/size records. The
+external TRANSFER_CHECKSUMS.txt contains final archive checksums. The packager
+verifies member CRC and hashes. No .git or unrelated Boardgames app is included.
+
+FIRST STEPS ON THE DESKTOP COMPUTER
+==================================
+1. Extract one of the ZIPs into a workspace accessible to the Folio agent.
+2. Open the current index.html above to inspect the standalone reference.
+   It is self-contained, offline, and does not require a web server or API key.
+3. Read FOLIO_INTEGRATION.md and GENERATE_MORE.md.
+4. Paste CONTINUE_IN_FOLIO.txt into the existing Folio app chat, adding the
+   extracted directory path. The Folio chat is not visible from the source
+   computer, so this package has not been sent or integrated there automatically.
+5. Have that agent inspect the actual Folio repository and its instructions.
+   Its framework, platform and app architecture were not available here.
+
+USER INTENT
+===========
+Miso is a cute adult ginger tabby companion for the Folio reader app. The cat
+window should occupy roughly the upper half to two-thirds of the screen when
+this submode is open. The user's target phone is a Galaxy S10; fit the actual
+container/viewport, rather than hard-coding a hardware pixel width.
+
+Keep the scope modest: one fixed isometric room, addable decorations and useful
+cat interactions. Future wishes include a small garden, gradual room expansion
+or a few rooms, and fixed unlockable furnishings, reminiscent of a small town
+opening up over time. Garden/expansion/economy/unlocks are NOT implemented yet.
+Do not turn this into a large crafting/base-management game.
+
+The user rejected the early script-drawn cats, inconsistent chunky silhouettes,
+box-like legs and extra paws. The established workflow uses image generation
+conditioned on frozen master sprites, complete poses, fixed grids, native export
+and separate art/motion review. Never regenerate the character from scratch for
+each animation, or use the latest generated frame as a new identity master.
+
+LATEST EXPLICIT DECISIONS
+=========================
+- Native Miso source: 64x64, root [31,55], frozen 16-color palette.
+- Display Miso uniformly at 1.30x: the user asked for 30% bigger after v2 felt
+  too small. Do not resize/repaint the master PNG to achieve this.
+- Environment is larger-format: 128x64 projected floor diamonds, 320x384 padded
+  prop cells. The scene is five by five logical floor squares, fixed 2:1 camera.
+- Soft environment scaling/edges are intentional. Miso sampling stays crisp.
+- Floor -> lower step -> top perch -> book-cubby roof; reverse safely to leave.
+- Top perch has watch/groom/nap; bookshelf has a nap. Wake before moving.
+- Window has a broad padded landing ledge, not just a thin drawn frame.
+- Food and water have separate front/back approaches and matching poses.
+- Tunnel has dedicated duck/crawl/emerge art and correct interior/mouth masking.
+- Layering uses pixel/height-aware occlusion, not whole-object centre sorting.
+
+CURRENT CAPABILITIES
+====================
+21 activities, five movement speeds, all-direction turns, jump arcs, feeding,
+scratching, low tunnel crawl, box hiding, sofa/rug naps, elevated naps/grooming,
+window watching, closed-door investigation, feather pounce and toy nudge.
+Small leaf/vine and hanging-ball pivots, water ripples and lamp glow animate
+without wobbling whole pieces of furniture. Ambient motion can be disabled;
+reduced-motion preferences are respected. Optional automatic exploration works.
+
+There are 289 native cat atlas frames and 34 clip definitions. The 277 frames
+and 29 definitions from before the last review are unchanged. The last review
+added twelve complete cat drawings / five feeding-and-tunnel clips, plus edited
+window and tower fixtures. Approved run_sw, sprint_sw and sprint_nw art, phase
+order and timing remain protected unless the user explicitly asks to change them.
+
+The room layout is currently fixed. The old modular placement editor is a
+separate earlier prototype; the current playable page does not contain it.
+The high plant shelf is decorative. The "bookshelf" landing is the low wall
+book cubby's roof. The ball toy nudges; it has no independently orbiting ball.
+
+WHERE TO FIND EVERYTHING
+=======================
+Current project root: pixel-cat-experiment/production/playful-room-playable-v2/
+
+  README.txt / PLAYABLE_WORKFLOW.md       Current build notes and continuation
+  MISO_ANIMATION_WORKFLOW.md             Standard character generation pipeline
+  masters/                              Canonical SW/NW, other reviewed views
+  masters/character-spec.json            Palette, master hash, root and invariants
+  masters/MASTER_PROMPT.txt              Frozen identity prompt
+  references/room-master.png             Chosen room design for all room art
+  references/tunnel-crouch-sw-*.png       Reviewed posture references, not identity
+  art/cat/miso-atlas.png                 Current 289-frame native atlas
+  animation_data.json                   Frame rects, clips, timings, contacts
+  art/environment/                      Current individual props/tiles/materials
+  environment.json                      Positions, sizes, anchors, cat_scale
+  interaction-contract.json             Surfaces, approaches, actions (audit data)
+  source/engine.js                      Pure World / Plan / Game behavior
+  source/renderer.js                    Real renderer and height-aware masks
+  source/app.js / page.html              Standalone UI/lifecycle demonstration
+  source/build_assets.py / build_page.py Native art export and HTML build
+  source/environment-originals/          Original room art inputs
+  source/retained-cat/ / retained-v2/     Historical native baselines
+  templates/ / jobs/ / originals/        Targets, job records and raw outputs
+  interaction-prompts.json              Earlier jump/scratch exact prompts
+  review-fix-prompts.json               Latest feeding/tunnel/window/tower prompts
+  provenance/room-generation-prompts.json Original room furniture/material prompts
+  provenance/retained-cat-generation-prompts.json Retained animation provenance
+  previews/review-fixes/interaction-review.png Latest visual interaction board
+  previews/review-fixes/*.gif            Isolated new pose playback
+  visual-review.json                    Art decisions, rejected proof, limitations
+  *-verification.json / portability-checks.json Actual check results
+
+ASSET_CATALOG.json at the handoff root gives a compact inventory of current
+props, clips, actions and support surfaces. It documents the build; it is not
+an independently editable gameplay registry consumed by the current engine.
+
+VALIDATION STATUS AND HONEST LIMITS
+==================================
+21 actions, 441 ordered action-to-action transitions and 625 jump trajectories
+pass simulation checks. Layer tests preserve feeding faces, both tower supports,
+elevated naps, window landing and tunnel hide/reveal. Atlas/palette/alpha,
+retained art/timing, exact tile joins and phone-DPR input checks pass.
+The original portable pack rebuilt 53 native art files and the HTML byte-for-
+byte without sibling projects. The dedicated Folio kit is checked on extraction.
+
+These are offline engine/Canvas/DOM-stub checks, plus agent inspection of native
+poses and actual-renderer images. No live-browser layout/performance or physical
+Galaxy S10 review was performed. Some marking/outline shimmer remains. Occlusion
+volumes and collision footprints are authored approximations. Future app/device
+testing and focused polish remain necessary; do not call this production-proven.
+
+Runtime has no API or npm dependency. Rebuild needs Python/Pillow 12.3+ and Node.
+Optional development renderer tests use @napi-rs/canvas; it is not a client app
+requirement. The full archive's Windows editors are not needed for this workflow.

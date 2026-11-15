@@ -1,0 +1,718 @@
+{
+  "name": "Miso Playful Loft playable v2",
+  "revision": "review fixes",
+  "floor": [
+    5,
+    5
+  ],
+  "canvas": [
+    1024,
+    768
+  ],
+  "tile": [
+    128,
+    64
+  ],
+  "origin": [
+    512,
+    308
+  ],
+  "wall_height": 208,
+  "cat_cell": [
+    64,
+    64
+  ],
+  "cat_root": [
+    31,
+    55
+  ],
+  "cat_scale": 1.3,
+  "viewport": [
+    144,
+    64,
+    736,
+    640
+  ],
+  "assets": [
+    {
+      "id": "sofa",
+      "name": "Teal sofa & cushions",
+      "cell": [
+        320,
+        384
+      ],
+      "anchor": [
+        160,
+        320
+      ],
+      "source_box": [
+        240,
+        126,
+        326,
+        201
+      ],
+      "source_anchor": [
+        284,
+        190
+      ],
+      "pos": [
+        1.55,
+        0.65
+      ],
+      "footprint": [
+        1.95,
+        0.9
+      ],
+      "surface": "floor",
+      "elevation": 0,
+      "solid": true,
+      "flat": false,
+      "sprite": "art/environment/props/sofa.png",
+      "visible_bounds": [
+        74,
+        197,
+        245,
+        344
+      ]
+    },
+    {
+      "id": "lamp",
+      "name": "Paper floor lamp",
+      "cell": [
+        320,
+        384
+      ],
+      "anchor": [
+        160,
+        320
+      ],
+      "source_box": [
+        228,
+        104,
+        256,
+        176
+      ],
+      "source_anchor": [
+        241,
+        167
+      ],
+      "pos": [
+        0.15,
+        0.65
+      ],
+      "footprint": [
+        0.45,
+        0.45
+      ],
+      "surface": "floor",
+      "elevation": 0,
+      "solid": true,
+      "flat": false,
+      "sprite": "art/environment/props/lamp.png",
+      "visible_bounds": [
+        138,
+        198,
+        186,
+        329
+      ]
+    },
+    {
+      "id": "rug",
+      "name": "Round patterned rug",
+      "cell": [
+        320,
+        384
+      ],
+      "anchor": [
+        160,
+        320
+      ],
+      "source_box": [
+        184,
+        190,
+        306,
+        255
+      ],
+      "source_anchor": [
+        245,
+        222
+      ],
+      "pos": [
+        1.95,
+        2.3
+      ],
+      "footprint": [
+        2.6,
+        2.6
+      ],
+      "surface": "floor",
+      "elevation": 0,
+      "solid": false,
+      "flat": true,
+      "sprite": "art/environment/props/rug.png",
+      "visible_bounds": [
+        45,
+        257,
+        275,
+        380
+      ]
+    },
+    {
+      "id": "cat_tower",
+      "name": "Cat post & hanging ball",
+      "cell": [
+        320,
+        384
+      ],
+      "anchor": [
+        160,
+        320
+      ],
+      "source_box": [
+        124,
+        170,
+        172,
+        242
+      ],
+      "source_anchor": [
+        148,
+        232
+      ],
+      "pos": [
+        0.8,
+        4.1
+      ],
+      "footprint": [
+        0.8,
+        0.75
+      ],
+      "surface": "floor",
+      "elevation": 0,
+      "solid": true,
+      "flat": false,
+      "sprite": "art/environment/props/cat_tower.png",
+      "visible_bounds": [
+        104,
+        196,
+        205,
+        333
+      ]
+    },
+    {
+      "id": "tunnel",
+      "name": "Purple play tunnel",
+      "cell": [
+        320,
+        384
+      ],
+      "anchor": [
+        160,
+        320
+      ],
+      "source_box": [
+        158,
+        236,
+        233,
+        283
+      ],
+      "source_anchor": [
+        196,
+        265
+      ],
+      "pos": [
+        2.8,
+        4.5
+      ],
+      "footprint": [
+        1.5,
+        0.65
+      ],
+      "surface": "floor",
+      "elevation": 0,
+      "solid": true,
+      "flat": false,
+      "sprite": "art/environment/props/tunnel.png",
+      "visible_bounds": [
+        86,
+        263,
+        208,
+        352
+      ]
+    },
+    {
+      "id": "box",
+      "name": "Open cardboard box",
+      "cell": [
+        320,
+        384
+      ],
+      "anchor": [
+        160,
+        320
+      ],
+      "source_box": [
+        263,
+        247,
+        325,
+        297
+      ],
+      "source_anchor": [
+        294,
+        282
+      ],
+      "pos": [
+        4.35,
+        3.35
+      ],
+      "footprint": [
+        0.75,
+        0.8
+      ],
+      "surface": "floor",
+      "elevation": 0,
+      "solid": true,
+      "flat": false,
+      "sprite": "art/environment/props/box.png",
+      "visible_bounds": [
+        99,
+        250,
+        217,
+        341
+      ]
+    },
+    {
+      "id": "ball_track",
+      "name": "Ball track",
+      "cell": [
+        320,
+        384
+      ],
+      "anchor": [
+        160,
+        320
+      ],
+      "source_box": [
+        312,
+        224,
+        363,
+        253
+      ],
+      "source_anchor": [
+        338,
+        244
+      ],
+      "pos": [
+        4.1,
+        1.55
+      ],
+      "footprint": [
+        1.05,
+        0.8
+      ],
+      "surface": "floor",
+      "elevation": 0,
+      "solid": true,
+      "flat": false,
+      "sprite": "art/environment/props/ball_track.png",
+      "visible_bounds": [
+        114,
+        279,
+        206,
+        332
+      ]
+    },
+    {
+      "id": "feather",
+      "name": "Feather wand",
+      "cell": [
+        320,
+        384
+      ],
+      "anchor": [
+        160,
+        320
+      ],
+      "source_box": [
+        247,
+        226,
+        291,
+        253
+      ],
+      "source_anchor": [
+        269,
+        245
+      ],
+      "pos": [
+        3.05,
+        2.65
+      ],
+      "footprint": [
+        0.8,
+        0.4
+      ],
+      "surface": "floor",
+      "elevation": 0,
+      "solid": false,
+      "flat": true,
+      "sprite": "art/environment/props/feather.png",
+      "visible_bounds": [
+        117,
+        289,
+        206,
+        336
+      ]
+    },
+    {
+      "id": "bowls",
+      "name": "Food & water tray",
+      "cell": [
+        320,
+        384
+      ],
+      "anchor": [
+        160,
+        320
+      ],
+      "source_box": [
+        306,
+        187,
+        363,
+        217
+      ],
+      "source_anchor": [
+        333,
+        211
+      ],
+      "pos": [
+        3.3,
+        0.85
+      ],
+      "footprint": [
+        1.25,
+        0.65
+      ],
+      "surface": "floor",
+      "elevation": 0,
+      "solid": true,
+      "flat": false,
+      "sprite": "art/environment/props/bowls.png",
+      "visible_bounds": [
+        112,
+        272,
+        211,
+        329
+      ]
+    },
+    {
+      "id": "high_shelf",
+      "name": "Shelf, books & trailing plant",
+      "cell": [
+        320,
+        384
+      ],
+      "anchor": [
+        160,
+        320
+      ],
+      "source_box": [
+        265,
+        87,
+        354,
+        152
+      ],
+      "source_anchor": [
+        310,
+        130
+      ],
+      "pos": [
+        1.7,
+        0
+      ],
+      "footprint": [
+        2.2,
+        0
+      ],
+      "surface": "wall_right",
+      "elevation": 102,
+      "solid": false,
+      "flat": false,
+      "sprite": "art/environment/props/high_shelf.png",
+      "visible_bounds": [
+        72,
+        237,
+        220,
+        355
+      ]
+    },
+    {
+      "id": "cubby_books",
+      "name": "Book cubby",
+      "cell": [
+        320,
+        384
+      ],
+      "anchor": [
+        160,
+        320
+      ],
+      "source_box": [
+        108,
+        141,
+        139,
+        176
+      ],
+      "source_anchor": [
+        122,
+        166
+      ],
+      "pos": [
+        0,
+        4.2
+      ],
+      "footprint": [
+        0,
+        0.75
+      ],
+      "surface": "wall_left",
+      "elevation": 110,
+      "solid": false,
+      "flat": false,
+      "sprite": "art/environment/props/cubby_books.png",
+      "visible_bounds": [
+        132,
+        274,
+        189,
+        339
+      ]
+    },
+    {
+      "id": "cubby_plant",
+      "name": "Plant cubby",
+      "cell": [
+        320,
+        384
+      ],
+      "anchor": [
+        160,
+        320
+      ],
+      "source_box": [
+        122,
+        120,
+        162,
+        165
+      ],
+      "source_anchor": [
+        139,
+        149
+      ],
+      "pos": [
+        0,
+        0.625
+      ],
+      "footprint": [
+        0,
+        0.75
+      ],
+      "surface": "wall_left",
+      "elevation": 130,
+      "solid": false,
+      "flat": false,
+      "sprite": "art/environment/props/cubby_plant.png",
+      "visible_bounds": [
+        129,
+        263,
+        198,
+        345
+      ]
+    },
+    {
+      "id": "window",
+      "name": "Four-pane window",
+      "cell": [
+        320,
+        384
+      ],
+      "anchor": [
+        160,
+        320
+      ],
+      "source_box": [
+        166,
+        82,
+        227,
+        159
+      ],
+      "source_anchor": [
+        196,
+        145
+      ],
+      "pos": [
+        0,
+        1.875
+      ],
+      "footprint": [
+        0,
+        1.65
+      ],
+      "surface": "wall_left",
+      "elevation": 78,
+      "solid": false,
+      "flat": false,
+      "sprite": "art/environment/props/window.png",
+      "visible_bounds": [
+        99,
+        196,
+        236,
+        374
+      ]
+    },
+    {
+      "id": "door",
+      "name": "Wooden door",
+      "cell": [
+        320,
+        384
+      ],
+      "anchor": [
+        160,
+        320
+      ],
+      "source_box": [
+        372,
+        124,
+        408,
+        227
+      ],
+      "source_anchor": [
+        389,
+        221
+      ],
+      "pos": [
+        4.15,
+        0
+      ],
+      "footprint": [
+        1.05,
+        0
+      ],
+      "surface": "wall_right",
+      "elevation": 0,
+      "solid": false,
+      "flat": false,
+      "sprite": "art/environment/props/door.png",
+      "visible_bounds": [
+        128,
+        131,
+        192,
+        327
+      ]
+    }
+  ],
+  "tiles": [
+    {
+      "id": "floor_a",
+      "path": "art/environment/tiles/floor_a.png",
+      "size": [
+        128,
+        64
+      ],
+      "anchor": [
+        64,
+        0
+      ],
+      "kind": "floor"
+    },
+    {
+      "id": "floor_b",
+      "path": "art/environment/tiles/floor_b.png",
+      "size": [
+        128,
+        64
+      ],
+      "anchor": [
+        64,
+        0
+      ],
+      "kind": "floor"
+    },
+    {
+      "id": "floor_c",
+      "path": "art/environment/tiles/floor_c.png",
+      "size": [
+        128,
+        64
+      ],
+      "anchor": [
+        64,
+        0
+      ],
+      "kind": "floor"
+    },
+    {
+      "id": "wall_left",
+      "path": "art/environment/tiles/wall_left.png",
+      "size": [
+        128,
+        320
+      ],
+      "anchor": [
+        96,
+        256
+      ],
+      "kind": "wall"
+    },
+    {
+      "id": "wall_right",
+      "path": "art/environment/tiles/wall_right.png",
+      "size": [
+        128,
+        320
+      ],
+      "anchor": [
+        32,
+        256
+      ],
+      "kind": "wall"
+    },
+    {
+      "id": "foundation_left",
+      "path": "art/environment/tiles/foundation_left.png",
+      "size": [
+        128,
+        64
+      ],
+      "anchor": [
+        32,
+        0
+      ],
+      "kind": "foundation"
+    },
+    {
+      "id": "foundation_right",
+      "path": "art/environment/tiles/foundation_right.png",
+      "size": [
+        128,
+        64
+      ],
+      "anchor": [
+        96,
+        0
+      ],
+      "kind": "foundation"
+    },
+    {
+      "id": "wall_post",
+      "path": "art/environment/tiles/wall_post.png",
+      "size": [
+        3,
+        208
+      ],
+      "anchor": [
+        1,
+        208
+      ],
+      "kind": "trim"
+    }
+  ]
+}

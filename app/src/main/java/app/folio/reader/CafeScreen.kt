@@ -34,7 +34,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
-@Composable internal fun CafeScreen() {
+@Composable internal fun CafeLegacyScreen() {
     val context = LocalContext.current
     val app = context.applicationContext as FolioApp
     val store = app.cafe

@@ -1,4 +1,13 @@
-# Folio — Android EPUB reader
+# Folio
+Folio is a vibe-coded Android reader with Danish and English TTS.
+
+Version **0.18.0** adds Miso's playable sprite room to **Café**: random exploration,
+four repeating routines, all 21 actions available freely from a menu, five
+movement speeds, pause and reduced motion. The room runs offline and suspends
+when hidden. Previous earned café/story data remains under room settings →
+**Tidligere café og gemte data**. New story vignettes are planned for later.
+See [implementation and limits](IMPLEMENTATION-v0.18.md) and the
+[laptop transfer / sprite workflow](game/README.md).
 
 Version **0.17.2** makes **Notes** a direct, continuous book notebook. It opens
 with the keyboard ready on a new line and saves automatically. Copy all, undo/redo,
@@ -7,7 +16,7 @@ migrated with a retained recovery copy. App updates keeps the latest notes after
 installation, and About Folio has a compact expandable version archive.
 See [implementation and limits](IMPLEMENTATION-v0.17.2.md).
 
-Earlier release descriptions below are historical; current 0.17.2 controls use
+Earlier release descriptions below are historical; current audiobook controls use
 chapter preview/Apply without a lock and the direct notebook rather than note cards.
 
 Version **0.17.1** improves audiobook position retention and stops a consumed Play

@@ -1,0 +1,170 @@
+{
+  "baseline": "playful-room-playable-v2 (review fixes)",
+  "catScale": 1.3,
+  "frames": 289,
+  "clips": 34,
+  "files": [
+    {
+      "source": "animation_data.json",
+      "asset": "animation_data.json",
+      "sha256": "569990ae66df09dc2db1c5989eb537bda7c68ffe1ada4a5e9f71bcdafab0c7ae",
+      "bytes": 67684
+    },
+    {
+      "source": "art/cat/miso-atlas.png",
+      "asset": "art/cat/miso-atlas.png",
+      "sha256": "d42d7224e0e76aaf09146f9419011130850f3e13640674a7e0d5db40a448ac1b",
+      "bytes": 356384
+    },
+    {
+      "source": "art/environment/props/ball_track.png",
+      "asset": "art/environment/props/ball_track.png",
+      "sha256": "2c77731eb2c1598b58ec806eb96ce6606773bdb16dea1e3824871c7490d34cca",
+      "bytes": 10428
+    },
+    {
+      "source": "art/environment/props/bowls.png",
+      "asset": "art/environment/props/bowls.png",
+      "sha256": "73e1770bc188c7b7c2005a0e8aee518e6037a4d367f887f6ebdd52ec0f5634fe",
+      "bytes": 11243
+    },
+    {
+      "source": "art/environment/props/box.png",
+      "asset": "art/environment/props/box.png",
+      "sha256": "8b3e12d33202580d61cfd0839cf7d73e7f3ab0f55eccb2dd46a90f75a4c7b240",
+      "bytes": 17110
+    },
+    {
+      "source": "art/environment/props/cat_tower.png",
+      "asset": "art/environment/props/cat_tower.png",
+      "sha256": "9aea988163b46f2d705f4acb65fc1c944d88df6aef22b931b0f60194b3d4e48f",
+      "bytes": 21461
+    },
+    {
+      "source": "art/environment/props/cubby_books.png",
+      "asset": "art/environment/props/cubby_books.png",
+      "sha256": "0cce0dfac7378e8ce6e147f7ff579c1ce741b9380a55c59f206fdf87002247cf",
+      "bytes": 8748
+    },
+    {
+      "source": "art/environment/props/cubby_plant.png",
+      "asset": "art/environment/props/cubby_plant.png",
+      "sha256": "0d9dd17ee5604ce0f01ffd427295b6ee2adfcb6a94834bab3eb135ad006914cd",
+      "bytes": 13288
+    },
+    {
+      "source": "art/environment/props/door.png",
+      "asset": "art/environment/props/door.png",
+      "sha256": "ea74f813ae44075251520d369222ef90c22b15c768806a899a4986d0912d3af6",
+      "bytes": 18384
+    },
+    {
+      "source": "art/environment/props/feather.png",
+      "asset": "art/environment/props/feather.png",
+      "sha256": "36f2e16906063c69c050b9c7d383b196e092dfc9b05b64f56a62074ffa10f620",
+      "bytes": 6197
+    },
+    {
+      "source": "art/environment/props/high_shelf.png",
+      "asset": "art/environment/props/high_shelf.png",
+      "sha256": "95b65b49fbc0388f5066f3b3142774685e4b3c0d6c2b15fb0b7f48f508f56ccc",
+      "bytes": 25495
+    },
+    {
+      "source": "art/environment/props/lamp.png",
+      "asset": "art/environment/props/lamp.png",
+      "sha256": "bdb02e8804367879c8908a74fa46585b4773c9ca87a92bdda4adc15d99546958",
+      "bytes": 10235
+    },
+    {
+      "source": "art/environment/props/rug.png",
+      "asset": "art/environment/props/rug.png",
+      "sha256": "a6b6626af3659bd44ca5d40e2345020a8fbc9b65273fc01b6469a7ac782d435d",
+      "bytes": 45842
+    },
+    {
+      "source": "art/environment/props/sofa.png",
+      "asset": "art/environment/props/sofa.png",
+      "sha256": "9a669a63f405f5361a698a00f1e648564722c4c9851482b7bc07178ddcbdc200",
+      "bytes": 36262
+    },
+    {
+      "source": "art/environment/props/tunnel.png",
+      "asset": "art/environment/props/tunnel.png",
+      "sha256": "7f3b165315977fc8201f8cb8324420d2af9c30b680321f046b86af8ac4e8c1d1",
+      "bytes": 18271
+    },
+    {
+      "source": "art/environment/props/window.png",
+      "asset": "art/environment/props/window.png",
+      "sha256": "fe598a2aadd832070e5d622685bbe0381f092177fc3c344209b3a2ffd9af1587",
+      "bytes": 34079
+    },
+    {
+      "source": "art/environment/tiles/floor_a.png",
+      "asset": "art/environment/tiles/floor_a.png",
+      "sha256": "b1bf2fc0fbdefabbe5ce9c8a9dba4ff158d6bd3b3502fb8e240d8cb20f01ad2f",
+      "bytes": 5505
+    },
+    {
+      "source": "art/environment/tiles/floor_b.png",
+      "asset": "art/environment/tiles/floor_b.png",
+      "sha256": "d861783773d1e55007f099e1a0be0dc271bf57198954bdab217d498100535995",
+      "bytes": 5432
+    },
+    {
+      "source": "art/environment/tiles/floor_c.png",
+      "asset": "art/environment/tiles/floor_c.png",
+      "sha256": "f56d2ffc7e62c943acc2905cea17d34b1420a44955ce7f11af3fb5e033c367f4",
+      "bytes": 5423
+    },
+    {
+      "source": "art/environment/tiles/foundation_left.png",
+      "asset": "art/environment/tiles/foundation_left.png",
+      "sha256": "30cd4f01cc36a67b37a67ed05610aea66545d7fec12b7df2edf4735a93b7da51",
+      "bytes": 1605
+    },
+    {
+      "source": "art/environment/tiles/foundation_right.png",
+      "asset": "art/environment/tiles/foundation_right.png",
+      "sha256": "24b2f7f216f19532df415dad30b7d832404cbde8e4c71f7eb4a1e5433dcec267",
+      "bytes": 1650
+    },
+    {
+      "source": "art/environment/tiles/wall_left.png",
+      "asset": "art/environment/tiles/wall_left.png",
+      "sha256": "93a4c52dce9d41e0d0fdf7f19998882fb356804a6b72d8c1a32b175b0cdc045f",
+      "bytes": 13833
+    },
+    {
+      "source": "art/environment/tiles/wall_post.png",
+      "asset": "art/environment/tiles/wall_post.png",
+      "sha256": "ba29579b6298d428ac094bf86cfcff798f52426dcdff29365a1b2be1a6d8ba74",
+      "bytes": 563
+    },
+    {
+      "source": "art/environment/tiles/wall_right.png",
+      "asset": "art/environment/tiles/wall_right.png",
+      "sha256": "24fe966be0320fa43c6550bfb423028b67ff3bb828aef48b464be37fae873adb",
+      "bytes": 14026
+    },
+    {
+      "source": "environment.json",
+      "asset": "environment.json",
+      "sha256": "98d4b5f83e9624eccaf1fc33fc64689ebf4cb2c90e35e3caf8e1ebbc917802bf",
+      "bytes": 11911
+    },
+    {
+      "source": "source/engine.js",
+      "asset": "engine.js",
+      "sha256": "76e68c6bb4714c5d121712d4de49a5c6fcac0ee8f6f39cb4c7b429ac3639fed1",
+      "bytes": 17338
+    },
+    {
+      "source": "source/renderer.js",
+      "asset": "renderer.js",
+      "sha256": "34d32ad2ee3b46c23a8af8a8fbe5acc9f60ecea7759260eb9c841734ca80d90b",
+      "bytes": 11857
+    }
+  ]
+}

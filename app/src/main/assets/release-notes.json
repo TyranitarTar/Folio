@@ -2,6 +2,18 @@
   "version": 1,
   "releases": [
     {
+      "version": "0.18.0",
+      "date": "2026-11-15",
+      "summary": "Miso's sprite room: a playable Cat Café with exploration, routines and free action testing.",
+      "changes": [
+        "Visit Café to watch Miso explore a furnished isometric room. Choose random exploration, a quiet morning, playtime, climbing and resting, or a tour of all 21 activities.",
+        "Open the action menu or tap furniture to try feeding, drinking, scratching, climbing, naps, grooming, toys and the tunnel. Tap clear floor to walk there. All room actions are free to test.",
+        "Choose five movement speeds, pause the room, turn ambient motion off, or enable reduced motion. The room suspends when you leave it or background Folio; audiobook playback continues independently.",
+        "The reviewed Miso artwork, safe platform routes, dedicated tunnel poses and furniture masking are retained. Room discoveries and settings have their own save; existing treats, chapters and café backup remain under room settings → Previous café and saved data.",
+        "This update establishes the companion room. New story vignettes and social events are planned for a later update."
+      ]
+    },
+    {
       "version": "0.17.2",
       "date": "2026-11-14",
       "summary": "One-tap book notebooks and clearer update notes.",

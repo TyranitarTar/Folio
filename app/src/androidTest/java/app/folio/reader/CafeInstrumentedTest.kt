@@ -59,6 +59,18 @@ class CafeInstrumentedTest {
         val point = target.visibleBounds
         File(app.filesDir, "v012-clicks.txt").appendText("$text: $point\n")
         device.click(point.centerX(), point.centerY()); Thread.sleep(400); device.waitForIdle()
+        if(text == "Café" && device.hasObject(By.desc("Værelsesindstillinger"))) {
+            device.findObject(By.desc("Værelsesindstillinger")).click()
+            var previous = device.wait(Until.findObject(By.text("Tidligere café og gemte data")), 3000)
+            repeat(4) {
+                if(previous == null || previous!!.visibleBounds.height() < 24) {
+                    device.swipe(device.displayWidth/2, device.displayHeight*3/4, device.displayWidth/2, device.displayHeight/3, 30)
+                    previous = device.wait(Until.findObject(By.text("Tidligere café og gemte data")), 1000)
+                }
+            }
+            assertNotNull("Previous café entry", previous); previous!!.click()
+            device.waitForIdle()
+        }
     }
     private fun top() { repeat(14) { device.swipe(device.displayWidth / 2, device.displayHeight / 3, device.displayWidth / 2, device.displayHeight * 3 / 4, 25) }; Thread.sleep(500); device.waitForIdle() }
     private fun tools() {
