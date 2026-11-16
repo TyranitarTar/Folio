@@ -31,6 +31,9 @@ for name in (".gitignore", "README.md", "TTS-roadmap.md", "build.gradle.kts", "a
         files.append(path)
 files.append(root / "verify_upgrade_v010.py")
 files.extend(p for p in (root / "game").glob("*") if p.is_file() and p.suffix in {".py", ".cjs", ".md", ".txt", ".json"})
+files.extend(p for p in (root / "game/eight-direction").rglob("*") if p.is_file() and p.suffix in {".py", ".md", ".txt", ".json", ".png", ".gif"})
+if (root / "IMPLEMENTATION-v0.18.1.md").is_file(): files.append(root / "IMPLEMENTATION-v0.18.1.md")
+if (root / "validate_release_v0181.py").is_file(): files.append(root / "validate_release_v0181.py")
 if (root / "IMPLEMENTATION-v0.18.md").is_file(): files.append(root / "IMPLEMENTATION-v0.18.md")
 if (root / "validate_release_v018.py").is_file(): files.append(root / "validate_release_v018.py")
 for name in ("IMPLEMENTATION-v0.10.1.md", "DESIGN-v0.10.1-speech-continuity-and-storage.md", "validate_release_v0101.py",

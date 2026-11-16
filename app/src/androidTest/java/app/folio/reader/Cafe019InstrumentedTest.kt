@@ -93,6 +93,11 @@ class Cafe019InstrumentedTest {
     @Test fun realRoomPauseBackgroundResumeAndRemountHaveOneOwnedLoop() {
         ActivityScenario.launch<MainActivity>(Intent(app, MainActivity::class.java)).use { scenario ->
             val view=ready(scenario)
+            scenario.onActivity { assertTrue("Café should keep the screen awake",it.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON != 0) }
+            assertEquals(1,CafeRoomView.liveInstances.get())
+            val idle=snapshot(view).getLong("paints");Thread.sleep(2000)
+            assertTrue("Idle room should draw at <= 8 fps",snapshot(view).getLong("paints")-idle<=20)
+            File(app.filesDir,"v0181-room-work.json").writeText(JSONObject().put("idleDrawsInTwoSeconds",snapshot(view).getLong("paints")-idle).put("canvas",snapshot(view).getJSONArray("canvas")).put("dpr",snapshot(view).getDouble("dpr")).put("targetIdleFps",8).put("targetMovingFps",24).put("physicalBatteryMeasured",false).toString())
             Thread.sleep(600); assertTrue(snapshot(view).getInt("frames")>0)
             shot("room")
             click("Pause"); Thread.sleep(300)
@@ -100,16 +105,20 @@ class Cafe019InstrumentedTest {
             assertEquals(paused.getLong("frames"), snapshot(view).getLong("frames"))
             click("Fortsæt"); Thread.sleep(500)
             assertTrue(snapshot(view).getLong("frames")>paused.getLong("frames"))
-            scenario.moveToState(Lifecycle.State.STARTED); Thread.sleep(500)
-            val stopped=snapshot(view); Thread.sleep(700)
-            assertFalse(stopped.getBoolean("active"))
-            assertEquals(stopped.getLong("frames"),snapshot(view).getLong("frames"))
+            scenario.moveToState(Lifecycle.State.CREATED); Thread.sleep(500)
+            assertEquals("Background room must be unloaded",0,CafeRoomView.liveInstances.get())
             scenario.moveToState(Lifecycle.State.RESUMED); Thread.sleep(700)
-            assertTrue(snapshot(view).getLong("frames")>stopped.getLong("frames"))
+            assertTrue(snapshot(ready(scenario)).getBoolean("ready"))
             repeat(3) {
                 click("More"); assertFalse(device.hasObject(By.desc("Misos kattecafé · interaktivt værelse")))
+                assertEquals(0,CafeRoomView.liveInstances.get())
+                scenario.onActivity { assertEquals(0,it.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
                 val next=ready(scenario); assertNotSame(view,next)
             }
+            device.wait(Until.findObject(By.desc("Library menu")),5000).click();Thread.sleep(300)
+            assertEquals("Covered room must unload",0,CafeRoomView.liveInstances.get())
+            click("About Folio");assertEquals(0,CafeRoomView.liveInstances.get())
+            device.pressBack();device.waitForIdle();ready(scenario)
             scenario.recreate(); Thread.sleep(800)
             assertTrue(snapshot(web(scenario)).getBoolean("ready"))
         }

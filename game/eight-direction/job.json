@@ -1,0 +1,204 @@
+{
+  "action": "eight-direction-run",
+  "status": "integrated",
+  "status_options": [
+    "planned",
+    "draft",
+    "reviewed",
+    "integrated",
+    "needs_revision"
+  ],
+  "canonical_master": {
+    "version": 1,
+    "native_reference": "production/miso-master-v1/miso-master-sw-64.png",
+    "enlarged_reference": "production/miso-master-v1/miso-master-sw-8x.png",
+    "rgba_pixel_sha256": "ae9e9180e61265b23a7a5b8319b809216570d8bed488603b4cdd753ccc740dcc"
+  },
+  "facing": "front/west/back additions",
+  "directional_references": [],
+  "contract": {
+    "native_cell": [
+      64,
+      64
+    ],
+    "root": [
+      31,
+      55
+    ],
+    "scene_tile": [
+      64,
+      32
+    ],
+    "palette_source": "production/miso-master-v1/character-spec.json",
+    "full_cell_sampling": true,
+    "silhouette_fit_resizing": false
+  },
+  "entry": "canonical neutral for this facing",
+  "exit": "canonical neutral for this facing",
+  "loop": true,
+  "key_poses": [
+    "reach",
+    "compression",
+    "flight",
+    "opposite reach",
+    "opposite compression",
+    "flight"
+  ],
+  "playback": [],
+  "playback_example": {
+    "pose": "pose_01",
+    "duration_ms": 250
+  },
+  "contact_plan": "Four anatomical legs; diagonal gait pair alternation with lifted paw vacancies; projected ground root fixed [31,55].",
+  "allowed_motion": "Complete natural running poses; +/-1 native pixel body bob, tail articulation.",
+  "stable_features": [
+    "head/body/paw proportions",
+    "coat identity",
+    "camera",
+    "pixel density"
+  ],
+  "template": {
+    "path": "REPLACE_WITH_EDIT_TARGET_PATH",
+    "columns": null,
+    "rows": null,
+    "enlargement": 8,
+    "pose_order": "row-major",
+    "neutral_control": "separate proof or explicitly identified cell"
+  },
+  "generation": {
+    "tool": "built-in image_gen",
+    "prompt_record": [
+      "proof-prompt.txt",
+      "run-front-prompt.txt",
+      "run-west-prompt.txt",
+      "run-back-prompt.txt"
+    ],
+    "original_output": [
+      "proof-original.png",
+      "run-front-original.png",
+      "run-west-original.png",
+      "run-back-original.png"
+    ],
+    "all_reference_paths": [
+      "baseline/masters/miso-master-sw-64.png",
+      "baseline/masters/miso-master-sw-8x.png",
+      "baseline/masters/miso-neutral-front-64.png",
+      "baseline/masters/miso-neutral-front-8x.png",
+      "baseline/masters/miso-neutral-west-64.png",
+      "baseline/masters/miso-neutral-west-8x.png",
+      "baseline/masters/miso-neutral-back-64.png",
+      "baseline/masters/miso-neutral-back-8x.png",
+      "direction-proof-target.png",
+      "run-front-target.png",
+      "run-west-target.png",
+      "run-back-target.png"
+    ]
+  },
+  "export": {
+    "frames": 310,
+    "retained_frames": 289,
+    "clips": 40,
+    "jobs": [
+      {
+        "direction": "front",
+        "facing": "s",
+        "grid": [
+          3,
+          2
+        ],
+        "source": [
+          1536,
+          1024
+        ],
+        "alpha_threshold": 190,
+        "native": [
+          64,
+          64
+        ],
+        "root": [
+          31,
+          55
+        ],
+        "whole_frame_translation": [
+          0,
+          -1
+        ],
+        "silhouette_fit": false,
+        "source_sha256": "8a389518a3e053fd276955e28c66dcd4c22cabebfa0b6dc97bf99cbb34ef5ed6"
+      },
+      {
+        "direction": "west",
+        "facing": "w",
+        "grid": [
+          3,
+          2
+        ],
+        "source": [
+          1536,
+          1024
+        ],
+        "alpha_threshold": 190,
+        "native": [
+          64,
+          64
+        ],
+        "root": [
+          31,
+          55
+        ],
+        "whole_frame_translation": [
+          0,
+          5
+        ],
+        "silhouette_fit": false,
+        "source_sha256": "26a99169b0b14930c55439c77feb5d45fc4598650b704e3ca1c5c165f51730fc"
+      },
+      {
+        "direction": "back",
+        "facing": "n",
+        "grid": [
+          3,
+          2
+        ],
+        "source": [
+          1536,
+          1024
+        ],
+        "alpha_threshold": 190,
+        "native": [
+          64,
+          64
+        ],
+        "root": [
+          31,
+          55
+        ],
+        "whole_frame_translation": [
+          0,
+          0
+        ],
+        "silhouette_fit": false,
+        "source_sha256": "fafe7ebaa3004a620c1bae9722d351da35070f198ce0be6244eb672ed86677aa"
+      }
+    ]
+  },
+  "review": {
+    "reviewer": "agent",
+    "date": "2026-11-16",
+    "identity_and_anatomy": "Small 2x2 proof reviewed at native and 6x scale; front/west/back preserve recognizable adult Miso, complete poses and four anatomical legs with natural overlap. Control is not integrated; original masters remain frozen.",
+    "native_format": "Passed: all cells 64x64, binary alpha, frozen 16-color palette; all previous 289 frames / 34 clips unchanged.",
+    "isolated_motion": "All six poses per cycle reviewed in order and as exported native loop sheets; original timing 85 ms per pose.",
+    "in_room": "Reviewed eight-facings.png made with the actual Folio renderer; new directions also exercised by emulator activities.",
+    "room_review_method": "Actual renderer contact board plus Android WebView interaction tests; physical phone unavailable.",
+    "notes": null,
+    "remaining_defects": [
+      "Minor coat/outline drift compared with neutral references; review every production pose and loop."
+    ]
+  },
+  "integration": {
+    "demo_version": null,
+    "new_clips": [],
+    "retained_clips": [],
+    "archive": null
+  }
+}

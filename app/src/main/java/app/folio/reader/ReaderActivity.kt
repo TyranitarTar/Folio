@@ -437,6 +437,7 @@ class ReaderActivity : FragmentActivity() {
             guided?.pause()
             if(menu.findItem(android.R.id.copy)==null) menu.add(0, android.R.id.copy, 0, "Copy").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
             menu.add(0, 105, 1, "Danish dictionary (online)")
+            menu.add(0, 106, 2, "Translate to English (Google)")
             menu.add(0, 101, 2, "Highlight").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
             menu.add(0, 102, 3, "Add note").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
             menu.add(0, 103, 4, "Read from selection").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
@@ -446,13 +447,18 @@ class ReaderActivity : FragmentActivity() {
         }
         override fun onPrepareActionMode(mode: ActionMode, menu: Menu) = false
         override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
-            if (item.itemId !in listOf(android.R.id.copy, 101, 102, 103, 104, 105)) return false
+            if (item.itemId !in listOf(android.R.id.copy, 101, 102, 103, 104, 105, 106)) return false
             lifecycleScope.launch {
                 navigator?.currentSelection()?.locator?.let { selected ->
                     if (item.itemId == android.R.id.copy) {
                         val text=selected.text.highlight.orEmpty()
                         if(text.isNotBlank()) (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager)
                             .setPrimaryClip(android.content.ClipData.newPlainText("Book passage",text))
+                    } else if(item.itemId==106) {
+                        val word=selected.text.highlight.orEmpty().trim().take(2000)
+                        val language=model.publication.value?.metadata?.languages?.firstOrNull()?.toString().orEmpty()
+                        if(word.isNotBlank()) runCatching { startActivity(Intent(Intent.ACTION_VIEW, ReaderLookup.english(word,language))) }
+                            .onFailure { model.notice.value="No browser is available for translation." }
                     } else if(item.itemId==105) {
                         val word=selected.text.highlight.orEmpty().trim().take(200)
                         if(word.isNotBlank()) runCatching { startActivity(Intent(Intent.ACTION_VIEW,

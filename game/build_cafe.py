@@ -25,18 +25,22 @@ def main():
     paths.update(t['path'] for t in env['tiles'])
     paths.add(meta['atlas'])
     records = []
+    overrides = []
     for name in sorted(paths):
         source = PROJECT / name
         destination = TARGET / name.removeprefix('source/')
         destination.parent.mkdir(parents=True, exist_ok=True)
+        if destination.exists() and digest(destination) != digest(source):
+            overrides.append({'asset': destination.relative_to(TARGET).as_posix(), 'baselineSha256': digest(source), 'runtimeSha256': digest(destination)})
+            continue # Folio owns its extended engine, metadata and renderer after integration.
         shutil.copyfile(source, destination)
         records.append({'source': name, 'asset': destination.relative_to(TARGET).as_posix(),
                         'sha256': digest(destination), 'bytes': destination.stat().st_size})
     (TARGET / 'provenance.json').write_text(json.dumps({
         'baseline': 'playful-room-playable-v2 (review fixes)', 'catScale': env['cat_scale'],
-        'frames': len(meta['rects']), 'clips': len(meta['clips']), 'files': records
+        'frames': len(meta['rects']), 'clips': len(meta['clips']), 'files': records, 'folioOverrides': overrides
     }, indent=2) + '\n')
-    print(f'Verified {len(manifest["files"])} handoff files; staged {len(records)} unchanged runtime files.')
+    print(f'Verified {len(manifest["files"])} handoff files; staged {len(records)} unchanged files, preserved {len(overrides)} Folio overrides.')
 
 if __name__ == '__main__':
     main()

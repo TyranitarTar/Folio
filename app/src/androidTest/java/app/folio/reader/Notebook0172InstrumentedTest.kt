@@ -66,7 +66,7 @@ class Notebook0172InstrumentedTest {
                 assertTrue(device.wait(Until.hasObject(By.desc("Play audiobook")),10000))
                 click(By.desc("Player menu"));click(By.text("Notes"))
                 var field=device.wait(Until.findObject(By.clazz("android.widget.EditText")),10000);assertNotNull(field)
-                assertTrue(field.text.contains(legacy.text));assertTrue(field.text.endsWith("\n- "))
+                assertTrue(field.text.contains(legacy.text));assertTrue(field.text.matches(Regex("(?s).*\\n- \\[C1 · [\\d:]+] ")))
                 waitFor{editor()!=null}
                 var ime=false
                 repeat(30){instrumentation.runOnMainSync{ime=ViewCompat.getRootWindowInsets(editor()!!.window.decorView)?.isVisible(WindowInsetsCompat.Type.ime())==true};if(!ime)delay(100)}
@@ -94,7 +94,7 @@ class Notebook0172InstrumentedTest {
                 assertTrue(app.audiobooks.notebooks.open(book).text.endsWith("Saved on leaving"))
                 click(By.desc("Player menu"));click(By.text("Notes"))
                 field=device.wait(Until.findObject(By.clazz("android.widget.EditText")),10000)
-                assertTrue(field.text.endsWith("Saved on leaving\n- "))
+                assertTrue(field.text.matches(Regex("(?s).*Saved on leaving\\n- \\[C1 · [\\d:]+] ")))
                 click(By.desc("Back to player"))
             }
             val archive=File(app.filesDir,"audiobooks/${book.id}/notes-legacy.json")

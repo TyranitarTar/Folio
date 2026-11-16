@@ -2,6 +2,18 @@
   "version": 1,
   "releases": [
     {
+      "version": "0.18.1",
+      "date": "2026-11-16",
+      "summary": "Smoother notes, timestamped entries and English lookup; sharper, more efficient Cat Café with eight movement facings.",
+      "changes": [
+        "Notes retain manual scrolling and reopen with a new C1/C2-style chapter number and playback timestamp. Enter continues timestamped bullet entries; pasted paragraphs stay unchanged.",
+        "The reader's selected-word menu now offers Google Translate to English alongside the Danish dictionary.",
+        "The visible Cat Café keeps the display awake. Its WebView is destroyed when leaving the room, covering it with another app page or backgrounding Folio, and recreated on return.",
+        "The Café uses larger original environment artwork and the display's actual pixel ratio. Background caching and adaptive frame scheduling reduce repeated work; paused and hidden rooms stop their animation timers.",
+        "Miso can travel directly across clear floor at any angle, with eight movement facings and new front, rear and side running cycles. Routes around furniture use continuous collision checks."
+      ]
+    },
+    {
       "version": "0.18.0",
       "date": "2026-11-15",
       "summary": "Miso's sprite room: a playable Cat Café with exploration, routines and free action testing.",

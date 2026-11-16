@@ -250,7 +250,7 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
                         }
                     }
                     tab == "Browse" -> SourceBrowser(open, { importBooks() }, { model.sample(open) })
-                    tab == "Café" -> CafeScreen()
+                    tab == "Café" -> CafeScreen(foremost = !menu && !readerSettings && !about && !historyNotes && !savedQuotes && !updates && !speechSettings && !audioSettings && !voicePacks && !storage && !licenses && !settings && detail == null)
                     else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
                         HomeAction("Reading history", "Your recently opened books", Icons.Outlined.History, { tab = "History" })
                         HomeAction("Saved highlights & quotes", "Passages saved from your books", Icons.Outlined.FormatQuote, { savedQuotes = true })

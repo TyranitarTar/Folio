@@ -1,10 +1,11 @@
 (function(root,factory){const api=factory();if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.LoftGame=api;})(typeof window==='undefined'?globalThis:window,function(){'use strict';
- const DIR={sw:[0,1],nw:[-1,0],ne:[0,-1],se:[1,0]},Q=8,RADIUS=.156,EPS=1e-6;
+ const DIR={sw:[0,1],nw:[-1,0],ne:[0,-1],se:[1,0],s:[1,1],n:[-1,-1],e:[1,-1],w:[-1,1]},Q=8,RADIUS=.156,EPS=1e-6;
  const clamp=(x,a=0,b=1)=>Math.min(b,Math.max(a,x)),mix=(a,b,t)=>a.map((v,i)=>v+(b[i]-v)*t),dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]),same=(a,b)=>dist(a,b)<EPS;
- const rear=f=>f==='nw'||f==='ne',mirror=f=>f==='ne'||f==='se';
+ const rear=f=>f==='nw'||f==='ne'||f==='n',mirror=f=>f==='ne'||f==='se'||f==='e';
  const JUMP_WINDOWS={jump:[220,550],jump_nw:[250,510]};
  function jumpTime(clip,total,p){const [lift,land]=JUMP_WINDOWS[clip];return p<.18?lift*p/.18:p<.82?lift+(land-lift)*(p-.18)/.64:land+(total-land)*(p-.82)/.18;}
- const heading=(a,b)=>Math.abs(b[0]-a[0])>Math.abs(b[1]-a[1])?(b[0]>a[0]?'se':'nw'):(b[1]>a[1]?'sw':'ne');
+ const axisHeading=(a,b)=>Math.abs(b[0]-a[0])>Math.abs(b[1]-a[1])?(b[0]>a[0]?'se':'nw'):(b[1]>a[1]?'sw':'ne');
+ const heading=(a,b)=>{const dx=b[0]-a[0],dy=b[1]-a[1],sx=(dx-dy)*64,sy=(dx+dy)*32;let best='sw',score=-Infinity;for(const [face,d] of Object.entries(DIR)){const x=(d[0]-d[1])*64,y=(d[0]+d[1])*32,s=(sx*x+sy*y)/Math.hypot(x,y);if(s>score){score=s;best=face;}}return best;};
  const TURN={sw:[{to:'nw',clip:'turn'},{to:'se',clip:'turn_front'}],nw:[{to:'sw',clip:'turn',reverse:true},{to:'ne',clip:'turn_back'}],ne:[{to:'nw',clip:'turn_back',reverse:true},{to:'se',clip:'turn',reverse:true,flip:true}],se:[{to:'ne',clip:'turn',flip:true},{to:'sw',clip:'turn_front',reverse:true}]};
  function turnRoute(from,to){const q=[{f:from,edges:[]}],seen=new Set([from]);while(q.length){const n=q.shift();if(n.f===to)return n.edges;for(const e of TURN[n.f])if(!seen.has(e.to)){seen.add(e.to);q.push({f:e.to,edges:[...n.edges,e]});}}throw Error('Invalid facing');}
  function frameAt(c,time,loop=false,reverse=false){const ds=reverse?[...c.durations_ms].reverse():c.durations_ms;let t=loop?time%c.total_ms:Math.min(c.total_ms-.001,time),i=0;while(i<ds.length-1&&t>=ds[i])t-=ds[i++];return reverse?ds.length-1-i:i;}
@@ -15,18 +16,19 @@
   inverse(p){const dx=(p[0]-this.env.origin[0])/64,dy=(p[1]-this.env.origin[1])/32;return [(dx+dy)/2,(dy-dx)/2];}
   local(id,p){const a=this.props.get(id),at=this.project(a.pos,a.elevation);return [at[0]+p[0]-a.anchor[0],at[1]+p[1]-a.anchor[1]];}
   surface(id,p){const a=this.props.get(id),dx=(p[0]-a.anchor[0])/128;return {at:[a.pos[0]+dx,a.pos[1]-dx],z:a.elevation+a.anchor[1]-p[1]};}
-  clear(p,ignore=[]){if(p.some(x=>x<RADIUS||x>5-RADIUS))return false;return !this.obstacles.some(a=>!ignore.includes(a.id)&&Math.abs(p[0]-a.pos[0])<a.footprint[0]/2+RADIUS-EPS&&Math.abs(p[1]-a.pos[1])<a.footprint[1]/2+RADIUS-EPS);}
-  segment(a,b,ignore=[]){const n=Math.max(1,Math.ceil(dist(a,b)*40));for(let i=0;i<=n;i++)if(!this.clear(mix(a,b,i/n),ignore))return false;return true;}
+  clear(p,ignore=[]){if(!Array.isArray(p)||p.length!==2||!p.every(Number.isFinite))return false;if(p.some(x=>x<RADIUS||x>5-RADIUS))return false;return !this.obstacles.some(a=>!ignore.includes(a.id)&&Math.abs(p[0]-a.pos[0])<a.footprint[0]/2+RADIUS-EPS&&Math.abs(p[1]-a.pos[1])<a.footprint[1]/2+RADIUS-EPS);}
+  segment(a,b,ignore=[]){if(!this.clear(a,ignore)||!this.clear(b,ignore))return false;for(const prop of this.obstacles){if(ignore.includes(prop.id))continue;let enter=0,leave=1,hit=true;for(let axis=0;axis<2;axis++){const radius=prop.footprint[axis]/2+RADIUS-EPS,low=prop.pos[axis]-radius,high=prop.pos[axis]+radius,d=b[axis]-a[axis];if(Math.abs(d)<EPS){if(a[axis]<=low||a[axis]>=high){hit=false;break;}}else{const t0=(low-a[axis])/d,t1=(high-a[axis])/d;enter=Math.max(enter,Math.min(t0,t1));leave=Math.min(leave,Math.max(t0,t1));if(leave<=enter+1e-10){hit=false;break;}}}if(hit&&leave>enter+1e-10)return false;}return true;}
   nearest(p,maxDistance=.6){let best=null,bestD=Infinity;for(let x=1;x<40;x++)for(let y=1;y<40;y++){const q=[x/Q,y/Q],d=dist(q,p);if(d<bestD&&d<=maxDistance&&this.clear(q)){best=q;bestD=d;}}return best;}
   path(start,goal,face='sw'){
-   if(!this.clear(start)||!this.clear(goal))return null;if(same(start,goal))return [];
+   if(!this.clear(start)||!this.clear(goal))return null;if(same(start,goal))return [];if(this.segment(start,goal))return [{from:start,to:goal,face:heading(start,goal)}];
    const grid=p=>{const a=p.map(v=>Math.round(v*Q)/Q),cs=[];for(let x=-1;x<=1;x++)for(let y=-1;y<=1;y++){const q=[a[0]+x/Q,a[1]+y/Q];if(this.clear(q)&&this.segment(p,q))cs.push(q);}cs.sort((a,b)=>dist(a,p)-dist(b,p));return cs[0];};
    const begin=grid(start),end=grid(goal);if(!begin||!end)return null;
-   const key=(p,f)=>p.join(',')+','+f,heur=p=>Math.abs(p[0]-end[0])+Math.abs(p[1]-end[1]),open=new Heap(),best=new Map();
+   const key=(p,f)=>p.join(',')+','+f,heur=p=>dist(p,end),open=new Heap(),best=new Map();
    const first={p:begin,f:face,g:0,score:heur(begin),prev:null};open.push(first);best.set(key(begin,face),0);let found=null,visited=0;
-   while(open.length&&visited++<30000){const n=open.pop();if(n.g>(best.get(key(n.p,n.f))??Infinity)+EPS)continue;if(same(n.p,end)){found=n;break;}for(const [f,d] of Object.entries(DIR)){const p=[n.p[0]+d[0]/Q,n.p[1]+d[1]/Q];if(!this.segment(n.p,p))continue;const g=n.g+1/Q+(f===n.f?0:.16),k=key(p,f);if(g>=(best.get(k)??Infinity)-EPS)continue;best.set(k,g);open.push({p,f,g,score:g+heur(p),prev:n});}}
+   while(open.length&&visited++<30000){const n=open.pop();if(n.g>(best.get(key(n.p,n.f))??Infinity)+EPS)continue;if(same(n.p,end)){found=n;break;}for(const [f,d] of Object.entries(DIR)){const p=[n.p[0]+d[0]/Q,n.p[1]+d[1]/Q];if(!this.segment(n.p,p))continue;const g=n.g+Math.hypot(...d)/Q+(f===n.f?0:.04),k=key(p,f);if(g>=(best.get(k)??Infinity)-EPS)continue;best.set(k,g);open.push({p,f,g,score:g+heur(p),prev:n});}}
    if(!found)return null;const points=[];for(let n=found;n;n=n.prev)points.unshift(n.p);if(!same(start,points[0]))points.unshift(start);if(!same(goal,points.at(-1)))points.push(goal);
-   const runs=[];let a=points[0];for(const b of points.slice(1)){if(same(a,b))continue;const f=heading(a,b),last=runs.at(-1);if(last&&last.face===f&&Math.abs((b[0]-a[0])*(a[1]-last.from[1])-(b[1]-a[1])*(a[0]-last.from[0]))<EPS)last.to=b;else runs.push({from:a,to:b,face:f});a=b;}return runs;
+   const smooth=[points[0]];for(let i=0;i<points.length-1;){let j=points.length-1;while(j>i+1&&!this.segment(points[i],points[j]))j--;smooth.push(points[j]);i=j;}
+   const runs=[];let a=smooth[0];for(const b of smooth.slice(1)){if(same(a,b))continue;const f=heading(a,b),last=runs.at(-1);if(last&&last.face===f&&Math.abs((b[0]-a[0])*(a[1]-last.from[1])-(b[1]-a[1])*(a[0]-last.from[0]))<EPS)last.to=b;else runs.push({from:a,to:b,face:f});a=b;}return runs;
   }
  }
  const ACTIONS={
@@ -45,10 +47,10 @@
  };
  class Plan{
   constructor(game){this.game=game;this.world=game.world;this.meta=game.meta;this.at=[...game.actor.at];this.z=game.actor.z;this.face=game.actor.face;this.support=game.actor.support;this.resting=game.actor.resting;this.steps=[];}
-  turn(to){for(const e of turnRoute(this.face,to))this.steps.push({type:'turn',clip:e.clip,duration:this.meta.clips[e.clip].total_ms,flip:e.flip||false,reverse:e.reverse||false,faceAfter:e.to});this.face=to;}
-  walk(to,pace=this.game.pace){const route=this.world.path(this.at,to,this.face);if(!route)return false;const gait=this.meta.movement_modes[pace];for(const r of route){this.turn(r.face);const pixels=dist(this.world.project(r.from),this.world.project(r.to));this.steps.push({type:'walk',clip:rear(r.face)?gait.nw:gait.sw,flip:mirror(r.face),from:r.from,to:r.to,z0:0,z1:0,duration:Math.max(60,pixels/(gait.speed*this.game.scale)*1000),loop:true,faceAfter:r.face,supportAfter:'floor'});this.at=[...r.to];}return true;}
+  turn(to){if(this.face===to)return;if(!TURN[this.face]||!TURN[to]){const clip=this.meta.direction_idle?.[to]||(rear(to)?'idle_nw':'idle');this.steps.push({type:'turn',clip,duration:100,flip:mirror(to),faceAfter:to});this.face=to;return;}for(const e of turnRoute(this.face,to))this.steps.push({type:'turn',clip:e.clip,duration:this.meta.clips[e.clip].total_ms,flip:e.flip||false,reverse:e.reverse||false,faceAfter:e.to});this.face=to;}
+  walk(to,pace=this.game.pace){const route=this.world.path(this.at,to,this.face);if(!route)return false;const gait=this.meta.movement_modes[pace];for(const r of route){this.turn(r.face);const pixels=dist(this.world.project(r.from),this.world.project(r.to));this.steps.push({type:'walk',clip:this.meta.direction_clips?.[r.face]||(rear(r.face)?gait.nw:gait.sw),rate:this.meta.direction_clips?.[r.face]?gait.speed/this.meta.movement_modes.run.speed:1,flip:mirror(r.face),from:r.from,to:r.to,z0:0,z1:0,duration:Math.max(60,pixels/(gait.speed*this.game.scale)*1000),loop:true,faceAfter:r.face,supportAfter:'floor'});this.at=[...r.to];}return true;}
   pose(clip,duration=null,face='sw',extra={}){this.turn(face);this.steps.push({type:'pose',clip,duration:duration??this.meta.clips[clip].total_ms,flip:mirror(face),loop:!!duration,...extra});}
-  jump(target,support,extra={}){const f=heading(this.at,target.at);this.turn(f);const clip=rear(f)?'jump_nw':'jump';this.steps.push({type:'jump',clip,duration:1100,from:[...this.at],to:[...target.at],z0:this.z,z1:target.z,apex:Math.max(32,Math.abs(target.z-this.z)*.6+20),flip:mirror(f),faceAfter:f,supportAfter:support,...extra});this.at=[...target.at];this.z=target.z;this.support=support;}
+  jump(target,support,extra={}){const f=axisHeading(this.at,target.at);this.turn(f);const clip=rear(f)?'jump_nw':'jump';this.steps.push({type:'jump',clip,duration:1100,from:[...this.at],to:[...target.at],z0:this.z,z1:target.z,apex:Math.max(32,Math.abs(target.z-this.z)*.6+20),flip:mirror(f),faceAfter:f,supportAfter:support,...extra});this.at=[...target.at];this.z=target.z;this.support=support;}
   wake(){if(this.resting){this.pose('curl_up',null,'sw',{restingAfter:null});this.resting=null;}}
   settle(){this.pose('curl_down',null,'sw',{restingAfter:'sleep'});this.resting='sleep';}
   floor(){this.wake();if(this.support==='floor')return true;if(this.support==='box')this.pose('sit_up',null,'sw',{occlusion:'box'});if(this.support==='bookshelf')this.jump(this.game.platforms.perch,'perch');if(this.support==='perch'){this.jump(this.game.platforms.step,'step');this.pose(rear(this.face)?'idle_nw':'idle',180,this.face);}if(this.support==='step'){this.jump({at:this.game.approach.step,z:0},'floor');return true;}const s=this.support,a=this.game.approach[s];if(!a)return false;this.jump({at:a,z:0},'floor',s==='box'?{occlusion:'box',exiting:true}:{});return true;}
@@ -83,7 +85,7 @@
   get busy(){return !!this.step;}
   start(plan,id){if(!plan.steps.length)return false;this.queue=plan.steps;this.action=id;this.next();return true;}
   command(id,target=null){if(!ACTIONS[id]&&!['move','down'].includes(id))return false;if(this.busy){this.pending={id,target};this.notice='Next: '+(ACTIONS[id]?.label??'move there');return true;}const p=new Plan(this);let ok;
-   if(id==='move'){const goal=this.world.nearest(target);ok=goal&&p.floor()&&p.walk(goal);if(ok)this.mark=goal;}
+   if(id==='move'){const goal=this.world.clear(target)?target:this.world.nearest(target);ok=goal&&p.floor()&&p.walk(goal);if(ok)this.mark=goal;}
    else if(id==='down'){ok=p.floor();}
    else ok=p.action(id);
    if(!ok){this.notice='That route is blocked. Try another spot.';return false;}
@@ -95,9 +97,9 @@
    if(this.step){const s=this.step;this.actor.clip=s.clip;this.actor.flip=s.flip??mirror(this.actor.face);this.actor.frame=s.reverse?this.meta.clips[s.clip].frames.length-1:0;this.actor.effect=s.effect||null;this.actor.occlusion=s.occlusion||null;this.actor.progress=0;this.history.push({event:'step',type:s.type,clip:s.clip,time:this.time});}
    else{if(this.action){this.counts[this.action]=(this.counts[this.action]||0)+1;this.history.push({event:'complete',id:this.action,time:this.time});}this.action=null;this.mark=null;this.actor.occlusion=this.actor.support==='box'?'box':null;this.actor.effect=null;this.actor.progress=1;this.idle=0;this.setIdle();this.notice='Miso is settled. Tap somewhere to explore.';}
   }
-  setIdle(){const a=this.actor;if(a.support==='box'){a.clip='rest';a.frame=2;a.flip=false;}else if(a.resting==='sleep'){a.clip='sleep';a.frame=7;a.flip=false;}else{a.clip=rear(a.face)?'idle_nw':'idle';a.frame=frameAt(this.meta.clips[a.clip],this.idle,true);a.flip=mirror(a.face);}}
+  setIdle(){const a=this.actor;if(a.support==='box'){a.clip='rest';a.frame=2;a.flip=false;}else if(a.resting==='sleep'){a.clip='sleep';a.frame=7;a.flip=false;}else{a.clip=this.meta.direction_idle?.[a.face]||(rear(a.face)?'idle_nw':'idle');a.frame=frameAt(this.meta.clips[a.clip],this.idle,true);a.flip=mirror(a.face);}}
   update(ms){let remaining=Math.max(0,ms);this.time+=remaining;
-   while(this.step&&remaining>0){const s=this.step,dt=Math.min(remaining,s.duration-this.elapsed);remaining-=dt;this.elapsed+=dt;const p=clamp(this.elapsed/s.duration),a=this.actor,c=this.meta.clips[s.clip];a.progress=p;a.frame=frameAt(c,s.type==='jump'?jumpTime(s.clip,c.total_ms,p):this.elapsed,s.loop,s.reverse);
+   while(this.step&&remaining>0){const s=this.step,dt=Math.min(remaining,s.duration-this.elapsed);remaining-=dt;this.elapsed+=dt;const p=clamp(this.elapsed/s.duration),a=this.actor,c=this.meta.clips[s.clip];a.progress=p;a.frame=frameAt(c,s.type==='jump'?jumpTime(s.clip,c.total_ms,p):this.elapsed*(s.rate??1),s.loop,s.reverse);
     if(s.from){let t=p;if(s.type==='jump'){t=clamp((p-.18)/.64);a.z=s.z0+(s.z1-s.z0)*t+4*s.apex*t*(1-t);}else a.z=s.z0??0;a.at=mix(s.from,s.to,t);}
     else if(s.hop){const t=clamp((this.elapsed-520)/300);a.z=4*s.hop*t*(1-t);}
     if(this.elapsed>=s.duration-EPS){if(s.to)a.at=[...s.to];a.z=s.z1??this.platforms[a.support]?.z??0;if(s.supportAfter)a.support=s.supportAfter;if(s.faceAfter)a.face=s.faceAfter;if('restingAfter'in s)a.resting=s.restingAfter;if(this.cancelAtBoundary){this.queue=[];this.cancelAtBoundary=false;this.action=null;}this.next();}

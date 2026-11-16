@@ -1,6 +1,12 @@
 # Folio
 Folio is a vibe-coded Android reader with Danish and English TTS.
 
+Version **0.18.1** improves note scrolling and adds C1/C2 chapter timestamps to
+new entries. Reader selections can open Google Translate to English. Cat Café
+stays awake while visible, unloads offscreen, uses adaptive rendering and larger
+environment sources, and supports direct movement with eight facings.
+See [implementation and limits](IMPLEMENTATION-v0.18.1.md).
+
 Version **0.18.0** adds Miso's playable sprite room to **Café**: random exploration,
 four repeating routines, all 21 actions available freely from a menu, five
 movement speeds, pause and reduced motion. The room runs offline and suspends

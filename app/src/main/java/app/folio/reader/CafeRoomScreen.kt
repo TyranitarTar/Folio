@@ -15,6 +15,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -22,7 +23,21 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.json.JSONObject
 
-@Composable internal fun CafeScreen() {
+@Composable internal fun CafeScreen(foremost:Boolean=true) {
+    val root=LocalView.current
+    val window=remember(root) {
+        generateSequence(root.context){(it as? android.content.ContextWrapper)?.baseContext}
+            .filterIsInstance<android.app.Activity>().firstOrNull()?.window
+    }
+    val owner=LocalLifecycleOwner.current
+    DisposableEffect(window,owner,foremost) {
+        val flag=android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+        val previous=window?.attributes?.flags?.and(flag)!=0 && window!=null
+        fun applyAwake(){if(foremost && owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))window?.addFlags(flag) else window?.clearFlags(flag)}
+        val observer=androidx.lifecycle.LifecycleEventObserver { _,_->applyAwake() }
+        owner.lifecycle.addObserver(observer);applyAwake()
+        onDispose { owner.lifecycle.removeObserver(observer);if(previous)window?.addFlags(flag) else window?.clearFlags(flag) }
+    }
     var legacy by rememberSaveable { mutableStateOf(false) }
     if(legacy) {
         BackHandler { legacy = false }
@@ -32,14 +47,14 @@ import org.json.JSONObject
             }
             Box(Modifier.weight(1f)) { CafeLegacyScreen() }
         }
-    } else CafeRoomScreen { legacy = true }
+    } else CafeRoomScreen(foremost) { legacy = true }
 }
 
-@Composable private fun CafeRoomScreen(legacy: () -> Unit) {
+@Composable private fun CafeRoomScreen(foremost:Boolean,legacy: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember { CafeRoomPreferences(context) }
     val owner = LocalLifecycleOwner.current
-    val lifecycle by owner.lifecycle.currentStateFlow.collectAsStateWithLifecycle()
+    val lifecycle by owner.lifecycle.currentStateFlow.collectAsState()
     var mode by remember { mutableStateOf(prefs.mode) }
     var pace by remember { mutableStateOf(prefs.pace) }
     var ambient by remember { mutableStateOf(prefs.ambient) }
@@ -53,8 +68,18 @@ import org.json.JSONObject
     var failed by remember { mutableStateOf(false) }
     var attempt by remember { mutableIntStateOf(0) }
     var web by remember { mutableStateOf<CafeRoomView?>(null) }
+    DisposableEffect(owner) {
+        val observer=androidx.lifecycle.LifecycleEventObserver { _,event ->
+            if(event==Lifecycle.Event.ON_PAUSE || event==Lifecycle.Event.ON_STOP || event==Lifecycle.Event.ON_DESTROY) {
+                web?.let { view -> view.disposeRoom();web=null;status=JSONObject();attempt++ }
+            }
+        }
+        owner.lifecycle.addObserver(observer)
+        onDispose { owner.lifecycle.removeObserver(observer) }
+    }
     val ready = status.optBoolean("ready") && !failed
     val paused = status.optBoolean("paused")
+    val mounted=foremost && lifecycle.isAtLeast(Lifecycle.State.RESUMED)
     val systemReduced = remember(lifecycle) {
         Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
     }
@@ -65,12 +90,8 @@ import org.json.JSONObject
         web?.command(id)
     }
     LaunchedEffect(web, mode, pace, ambient, reduced, systemReduced, close) { web?.configure(config()) }
-    LaunchedEffect(web, lifecycle, actions, tools, failed) {
-        web?.setHostActive(lifecycle.isAtLeast(Lifecycle.State.RESUMED) && !actions && !tools && !failed)
-    }
-    DisposableEffect(web) {
-        val current = web
-        onDispose { current?.disposeRoom() }
+    LaunchedEffect(web, mounted, actions, tools, failed) {
+        web?.setHostActive(mounted && !actions && !tools && !failed)
     }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -81,7 +102,7 @@ import org.json.JSONObject
             val roomHeight = maxHeight * .60f
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.fillMaxWidth().height(roomHeight)) {
-                    key(attempt) {
+                    if(mounted) key(attempt) {
                         AndroidView(modifier = Modifier.fillMaxSize(), factory = { ctx ->
                             CafeRoomView(ctx).also { view ->
                                 view.onStatus = { value ->
@@ -95,6 +116,9 @@ import org.json.JSONObject
                                 view.onPageReady = { view.configure(config().put("counts", prefs.counts())) }
                                 web = view; view.openRoom()
                             }
+                        },onReset=null,onRelease={ view ->
+                            view.disposeRoom()
+                            if(web===view) { web=null;status=JSONObject() }
                         })
                     }
                     if(failed) Surface(Modifier.fillMaxSize()) {

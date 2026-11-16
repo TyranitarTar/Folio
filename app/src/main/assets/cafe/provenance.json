@@ -5,12 +5,6 @@
   "clips": 34,
   "files": [
     {
-      "source": "animation_data.json",
-      "asset": "animation_data.json",
-      "sha256": "569990ae66df09dc2db1c5989eb537bda7c68ffe1ada4a5e9f71bcdafab0c7ae",
-      "bytes": 67684
-    },
-    {
       "source": "art/cat/miso-atlas.png",
       "asset": "art/cat/miso-atlas.png",
       "sha256": "d42d7224e0e76aaf09146f9419011130850f3e13640674a7e0d5db40a448ac1b",
@@ -147,24 +141,28 @@
       "asset": "art/environment/tiles/wall_right.png",
       "sha256": "24fe966be0320fa43c6550bfb423028b67ff3bb828aef48b464be37fae873adb",
       "bytes": 14026
+    }
+  ],
+  "folioOverrides": [
+    {
+      "asset": "animation_data.json",
+      "baselineSha256": "569990ae66df09dc2db1c5989eb537bda7c68ffe1ada4a5e9f71bcdafab0c7ae",
+      "runtimeSha256": "c26653a18bb58d9da9b790a8a57ce62e6269018c74524d99905f591e0cc31f54"
     },
     {
-      "source": "environment.json",
       "asset": "environment.json",
-      "sha256": "98d4b5f83e9624eccaf1fc33fc64689ebf4cb2c90e35e3caf8e1ebbc917802bf",
-      "bytes": 11911
+      "baselineSha256": "98d4b5f83e9624eccaf1fc33fc64689ebf4cb2c90e35e3caf8e1ebbc917802bf",
+      "runtimeSha256": "ccf73e54d6e58529bd73916b077822535ec08dbc25498ad4e7f599c693e6b3b1"
     },
     {
-      "source": "source/engine.js",
       "asset": "engine.js",
-      "sha256": "76e68c6bb4714c5d121712d4de49a5c6fcac0ee8f6f39cb4c7b429ac3639fed1",
-      "bytes": 17338
+      "baselineSha256": "76e68c6bb4714c5d121712d4de49a5c6fcac0ee8f6f39cb4c7b429ac3639fed1",
+      "runtimeSha256": "54582c5c7fb62ea8769ee8aa21e725c4619b15b148040176f695577f6293968f"
     },
     {
-      "source": "source/renderer.js",
       "asset": "renderer.js",
-      "sha256": "34d32ad2ee3b46c23a8af8a8fbe5acc9f60ecea7759260eb9c841734ca80d90b",
-      "bytes": 11857
+      "baselineSha256": "34d32ad2ee3b46c23a8af8a8fbe5acc9f60ecea7759260eb9c841734ca80d90b",
+      "runtimeSha256": "ab3e88dd33fd74e8e7f7b85ec95832d7930524fb1c235833eba24c49ee06aa19"
     }
   ]
 }

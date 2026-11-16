@@ -1,4 +1,4 @@
-# Folio 0.18 · Miso's room
+# Folio 0.18.1 · Miso's room
 
 The two laptop ZIPs are copied here without modification. SHA-256 copy checks
 are recorded in transfer-checksums.json. Only IMPLEMENTATION is extracted, into
@@ -13,8 +13,11 @@ Android integration lives in app/src/main/assets/cafe/ and CafeRoomScreen.kt /
 CafeRoomView.kt, rather than modifying or replacing the standalone reference.
 
 Run `python game/build_cafe.py` from android-reader to verify all 234 transfer
-manifest entries and stage the 27 unchanged runtime files. The host page,
-host.js and director.js are Folio-owned. provenance.json records copied hashes.
+manifest entries and stage the unchanged runtime files while retaining the four
+Folio overrides for movement, rendering, animation metadata and environment.
+The host page, host.js and director.js are Folio-owned. provenance.json records
+baseline and current override hashes. See IMPLEMENTATION-v0.18.1.md and
+VALIDATION-0181.md for the current follow-up and physical-device limitations.
 The complete artwork pipeline is retained in the extracted handoff for future
 sprite work; a source checkout can run/build Folio with just its staged assets.
 

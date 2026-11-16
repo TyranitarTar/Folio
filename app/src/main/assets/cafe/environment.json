@@ -67,7 +67,7 @@
       "elevation": 0,
       "solid": true,
       "flat": false,
-      "sprite": "art/environment/props/sofa.png",
+      "sprite": "art/environment/hq/sofa.png",
       "visible_bounds": [
         74,
         197,
@@ -108,7 +108,7 @@
       "elevation": 0,
       "solid": true,
       "flat": false,
-      "sprite": "art/environment/props/lamp.png",
+      "sprite": "art/environment/hq/lamp.png",
       "visible_bounds": [
         138,
         198,
@@ -149,7 +149,7 @@
       "elevation": 0,
       "solid": false,
       "flat": true,
-      "sprite": "art/environment/props/rug.png",
+      "sprite": "art/environment/hq/rug.png",
       "visible_bounds": [
         45,
         257,
@@ -190,7 +190,7 @@
       "elevation": 0,
       "solid": true,
       "flat": false,
-      "sprite": "art/environment/props/cat_tower.png",
+      "sprite": "art/environment/hq/cat_tower.png",
       "visible_bounds": [
         104,
         196,
@@ -231,7 +231,7 @@
       "elevation": 0,
       "solid": true,
       "flat": false,
-      "sprite": "art/environment/props/tunnel.png",
+      "sprite": "art/environment/hq/tunnel.png",
       "visible_bounds": [
         86,
         263,
@@ -272,7 +272,7 @@
       "elevation": 0,
       "solid": true,
       "flat": false,
-      "sprite": "art/environment/props/box.png",
+      "sprite": "art/environment/hq/box.png",
       "visible_bounds": [
         99,
         250,
@@ -313,7 +313,7 @@
       "elevation": 0,
       "solid": true,
       "flat": false,
-      "sprite": "art/environment/props/ball_track.png",
+      "sprite": "art/environment/hq/ball_track.png",
       "visible_bounds": [
         114,
         279,
@@ -354,7 +354,7 @@
       "elevation": 0,
       "solid": false,
       "flat": true,
-      "sprite": "art/environment/props/feather.png",
+      "sprite": "art/environment/hq/feather.png",
       "visible_bounds": [
         117,
         289,
@@ -395,7 +395,7 @@
       "elevation": 0,
       "solid": true,
       "flat": false,
-      "sprite": "art/environment/props/bowls.png",
+      "sprite": "art/environment/hq/bowls.png",
       "visible_bounds": [
         112,
         272,
@@ -436,7 +436,7 @@
       "elevation": 102,
       "solid": false,
       "flat": false,
-      "sprite": "art/environment/props/high_shelf.png",
+      "sprite": "art/environment/hq/high_shelf.png",
       "visible_bounds": [
         72,
         237,
@@ -477,7 +477,7 @@
       "elevation": 110,
       "solid": false,
       "flat": false,
-      "sprite": "art/environment/props/cubby_books.png",
+      "sprite": "art/environment/hq/cubby_books.png",
       "visible_bounds": [
         132,
         274,
@@ -518,7 +518,7 @@
       "elevation": 130,
       "solid": false,
       "flat": false,
-      "sprite": "art/environment/props/cubby_plant.png",
+      "sprite": "art/environment/hq/cubby_plant.png",
       "visible_bounds": [
         129,
         263,
@@ -559,7 +559,7 @@
       "elevation": 78,
       "solid": false,
       "flat": false,
-      "sprite": "art/environment/props/window.png",
+      "sprite": "art/environment/hq/window.png",
       "visible_bounds": [
         99,
         196,
@@ -600,7 +600,7 @@
       "elevation": 0,
       "solid": false,
       "flat": false,
-      "sprite": "art/environment/props/door.png",
+      "sprite": "art/environment/hq/door.png",
       "visible_bounds": [
         128,
         131,
@@ -612,7 +612,7 @@
   "tiles": [
     {
       "id": "floor_a",
-      "path": "art/environment/tiles/floor_a.png",
+      "path": "art/environment/hq/floor_a.png",
       "size": [
         128,
         64
@@ -625,7 +625,7 @@
     },
     {
       "id": "floor_b",
-      "path": "art/environment/tiles/floor_b.png",
+      "path": "art/environment/hq/floor_b.png",
       "size": [
         128,
         64
@@ -638,7 +638,7 @@
     },
     {
       "id": "floor_c",
-      "path": "art/environment/tiles/floor_c.png",
+      "path": "art/environment/hq/floor_c.png",
       "size": [
         128,
         64
@@ -651,7 +651,7 @@
     },
     {
       "id": "wall_left",
-      "path": "art/environment/tiles/wall_left.png",
+      "path": "art/environment/hq/wall_left.png",
       "size": [
         128,
         320
@@ -664,7 +664,7 @@
     },
     {
       "id": "wall_right",
-      "path": "art/environment/tiles/wall_right.png",
+      "path": "art/environment/hq/wall_right.png",
       "size": [
         128,
         320
@@ -677,7 +677,7 @@
     },
     {
       "id": "foundation_left",
-      "path": "art/environment/tiles/foundation_left.png",
+      "path": "art/environment/hq/foundation_left.png",
       "size": [
         128,
         64
@@ -690,7 +690,7 @@
     },
     {
       "id": "foundation_right",
-      "path": "art/environment/tiles/foundation_right.png",
+      "path": "art/environment/hq/foundation_right.png",
       "size": [
         128,
         64
@@ -703,7 +703,7 @@
     },
     {
       "id": "wall_post",
-      "path": "art/environment/tiles/wall_post.png",
+      "path": "art/environment/hq/wall_post.png",
       "size": [
         3,
         208
@@ -714,5 +714,6 @@
       ],
       "kind": "trim"
     }
-  ]
+  ],
+  "render_scale": 2
 }

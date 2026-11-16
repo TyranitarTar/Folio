@@ -53,8 +53,19 @@ internal class BookNotebookModel(application:Application):AndroidViewModel(appli
     private var order=0L
     private var savedText=""
     private var originalText:String?=null
+    private var openingEntry=""
     var editorScroll:Int?=null
-    val document:String get()=NotebookEditing.document(value.text,originalText)
+    val document:String get()=NotebookEditing.document(value.text,originalText,openingEntry)
+    fun entryContext():String {
+        val current=book ?: return ""
+        val playing=AudiobookController.state.value.takeIf{it.id==current.id}
+        val track=playing?.trackIndex ?: current.positionTrack
+        val at=playing?.positionMs ?: current.positionMs
+        val chapters=current.listeningChapters()
+        if(chapters.isEmpty())return "[C${track+1} · ${audioTime(at.coerceAtLeast(0))}] "
+        val index=chapters.currentChapter(track,at)
+        return "[C${index+1} · ${audioTime((at-chapters[index].startMs).coerceAtLeast(0))}] "
+    }
     private var durable=true
     private val undo=ArrayDeque<TextFieldValue>()
     private val redo=ArrayDeque<TextFieldValue>()
@@ -65,14 +76,14 @@ internal class BookNotebookModel(application:Application):AndroidViewModel(appli
                 if(store.books.value.none{it.id==id})store.load()
                 val current=store.books.value.firstOrNull{it.id==id} ?: error("This audiobook is no longer available.")
                 val document=store.notebooks.open(current)
-                book=current;savedText=document.text;originalText=document.text;value=NotebookEditing.begin(document.text);loaded=true;status="Saved"
+                book=current;openingEntry=entryContext();savedText=document.text;originalText=document.text;value=NotebookEditing.begin(document.text,openingEntry);loaded=true;status="Saved"
             } catch(e:CancellationException){throw e} catch(e:Exception){failed=true;status=e.message ?: "Notes could not open. Existing files have been kept."}
         }
     }
     fun edit(next:TextFieldValue) {
         if(!loaded)return
-        val edited=NotebookEditing.edit(value,next)
-        if(NotebookEditing.document(edited.text,originalText).length>BookNotebookStore.MAX_CHARS){status="Notebook full. Export the text before adding more.";return}
+        val edited=NotebookEditing.edit(value,next,entryContext())
+        if(NotebookEditing.document(edited.text,originalText,openingEntry).length>BookNotebookStore.MAX_CHARS){status="Notebook full. Export the text before adding more.";return}
         if(edited.text==value.text){value=edited;return}
         undo.addLast(value);trim(undo);redo.clear()
         value=edited;changed()
@@ -167,10 +178,7 @@ class BookNotebookActivity:ComponentActivity() {
                     DropdownMenuItem(text={Text("Export .txt")},onClick={menu=false;export.launch("${model.book?.title?.replace(Regex("[\\\\/:*?\"<>|]"),"_")?.take(100) ?: "Book"} - Notes.txt")})
                     DropdownMenuItem(text={Text("Find in notes")},onClick={menu=false;finding=true})
                     DropdownMenuItem(text={Text("Insert playback timestamp")},onClick={
-                        menu=false;val book=model.book ?: return@DropdownMenuItem;val state=AudiobookController.state.value.takeIf{it.id==book.id}
-                        val track=state?.trackIndex ?: book.positionTrack;val at=state?.positionMs ?: book.positionMs
-                        val chapters=book.listeningChapters();val chapter=chapters[chapters.currentChapter(track,at)]
-                        model.insert("[${chapter.title} · ${audioTime((at-chapter.startMs).coerceAtLeast(0))}] ")
+                        menu=false;model.insert(model.entryContext())
                     })
                 }
             }

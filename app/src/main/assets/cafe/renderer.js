@@ -7,13 +7,13 @@
  function contains(poly,x,y){let inside=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])inside=!inside;}return inside;}
  function spans(poly,width){return Array.from({length:width},(_,x)=>{const at=x+.5,ys=[];for(let i=0;i<poly.length;i++){const a=poly[i],b=poly[(i+1)%poly.length];if((a[0]<=at&&b[0]>at)||(b[0]<=at&&a[0]>at))ys.push(a[1]+(at-a[0])*(b[1]-a[1])/(b[0]-a[0]));}return ys.length>=2?[Math.min(...ys),Math.max(...ys)]:null;});}
  class Renderer{
-  constructor(env,meta,images,makeCanvas){this.env=env;this.meta=meta;this.images=images;this.makeCanvas=makeCanvas;this.shell=makeCanvas(1024,768);this.props=new Map(env.assets.map(a=>[a.id,a]));this.tiles=new Map(env.tiles.map(a=>[a.id,a]));this.hit=new Map();this.mapping={scale:1,tx:0,ty:0};this.buildShell();
-   for(const a of env.assets){const c=makeCanvas(...a.cell),g=c.getContext('2d');g.drawImage(images[a.sprite],0,0);this.hit.set(a.id,g.getImageData(0,0,...a.cell).data);}
+  constructor(env,meta,images,makeCanvas){this.env=env;this.meta=meta;this.images=images;this.makeCanvas=makeCanvas;this.res=1;this.shell=makeCanvas(1024,768);this.room=makeCanvas(1024,768);this.sceneKey=null;this.sceneBuilds=0;this.props=new Map(env.assets.map(a=>[a.id,a]));this.tiles=new Map(env.tiles.map(a=>[a.id,a]));this.hit=new Map();this.mapping={scale:1,tx:0,ty:0};this.buildShell();
+   for(const a of env.assets){const c=makeCanvas(...a.cell),g=c.getContext('2d');g.drawImage(images[a.sprite],0,0,...a.cell);this.hit.set(a.id,g.getImageData(0,0,...a.cell).data);}
    this.spans=new Map(Object.entries(VOLUMES).map(([id,v])=>[id,spans(v.ground,320)]));this.catLayer=makeCanvas(100,100);this.catCtx=this.catLayer.getContext('2d',{willReadFrequently:true});this.coverLayer=makeCanvas(100,100);this.coverData=this.coverLayer.getContext('2d').createImageData(100,100);this.lastOcclusion={};
   }
   project(p,z=0){return [this.env.origin[0]+(p[0]-p[1])*64,this.env.origin[1]+(p[0]+p[1])*32-z];}
   pos(a){const p=this.project(a.pos,a.elevation);return [p[0]-a.anchor[0],p[1]-a.anchor[1]];}
-  buildShell(){const g=this.shell.getContext('2d');g.imageSmoothingEnabled=false;g.fillStyle='#f2ebdf';g.fillRect(0,0,1024,768);const tile=(id,x,y)=>{const t=this.tiles.get(id),p=this.project([x,y]);g.drawImage(this.images[t.path],Math.round(p[0]-t.anchor[0]),Math.round(p[1]-t.anchor[1]));};
+  buildShell(){const g=this.shell.getContext('2d');g.scale(this.res,this.res);g.imageSmoothingEnabled=false;g.fillStyle='#f2ebdf';g.fillRect(0,0,1024,768);const tile=(id,x,y)=>{const t=this.tiles.get(id),p=this.project([x,y]);g.drawImage(this.images[t.path],Math.round(p[0]-t.anchor[0]),Math.round(p[1]-t.anchor[1]),...t.size);};
    for(let i=0;i<5;i++){tile('foundation_left',i,5);tile('foundation_right',5,i);}for(let y=0;y<5;y++)for(let x=0;x<5;x++)tile(['floor_a','floor_b','floor_c'][(x*3+y*7)%3],x,y);for(let i=0;i<5;i++){tile('wall_left',0,i);tile('wall_right',i,0);}for(const [x,y] of [[0,0],[0,5],[5,0]])tile('wall_post',x,y);
   }
   screenToWorld(x,y){const m=this.mapping;return [(x-m.tx)/m.scale,(y-m.ty)/m.scale];}
@@ -23,13 +23,13 @@
   }
   prop(g,a,game,opt){const [x,y]=this.pos(a),im=this.images[a.sprite],regions=opt.ambient?REGIONS[a.id]||[]:[];g.save();g.translate(Math.round(x),Math.round(y));g.imageSmoothingEnabled=opt.soft;
    if(opt.selected===a.id){g.shadowColor='#b69655aa';g.shadowBlur=7;}
-   if(game.actor.effect==='ball'&&a.id==='ball_track')g.translate(Math.sin(game.time*.026)*1.2,0);
-   if(!regions.length)g.drawImage(im,0,0);else{
-    g.save();g.beginPath();g.rect(0,0,...a.cell);for(const r of regions)g.rect(...r.box);g.clip('evenodd');g.drawImage(im,0,0);g.restore();
-    g.shadowBlur=0;for(const r of regions){const angle=Math.sin(game.time*2*Math.PI/r.period)*r.amplitude*(game.actor.effect==='scratch'&&a.id==='cat_tower'?2.4:1);g.save();g.translate(...r.pivot);g.rotate(angle);const [sx,sy,w,h]=r.box;g.drawImage(im,sx,sy,w,h,sx-r.pivot[0],sy-r.pivot[1],w,h);g.restore();}
+   if(!opt.static&&game.actor.effect==='ball'&&a.id==='ball_track')g.translate(Math.sin(game.time*.026)*1.2,0);
+   if(!regions.length)g.drawImage(im,0,0,...a.cell);else{
+    g.save();g.beginPath();g.rect(0,0,...a.cell);for(const r of regions)g.rect(...r.box);g.clip('evenodd');g.drawImage(im,0,0,...a.cell);g.restore();
+    g.shadowBlur=0;if(!opt.static)for(const r of regions){const angle=Math.sin(game.time*2*Math.PI/r.period)*r.amplitude*(game.actor.effect==='scratch'&&a.id==='cat_tower'?2.4:1);g.save();g.translate(...r.pivot);g.rotate(angle);const [sx,sy,w,h]=r.box;const density=im.width/a.cell[0];g.drawImage(im,sx*density,sy*density,w*density,h*density,sx-r.pivot[0],sy-r.pivot[1],w,h);g.restore();}
    }
    g.shadowBlur=0;
-   if(a.id==='bowls'&&opt.ambient){g.save();g.beginPath();g.ellipse(175,299,12,6,0,0,Math.PI*2);g.clip();const t=(game.time%1700)/1700;g.strokeStyle=`rgba(244,255,249,${.5*(1-t)})`;g.lineWidth=1.2;g.beginPath();g.ellipse(175,299,3+t*10,1.5+t*5,0,0,Math.PI*2);g.stroke();if(game.action==='drink'){g.fillStyle='#fff8d9';g.fillRect(171+Math.round(Math.sin(game.time*.01)*3),296,2,1);}g.restore();}
+   if(a.id==='bowls'&&opt.ambient&&!opt.static){g.save();g.beginPath();g.ellipse(175,299,12,6,0,0,Math.PI*2);g.clip();const t=(game.time%1700)/1700;g.strokeStyle=`rgba(244,255,249,${.5*(1-t)})`;g.lineWidth=1.2;g.beginPath();g.ellipse(175,299,3+t*10,1.5+t*5,0,0,Math.PI*2);g.stroke();if(game.action==='drink'){g.fillStyle='#fff8d9';g.fillRect(171+Math.round(Math.sin(game.time*.01)*3),296,2,1);}g.restore();}
    g.restore();
   }
   shadow(g,game){const a=game.actor;if(a.occlusion==='tunnel'&&a.progress>.2&&a.progress<.8)return;const platform=game.platforms[a.support],base=platform?.z??0,p=this.project(a.at,base),lift=Math.max(0,a.z-base);g.save();g.fillStyle=`rgba(68,48,44,${Math.max(.07,.2-lift*.001)})`;g.beginPath();g.ellipse(p[0],p[1]+1,Math.max(6,13*game.scale-lift*.025),4*game.scale,0,0,Math.PI*2);g.fill();g.restore();}
@@ -56,17 +56,25 @@
    }
    this.lastCatStats={rawPixels:raw,visiblePixels:visible,visibleFraction:visible/Math.max(1,raw),headVisibleFraction:headVisible/Math.max(1,headRaw)};const mg=this.coverLayer.getContext('2d');mg.putImageData(this.coverData,0,0);cg.save();cg.globalCompositeOperation='destination-out';cg.drawImage(this.coverLayer,0,0);cg.restore();g.save();g.imageSmoothingEnabled=false;g.drawImage(this.catLayer,left,top);g.restore();
   }
-  boxFront(g){const a=this.props.get('box'),p=this.pos(a);g.save();g.translate(...p);g.beginPath();[[101,279],[159,304],[213,281],[208,312],[160,335],[109,312]].forEach(([x,y],i)=>i?g.lineTo(x,y):g.moveTo(x,y));g.closePath();g.clip();g.drawImage(this.images[a.sprite],0,0);g.restore();}
-  tunnelFront(g){const a=this.props.get('tunnel'),p=this.pos(a);g.save();g.translate(...p);g.beginPath();g.rect(0,0,...a.cell);g.ellipse(184,322,17,23,.18,0,Math.PI*2);g.clip('evenodd');g.drawImage(this.images[a.sprite],0,0);g.restore();}
+  boxFront(g){const a=this.props.get('box'),p=this.pos(a);g.save();g.translate(...p);g.beginPath();[[101,279],[159,304],[213,281],[208,312],[160,335],[109,312]].forEach(([x,y],i)=>i?g.lineTo(x,y):g.moveTo(x,y));g.closePath();g.clip();g.drawImage(this.images[a.sprite],0,0,...a.cell);g.restore();}
+  tunnelFront(g){const a=this.props.get('tunnel'),p=this.pos(a);g.save();g.translate(...p);g.beginPath();g.rect(0,0,...a.cell);g.ellipse(184,322,17,23,.18,0,Math.PI*2);g.clip('evenodd');g.drawImage(this.images[a.sprite],0,0,...a.cell);g.restore();}
+  scene(game,opt){const key=[game.lamp,opt.ambient,opt.soft,opt.selected].join('|');if(key!==this.sceneKey){this.sceneKey=key;this.sceneBuilds++;const g=this.room.getContext('2d');g.setTransform(this.res,0,0,this.res,0,0);g.imageSmoothingEnabled=opt.soft;g.drawImage(this.shell,0,0,1024,768);
+   if(game.lamp){const a=this.props.get('lamp'),p=this.pos(a),x=p[0]+160,y=p[1]+216,r=g.createRadialGradient(x,y,3,x,y,105);const pulse=0;r.addColorStop(0,`rgba(255,219,143,${.13+pulse})`);r.addColorStop(1,'rgba(255,219,143,0)');g.fillStyle=r;g.fillRect(x-105,y-105,210,210);}
+   const props=this.env.assets;for(const a of props.filter(a=>a.surface!=='floor'))this.prop(g,a,game,{...opt,static:true});for(const a of props.filter(a=>a.flat))this.prop(g,a,game,{...opt,static:true});
+   for(const a of props.filter(a=>a.surface==='floor'&&!a.flat&&a.id!=='ball_track').sort((a,b)=>(a.pos[0]+a.pos[1])-(b.pos[0]+b.pos[1])))this.prop(g,a,game,{...opt,static:true});
+}return this.room;}
+  dynamic(g,game,opt){
+   if(opt.ambient)for(const [id,regions] of Object.entries(REGIONS)){const a=this.props.get(id),im=this.images[a.sprite],[x,y]=this.pos(a),density=im.width/a.cell[0];for(const r of regions){const [sx,sy,w,h]=r.box,angle=Math.sin(game.time*2*Math.PI/r.period)*r.amplitude*(game.actor.effect==='scratch'&&id==='cat_tower'?2.4:1);g.save();g.translate(Math.round(x)+r.pivot[0],Math.round(y)+r.pivot[1]);g.rotate(angle);g.imageSmoothingEnabled=opt.soft;g.drawImage(im,sx*density,sy*density,w*density,h*density,sx-r.pivot[0],sy-r.pivot[1],w,h);g.restore();}}
+   this.prop(g,this.props.get('ball_track'),game,{...opt,ambient:false});
+   if(opt.ambient){const a=this.props.get('bowls'),[x,y]=this.pos(a),t=(game.time%1700)/1700;g.save();g.translate(Math.round(x),Math.round(y));g.beginPath();g.ellipse(175,299,12,6,0,0,Math.PI*2);g.clip();g.strokeStyle=`rgba(244,255,249,${.5*(1-t)})`;g.lineWidth=1.2;g.beginPath();g.ellipse(175,299,3+t*10,1.5+t*5,0,0,Math.PI*2);g.stroke();g.restore();}
+  }
   render(g,game,width,height,options={}){const opt={soft:true,ambient:true,zoom:1,selected:null,...options},v=this.env.viewport;let scale=Math.min(width/v[2],height/v[3])*opt.zoom;
+   const resolution=Math.min(this.env.render_scale||1,Math.max(1,Math.ceil(scale)));
+   if(resolution!==this.res){this.res=resolution;this.shell.width=1024*resolution;this.shell.height=768*resolution;this.room.width=1024*resolution;this.room.height=768*resolution;this.sceneKey=null;this.buildShell();}
    let cx=v[0]+v[2]/2,cy=v[1]+v[3]/2;if(opt.zoom>1&&opt.focus){cx=opt.focus[0];cy=opt.focus[1];cx=Math.max(144+width/scale/2,Math.min(880-width/scale/2,cx));cy=Math.max(64+height/scale/2,Math.min(704-height/scale/2,cy));}
-   const tx=width/2-cx*scale,ty=height/2-cy*scale;this.mapping={scale,tx,ty};g.setTransform(1,0,0,1,0,0);g.fillStyle='#f2ebdf';g.fillRect(0,0,width,height);g.setTransform(scale,0,0,scale,tx,ty);g.imageSmoothingEnabled=opt.soft;g.drawImage(this.shell,0,0);
-   if(game.lamp){const a=this.props.get('lamp'),p=this.pos(a),x=p[0]+160,y=p[1]+216,r=g.createRadialGradient(x,y,3,x,y,105);const pulse=opt.ambient?Math.sin(game.time*.0012)*.015:0;r.addColorStop(0,`rgba(255,219,143,${.13+pulse})`);r.addColorStop(1,'rgba(255,219,143,0)');g.fillStyle=r;g.fillRect(x-105,y-105,210,210);}
-   const props=this.env.assets;for(const a of props.filter(a=>a.surface!=='floor'))this.prop(g,a,game,opt);for(const a of props.filter(a=>a.flat))this.prop(g,a,game,opt);
+   const tx=width/2-cx*scale,ty=height/2-cy*scale;this.mapping={scale,tx,ty};g.setTransform(1,0,0,1,0,0);g.fillStyle='#f2ebdf';g.fillRect(0,0,width,height);g.setTransform(scale,0,0,scale,tx,ty);g.imageSmoothingEnabled=opt.soft;g.drawImage(this.scene(game,opt),0,0,1024,768);this.dynamic(g,game,opt);
    if(game.mark&&game.busy){const p=this.project(game.mark);g.strokeStyle='#7c956d99';g.lineWidth=1.5;g.beginPath();g.ellipse(p[0],p[1],8,4,0,0,Math.PI*2);g.stroke();}
-   if(game.actor.support==='floor')this.shadow(g,game);
-   for(const a of props.filter(a=>a.surface==='floor'&&!a.flat).sort((a,b)=>(a.pos[0]+a.pos[1])-(b.pos[0]+b.pos[1])))this.prop(g,a,game,opt);
-   if(game.actor.support!=='floor')this.shadow(g,game);this.cat(g,game);
+   this.shadow(g,game);this.cat(g,game);
    if(!game.lamp){g.fillStyle='rgba(59,64,81,.045)';g.fillRect(100,40,800,680);}g.setTransform(1,0,0,1,0,0);return this.mapping;
   }
  }

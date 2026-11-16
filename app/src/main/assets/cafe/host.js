@@ -2,11 +2,11 @@
   'use strict';
   const canvas = document.getElementById('room'), ctx = canvas.getContext('2d');
   let game, renderer, director, ready = false, configured = false, destroyed = false, hostActive = false;
-  let paused = false, handle = null, last = null, frames = 0, lastReport = '', lastCounts = '';
+  let paused = false, handle = null, wakeHandle = null, last = null, frames = 0, paints = 0, lastReport = '', lastCounts = '';
   let settings = {mode:'random', pace:'walk', ambient:true, reduced:false, close:false, counts:{}};
   const signal = (method, data) => { try { window.FolioRoom?.[method](JSON.stringify(data)); } catch (_) {} };
   const snapshot = () => ({ready, active:hostActive && !document.hidden, paused, frames,
-    mode:director?.mode || settings.mode, ...game?.snapshot()});
+    mode:director?.mode || settings.mode, paints, sceneBuilds:renderer?.sceneBuilds || 0, canvas:[canvas.width,canvas.height], dpr:window.devicePixelRatio || 1, ...game?.snapshot()});
   function report(force = false) {
     if (!ready || !configured) return;
     const value = {ready:true, paused, mode:director.mode, busy:game.busy, action:game.action,
@@ -22,28 +22,30 @@
     if (saved !== lastCounts) { lastCounts = saved; signal('discoveries', counts); }
   }
   function render() {
-    if (ready && !destroyed && hostActive && !document.hidden) renderer.render(ctx, game, canvas.width, canvas.height,
+    if (ready && !destroyed && hostActive && !document.hidden) { paints++; renderer.render(ctx, game, canvas.width, canvas.height,
       {soft:true, ambient:settings.ambient && !settings.reduced, zoom:settings.close ? 1.45 : 1,
-        focus:game.world.project(game.actor.at, game.actor.z).map((v,i) => i ? v-70 : v)});
+        focus:game.world.project(game.actor.at, game.actor.z).map((v,i) => i ? v-70 : v)}); }
   }
   function resized() {
-    const r = canvas.getBoundingClientRect(), dpr = Math.min(3, window.devicePixelRatio || 1);
-    canvas.width = Math.max(1, Math.round(r.width*dpr)); canvas.height = Math.max(1, Math.round(r.height*dpr));
+    const r = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    const w=Math.max(1,Math.round(r.width*dpr)),h=Math.max(1,Math.round(r.height*dpr));
+    if(canvas.width!==w)canvas.width=w;if(canvas.height!==h)canvas.height=h;
     render();
   }
-  function suspend() { if (handle !== null) cancelAnimationFrame(handle); handle = null; last = null; }
+  function suspend() { if (handle !== null) cancelAnimationFrame(handle); if(wakeHandle!==null)clearTimeout(wakeHandle); handle = null; wakeHandle=null; last = null; }
   function schedule() {
-    if (ready && !destroyed && hostActive && !paused && !document.hidden && handle === null) handle = requestAnimationFrame(tick);
+    if (ready && !destroyed && hostActive && !paused && !document.hidden && handle === null && wakeHandle===null) {
+      const delay=game.busy?1000/24:settings.reduced?1000:settings.ambient?125:250;
+      wakeHandle=setTimeout(()=>{wakeHandle=null;handle=requestAnimationFrame(tick);},delay);
+    }
   }
   function tick(now) {
     handle = null;
     if (destroyed || !hostActive || paused || document.hidden) { last = null; return; }
-    const dt = last === null ? 0 : Math.max(0, Math.min(80, now-last));
-    // Cap expensive pixel-mask compositing at 30 fps; preserve elapsed simulation time.
-    if (last !== null && dt < 32) { schedule(); return; }
+    const dt = last === null ? 0 : Math.max(0, Math.min(1000, now-last));
     last = now;
     director.update(dt); frames++;
-    if (!settings.reduced || game.busy || frames % 8 === 0) render();
+    render();
     report(); schedule();
   }
   function configure(value) {
@@ -70,7 +72,7 @@
       const counts = game.counts; game.reset(); game.counts = counts;
       director.setMode('manual'); game.pace = settings.pace;
     } else if (!director.command(id)) return false;
-    render(); report(true); return true;
+    render(); report(true); suspend();schedule(); return true;
   }
   function active(value) {
     hostActive = Boolean(value);
@@ -92,7 +94,7 @@
     window.removeEventListener('resize', resized); document.removeEventListener('visibilitychange', visibility);
     canvas.removeEventListener('pointerup', pointer);
     if (renderer) {
-      for (const c of [renderer.shell, renderer.catLayer, renderer.coverLayer]) { c.width = 1; c.height = 1; }
+      for (const c of [renderer.shell, renderer.room, renderer.catLayer, renderer.coverLayer]) { c.width = 1; c.height = 1; }
       renderer.images = {}; renderer.hit.clear();
     }
     renderer = null; game = null; director = null; ready = false; canvas.width = 1; canvas.height = 1;

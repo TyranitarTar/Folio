@@ -1,0 +1,66 @@
+{
+  "character": "Miso",
+  "version": 1,
+  "status": "Frozen baseline from the current neutral standing idle; user may replace with a new version.",
+  "canvas": [
+    64,
+    64
+  ],
+  "root": [
+    31,
+    55
+  ],
+  "facing": "sw",
+  "opaque_bounds": [
+    8,
+    5,
+    56,
+    55
+  ],
+  "opaque_size": [
+    48,
+    50
+  ],
+  "opaque_colors": 16,
+  "palette": [
+    "#4a2935",
+    "#71383a",
+    "#974a32",
+    "#b75c31",
+    "#d77a36",
+    "#ef9944",
+    "#ffb85e",
+    "#c18c66",
+    "#e8b98b",
+    "#ffdfac",
+    "#fff0cb",
+    "#d98b88",
+    "#a86470",
+    "#264638",
+    "#598740",
+    "#a6bf66"
+  ],
+  "alpha_values": [
+    0,
+    255
+  ],
+  "pixel_sha256": "ae9e9180e61265b23a7a5b8319b809216570d8bed488603b4cdd753ccc740dcc",
+  "source": {
+    "pack": "miso-imagegen-v3",
+    "clip": "idle",
+    "clip_frame": 0,
+    "atlas_frame": 0
+  },
+  "generation_references": [
+    "miso-master-sw-64.png",
+    "miso-master-sw-8x.png"
+  ],
+  "invariants": [
+    "Both reference images show exactly the same pixels; 8x is nearest-neighbor enlargement.",
+    "No new neutral design, changed head size, body thickness, paw size, fur markings, palette, or camera.",
+    "No per-frame or per-sheet fit-to-bounding-box resizing. Use a fixed cell grid and one documented sampling scale.",
+    "Generate full poses; no procedural limb reconstruction or partial-body overlays.",
+    "New outputs are drafts, not references for later generations.",
+    "Native format tests do not establish correct anatomy or consistent design; visually review each frame."
+  ]
+}

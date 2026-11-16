@@ -1,0 +1,88 @@
+{
+  "frames": 310,
+  "retained_frames": 289,
+  "clips": 40,
+  "jobs": [
+    {
+      "direction": "front",
+      "facing": "s",
+      "grid": [
+        3,
+        2
+      ],
+      "source": [
+        1536,
+        1024
+      ],
+      "alpha_threshold": 190,
+      "native": [
+        64,
+        64
+      ],
+      "root": [
+        31,
+        55
+      ],
+      "whole_frame_translation": [
+        0,
+        -1
+      ],
+      "silhouette_fit": false,
+      "source_sha256": "8a389518a3e053fd276955e28c66dcd4c22cabebfa0b6dc97bf99cbb34ef5ed6"
+    },
+    {
+      "direction": "west",
+      "facing": "w",
+      "grid": [
+        3,
+        2
+      ],
+      "source": [
+        1536,
+        1024
+      ],
+      "alpha_threshold": 190,
+      "native": [
+        64,
+        64
+      ],
+      "root": [
+        31,
+        55
+      ],
+      "whole_frame_translation": [
+        0,
+        5
+      ],
+      "silhouette_fit": false,
+      "source_sha256": "26a99169b0b14930c55439c77feb5d45fc4598650b704e3ca1c5c165f51730fc"
+    },
+    {
+      "direction": "back",
+      "facing": "n",
+      "grid": [
+        3,
+        2
+      ],
+      "source": [
+        1536,
+        1024
+      ],
+      "alpha_threshold": 190,
+      "native": [
+        64,
+        64
+      ],
+      "root": [
+        31,
+        55
+      ],
+      "whole_frame_translation": [
+        0,
+        0
+      ],
+      "silhouette_fit": false,
+      "source_sha256": "fafe7ebaa3004a620c1bae9722d351da35070f198ce0be6244eb672ed86677aa"
+    }
+  ]
+}

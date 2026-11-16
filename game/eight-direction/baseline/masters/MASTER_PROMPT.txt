@@ -1,0 +1,34 @@
+Use case: identity-preserve.
+Asset type: pixel-art animation key poses for Miso in the existing isometric room.
+
+REFERENCE INPUTS (always include both explicitly in the image-gen call):
+1. miso-master-sw-64.png: the canonical character, pixel density and cell scale.
+2. miso-master-sw-8x.png: exactly the same bitmap enlarged by nearest-neighbor for inspection. It is not a separate design.
+
+Treat this as the SAME Miso sprite in a changed pose, not a character redesign.
+Keep head size, cheek shape, ear size, muzzle, green eyes, chest depth, torso
+thickness, legs/paws, tail thickness and length, and the coat markings faithful
+to the reference. Keep the same camera, pixel-cluster density and palette.
+Do not make Miso chunkier, younger, taller, fluffier or more detailed.
+
+Draw the entire cat in every pose. Four legs total. A lifted forepaw leaves
+its floor position; do not retain a duplicate grounded paw. No geometric
+replacement limbs, body-part collages, detached paws or extra appendages.
+
+Every pose is planned within an equal 64x64 logical cell with root [31,55].
+The standing silhouette is 48x50 pixels including tail, inside that cell.
+Keep the figure-to-cell size consistent; never enlarge a sitting/curled pose
+just to fill its cell. Render visible square pixel clusters with stepped
+one-pixel outlines, no smooth painting, gradient, fur noise or extra detail.
+
+Keep a fixed grid and adequate empty cell margins. No text or grid lines.
+Neutral ivory background for a sheet, or actual transparency for an isolated
+pose. Do not include floor shadows in sprite art.
+
+POSE REQUEST:
+[Specify only the requested action and its key poses here.]
+
+OUTPUT REVIEW:
+The generator may return a large image rather than a literal 64x64 bitmap.
+That is a draft. It must pass identity/anatomy review before native export.
+Do not use this new output as the reference for the next generation.

@@ -67,6 +67,7 @@ internal class CafeRoomPreferences(context: Context) {
 /** A single, local-only WebView owns one renderer. It has no access to file/content URLs. */
 @SuppressLint("SetJavaScriptEnabled", "ViewConstructor")
 internal class CafeRoomView(context: Context) : WebView(context) {
+    companion object { val liveInstances=java.util.concurrent.atomic.AtomicInteger(0) }
     var onStatus: (JSONObject) -> Unit = {}
     var onPick: (String) -> Unit = {}
     var onFailure: () -> Unit = {}
@@ -74,8 +75,10 @@ internal class CafeRoomView(context: Context) : WebView(context) {
     var onPageReady: () -> Unit = {}
     private var disposed = false
     private var hostActive = false
+    private var initialized=false
     private val origin = "https://folio.local/cafe/"
     init {
+        liveInstances.incrementAndGet()
         // WebView treats a WRAP_CONTENT height as a zero-height CSS viewport,
         // even when Compose gives AndroidView a fixed measured rectangle.
         layoutParams = android.view.ViewGroup.LayoutParams(
@@ -108,6 +111,15 @@ internal class CafeRoomView(context: Context) : WebView(context) {
                 return true // Retry replaces this dead WebView; don't crash the reader.
             }
         }
+        initialized=true
+    }
+    override fun onWindowFocusChanged(hasWindowFocus:Boolean) {
+        super.onWindowFocusChanged(hasWindowFocus)
+        if(initialized)applyVisibility()
+    }
+    override fun onWindowVisibilityChanged(visibility:Int) {
+        super.onWindowVisibilityChanged(visibility)
+        if(initialized)applyVisibility()
     }
     internal fun asset(uri: Uri): WebResourceResponse {
         fun missing() = WebResourceResponse("text/plain", "UTF-8", 404, "Not found", emptyMap(), ByteArrayInputStream(byteArrayOf()))
@@ -126,16 +138,21 @@ internal class CafeRoomView(context: Context) : WebView(context) {
     fun command(id: String) { script("window.FolioCafe?.command(${JSONObject.quote(id)})") }
     fun setHostActive(active: Boolean) {
         hostActive = active
-        if(disposed) return
-        if(active) onResume()
+        applyVisibility()
+    }
+    private fun applyVisibility() {
+        if(disposed) { return }
+        val active=hostActive && windowVisibility==android.view.View.VISIBLE && hasWindowFocus()
+        if(active) { onResume() }
         script("window.FolioCafe?.active($active)")
-        if(!active) onPause()
+        if(!active) { onPause() }
     }
     private fun script(code: String) { if(!disposed) evaluateJavascript(code, null) }
     fun disposeRoom() {
-        if(disposed) return
+        if(disposed) { return }
         script("window.FolioCafe?.destroy()")
         disposed = true
+        liveInstances.decrementAndGet()
         onStatus = {}; onPick = {}; onFailure = {}; onDiscoveries = {}; onPageReady = {}
         stopLoading(); removeJavascriptInterface("FolioRoom"); onPause()
         (parent as? android.view.ViewGroup)?.removeView(this)
