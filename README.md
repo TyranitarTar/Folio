@@ -1,6 +1,16 @@
 # Folio
 Folio is a vibe-coded Android reader with Danish and English TTS.
 
+Version **0.19.0** brings the approved Godot Cat Café to Android: detailed pixel
+Miso, eight movement directions, all 21 free activities, close camera, contextual
+menus, sunlight particles and ambient motion. The engine opens on demand in an
+isolated process and closes when you leave; narration remains independent. Room
+settings and discoveries migrate from 0.18.1. Previous earned café/story data is
+available through the room menu. Garden, upstairs and new stories come later.
+See [implementation and validation](IMPLEMENTATION-v0.19.md) and
+[Godot source/build instructions](game/miso-home/README.md).
+
+
 Version **0.18.1** improves note scrolling and adds C1/C2 chapter timestamps to
 new entries. Reader selections can open Google Translate to English. Cat Café
 stays awake while visible, unloads offscreen, uses adaptive rendering and larger

@@ -51,7 +51,12 @@ class CafeInstrumentedTest {
         File(app.filesDir, "v012-$label-state.json").writeText(app.cafe.profiles.value.test.json().toString(2))
     }
     private fun click(text: String) {
+        if(text=="Café") {
+            app.startActivity(Intent(app,CafeArchiveActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            device.waitForIdle();return
+        }
         if(text=="Reading") {
+            device.pressBack();device.waitForIdle()
             device.wait(Until.findObject(By.desc("eBooks library")),10000).click();device.waitForIdle();return
         }
         find(text); Thread.sleep(500)
@@ -121,22 +126,26 @@ class CafeInstrumentedTest {
         Unit
     }
     @Test fun normalScenePauseRecreationAndCafeVisitKeepBookAndWallet() = runBlocking {
+        // Start this disposable story fixture at page zero, even if the emulator
+        // already holds an ongoing chapter. @After restores the original profile.
+        val fixture=org.json.JSONObject(app.cafe.export())
+        fixture.getJSONObject("normal").put("scene",-1).put("page",0).put("read",0)
+        app.cafeReading.restore(fixture.toString())
         app.cafe.setEnabled(true)
         val book = app.library.importSample()
         val original = app.library.books.value.first { it.id == book.id }
         val originalBalance = app.cafe.profiles.value.normal.balance
-        ActivityScenario.launch<MainActivity>(Intent(app, MainActivity::class.java)).use { scenario ->
-            click("Café")
+        ActivityScenario.launch<CafeArchiveActivity>(Intent(app,CafeArchiveActivity::class.java)).use { archive ->
             device.takeScreenshot(File(app.filesDir, "v012-cafe-normal.png"))
             click("Læs kapitlet"); click("Videre"); click("Pause og gem")
             assertEquals(1, app.cafe.profiles.value.normal.page)
-            scenario.recreate()
+            archive.recreate()
             click("Fortsæt kapitlet")
             assertTrue(device.wait(Until.hasObject(By.text(MisoStory.chapters[0].opening[1])), 5000))
-            click("Pause og gem"); click("Reading")
-            assertEquals(original, app.library.books.value.first { it.id == book.id })
-            assertEquals(originalBalance, app.cafe.profiles.value.normal.balance)
+            click("Pause og gem")
         }
+        assertEquals(original, app.library.books.value.first { it.id == book.id })
+        assertEquals(originalBalance, app.cafe.profiles.value.normal.balance)
         Unit
     }
     @Test fun readingHeartbeatEarnsOneTreatAndCannotCountMenuOrInactiveTime() = runBlocking {

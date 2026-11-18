@@ -130,3 +130,4 @@ org.jspecify:jspecify:1.0.0
 org.readium.kotlin-toolkit:readium-navigator:3.1.2
 org.readium.kotlin-toolkit:readium-shared:3.1.2
 org.readium.kotlin-toolkit:readium-streamer:3.1.2
+org.godotengine:godot:4.7.2.stable

@@ -11,8 +11,8 @@
     <queries><intent><action android:name="android.intent.action.TTS_SERVICE"/></intent></queries>
     <application android:name=".FolioApp" android:label="Folio" android:icon="@mipmap/ic_folio_cat" android:roundIcon="@mipmap/ic_folio_cat_round"
         android:allowBackup="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules" android:supportsRtl="true" android:theme="@style/Theme.Folio">
-        <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.updates" android:exported="false" android:grantUriPermissions="true">
-            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/update_paths"/>
+        <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.updates" tools:replace="android:authorities" android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/update_paths" tools:replace="android:resource"/>
         </provider>
         <service android:name=".SpeechService" android:exported="false" android:foregroundServiceType="mediaPlayback"/>
         <service android:name=".AudiobookService" android:exported="false" android:foregroundServiceType="mediaPlayback"/>
@@ -21,6 +21,10 @@
         <activity android:name=".ReaderActivity" android:exported="false" android:configChanges="keyboardHidden"/>
         <activity android:name=".AudiobookActivity" android:exported="false"/>
         <activity android:name=".BookNotebookActivity" android:exported="false" android:windowSoftInputMode="adjustResize"/>
+        <activity android:name=".CafeActivity" android:process=":cafe" android:exported="false"
+            android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" android:screenOrientation="fullUser"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|keyboard|uiMode|density"/>
+        <activity android:name=".CafeArchiveActivity" android:exported="false"/>
         <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>

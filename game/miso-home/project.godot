@@ -1,0 +1,33 @@
+config_version=5
+
+[application]
+config/name="Misos lille hjem"
+run/main_scene="res://scenes/cafe.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+config/description="Folio 0.19 · Misos lille hjem"
+
+[display]
+window/size/viewport_width=540
+window/size/viewport_height=1200
+window/size/window_width_override=540
+window/size/window_height_override=1200
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=6
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
+textures/canvas_textures/default_texture_filter=0
+textures/vram_compression/import_etc2_astc=true
+environment/defaults/default_clear_color=Color(0.94, 0.90, 0.83, 1)
+
+[input_devices]
+pointing/emulate_touch_from_mouse=true
+
+[audio]
+driver/enable_input=false
+
+[editor_plugins]
+enabled=PackedStringArray()

@@ -32,6 +32,12 @@ for name in (".gitignore", "README.md", "TTS-roadmap.md", "build.gradle.kts", "a
 files.append(root / "verify_upgrade_v010.py")
 files.extend(p for p in (root / "game").glob("*") if p.is_file() and p.suffix in {".py", ".cjs", ".md", ".txt", ".json"})
 files.extend(p for p in (root / "game/eight-direction").rglob("*") if p.is_file() and p.suffix in {".py", ".md", ".txt", ".json", ".png", ".gif"})
+# Production Godot source, generated native art, and preserved generation originals.
+# Editor caches and machine-specific imports are recreated by Godot.
+files.extend(p for p in (root / "game/miso-home").rglob("*") if p.is_file()
+             and not any(part in {".godot", "__pycache__"} for part in p.relative_to(root).parts)
+             and p.suffix.lower() not in {".pyc", ".import"})
+files.extend(root / name for name in ("IMPLEMENTATION-v0.19.md", "validate_release_v019.py"))
 if (root / "IMPLEMENTATION-v0.18.1.md").is_file(): files.append(root / "IMPLEMENTATION-v0.18.1.md")
 if (root / "validate_release_v0181.py").is_file(): files.append(root / "validate_release_v0181.py")
 if (root / "IMPLEMENTATION-v0.18.md").is_file(): files.append(root / "IMPLEMENTATION-v0.18.md")

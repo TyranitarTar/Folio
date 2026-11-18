@@ -142,7 +142,7 @@ class Notebook0172InstrumentedTest {
                 device.pressKeyCode(android.view.KeyEvent.KEYCODE_MOVE_END)
                 device.pressKeyCode(android.view.KeyEvent.KEYCODE_ENTER)
                 device.executeShellCommand("input text Second");device.waitForIdle()
-                assertEquals("- First\n- Second",device.findObject(By.clazz("android.widget.EditText")).text)
+                assertTrue(device.findObject(By.clazz("android.widget.EditText")).text.matches(Regex("- First\\n- \\[C1 · [\\d:]+] Second")))
                 field.text="- Audio stays playing"
                 device.waitForIdle();assertEquals("- Audio stays playing",device.findObject(By.clazz("android.widget.EditText")).text)
                 device.pressHome();delay(600)
@@ -167,25 +167,35 @@ class Notebook0172InstrumentedTest {
             instrumentation.runOnMainSync{val model=ViewModelProvider(editor() as BookNotebookActivity)[BookNotebookModel::class.java];value=TextFieldSnapshot(model.value.text,model.value.selection.end)}
             return value!!
         }
+        suspend fun verify(phase:String,ready:()->Boolean) {
+            try { waitFor(ready) }
+            catch(e:TimeoutCancellationException) {
+                device.takeScreenshot(File(app.filesDir,"v019-long-notebook-timeout.png"))
+                throw AssertionError("Long notebook: $phase",e)
+            }
+        }
         try {
             ActivityScenario.launch<BookNotebookActivity>(Intent(app,BookNotebookActivity::class.java).putExtra("audiobook",book.id)).use {
                 assertNotNull(device.wait(Until.findObject(By.clazz("android.widget.EditText")),15000))
-                waitFor{editor()!=null && current().text.length==text.length}
+                verify("document loaded"){editor()!=null && current().text.length==text.length}
                 assertEquals(text.length,current().selection)
-                delay(400);device.pressKeyCode(android.view.KeyEvent.KEYCODE_DEL)
-                waitFor{current().text.length==text.length-1}
+                // A long document can finish layout before its input connection.
+                var ime=false
+                verify("keyboard ready"){instrumentation.runOnMainSync{ime=ViewCompat.getRootWindowInsets(editor()!!.window.decorView)?.isVisible(WindowInsetsCompat.Type.ime())==true};ime && device.findObject(By.clazz("android.widget.EditText"))?.isFocused==true}
+                device.pressKeyCode(android.view.KeyEvent.KEYCODE_DEL)
+                verify("backspace applied"){current().text.length==text.length-1}
                 assertTrue(current().text.endsWith("TAIL_MARKE"))
                 assertTrue(device.wait(Until.hasObject(By.text("Saved")),10000))
-                waitFor{caretVisible()}
+                verify("caret visible"){caretVisible()}
                 device.takeScreenshot(File(app.filesDir,"v0172-long-notebook.png"))
                 device.setOrientationLeft();delay(800)
                 assertNotNull(device.wait(Until.findObject(By.clazz("android.widget.EditText")),10000))
-                waitFor{editor()!=null}
+                verify("editor resumed"){editor()!=null}
                 assertEquals(text.dropLast(1),current().text)
-                waitFor{caretVisible()}
+                verify("caret visible"){caretVisible()}
                 device.takeScreenshot(File(app.filesDir,"v0172-notebook-landscape.png"))
                 device.setOrientationNatural();delay(500)
-                waitFor{editor()!=null};device.waitForIdle()
+                verify("editor resumed"){editor()!=null};device.waitForIdle()
                 click(By.desc("Back to player"))
             }
             assertEquals(text.dropLast(1),app.audiobooks.notebooks.open(book).text)

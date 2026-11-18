@@ -24,8 +24,8 @@ android {
         applicationId = "app.folio.reader"
         minSdk = 26
         targetSdk = 35
-        versionCode = 28
-        versionName = "0.18.1"
+        versionCode = 29
+        versionName = "0.19.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_static" } }
     }
@@ -60,7 +60,9 @@ android {
         }
     }
     buildTypes {
-        getByName("debug") { applicationIdSuffix = ".debug" }
+        getByName("debug") {
+            applicationIdSuffix = ".debug"
+        }
         getByName("release") {
             isDebuggable = false
             signingConfig = signingConfigs.getByName("localRelease")
@@ -79,6 +81,7 @@ tasks.withType<Test>().configureEach {
     }
 }
 dependencies {
+    implementation("org.godotengine:godot:4.7.2.stable")
     implementation("androidx.core:core-ktx:1.16.0")
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.appcompat:appcompat:1.7.0")

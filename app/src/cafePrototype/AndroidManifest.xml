@@ -1,0 +1,20 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <application>
+        <!-- The prototype does not use Godot file sharing. Preserve Folio's restricted updater provider. -->
+        <provider android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates" tools:replace="android:authorities">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_paths" tools:replace="android:resource"/>
+        </provider>
+        <activity android:name=".CafePrototypeActivity" android:process=":cafePrototype"
+            android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
+            android:label="Miso · Godot prototype" android:exported="true"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|keyboard|uiMode|density">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

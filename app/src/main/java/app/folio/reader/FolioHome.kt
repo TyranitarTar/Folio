@@ -210,7 +210,7 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
                 (listOf("Books" to Icons.Outlined.CollectionsBookmark, "Audiobooks" to Icons.Outlined.Headphones) +
                     listOf("Café" to Icons.Outlined.Pets) +
                     listOf("Browse" to Icons.Outlined.TravelExplore, "More" to Icons.Outlined.MoreHoriz)).forEach { (name, icon) ->
-                    Column(Modifier.weight(1f).heightIn(min=56.dp).semantics{contentDescription=if(name=="Books")"eBooks library" else "$name tab"}.selectable(tab==name,role=Role.Tab,onClick={tab=name;selected=emptySet();query="";searching=false}),
+                    Column(Modifier.weight(1f).heightIn(min=56.dp).semantics{contentDescription=if(name=="Books")"eBooks library" else "$name tab"}.selectable(tab==name,role=Role.Tab,onClick={if(name=="Café") openMisoHome(context) else tab=name;selected=emptySet();query="";searching=false}),
                         horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
                         Box(Modifier.clip(RoundedCornerShape(20.dp)).background(if(tab==name)MaterialTheme.colorScheme.secondaryContainer else Color.Transparent).padding(horizontal=14.dp,vertical=3.dp)) { Icon(icon,null,Modifier.size(22.dp)) }
                         Text(if(name=="Books")"eBooks" else name,fontSize=11.sp,maxLines=1,softWrap=false)
@@ -264,7 +264,7 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
                         Spacer(Modifier.height(16.dp))
                         HomeAction("App updates", "Check GitHub for a newer signed version", Icons.Outlined.SystemUpdate, { updates = true })
                         HomeAction("About Folio", "Version $version", Icons.Outlined.Info, { about = true })
-                        HomeAction("Licenses", "Mihon, Readium and offline voice credits", Icons.Outlined.Description, { licenses = true })
+                        HomeAction("Licenses", "Godot, Readium, Mihon and offline voice credits", Icons.Outlined.Description, { licenses = true })
                     }
                 }
                 }
@@ -338,7 +338,7 @@ fun FolioHome(model: LibraryViewModel, open: (Book) -> Unit, speech: (Book) -> U
             } },
             confirmButton = { TextButton(onClick = { about = false }) { Text("Close") } }, dismissButton = { TextButton(onClick = { about = false; licenses = true }) { Text("Licenses") } })
         if (licenses) {
-            val credits = remember { listOf("MIHON_LICENSE.txt", "AI_VOICE_LICENSES.txt", "THIRD_PARTY_NOTICES.txt").joinToString("\n\n") { context.assets.open(it).bufferedReader().use { reader -> reader.readText() } } }
+            val credits = remember { listOf("MIHON_LICENSE.txt", "AI_VOICE_LICENSES.txt", "THIRD_PARTY_NOTICES.txt", "cafe-engine/COPYRIGHT-GODOT.txt").joinToString("\n\n") { context.assets.open(it).bufferedReader().use { reader -> reader.readText() } } }
             AlertDialog(onDismissRequest = { licenses = false }, title = { Text("Licenses and credits") },
                 text = { Text(credits, Modifier.heightIn(max = 450.dp).verticalScroll(rememberScrollState()), fontSize = 12.sp) },
                 confirmButton = { TextButton(onClick = { licenses = false }) { Text("Close") } })

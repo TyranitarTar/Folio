@@ -7,3 +7,5 @@
 /screenshots/
 /**/.cxx/
 *.log
+/**/.godot/
+/app/src/cafePrototype/assets/*.pck

@@ -1,0 +1,58 @@
+{
+  "engine": "Godot 4.7.2",
+  "generationTool": "built-in image_gen",
+  "status": "prototype_candidate_agent_reviewed_not_user_accepted",
+  "targets": [
+    "1080x2280",
+    "1080x2520"
+  ],
+  "nativeCandidates": [
+    96,
+    128
+  ],
+  "sourceLimitsLiftedByUser": true,
+  "drawnFacing": "SW",
+  "mirroredFacing": "SE",
+  "oldMasters": [
+    {
+      "path": "references/miso-master-sw-64.png",
+      "sha256": "c2c65dd1a1e0d45c817bd70d352f9a01c826edfbb11254342dbf6b8cf7ef5a12"
+    },
+    {
+      "path": "references/miso-master-sw-8x.png",
+      "sha256": "a2d7c234669362d71a0ff3f4e81a68aea5c709fb1e8babb4e1e932de037327b4"
+    }
+  ],
+  "jobs": [
+    {
+      "key": "master",
+      "prompt": "master-prompt.txt",
+      "output": "miso-master-v2-original.png",
+      "outputSha256": "056fabb0aa9e11211fbdcffb263b9565b8f0a464e95516df54d055dc5459dc7c",
+      "grid": [
+        1,
+        1
+      ]
+    },
+    {
+      "key": "walk",
+      "prompt": "walk-prompt.txt",
+      "output": "walk-original.png",
+      "outputSha256": "b8e1fe11a06e2feacdbb0f3f7f3b2555200093d95a3dadd8c4f061f71d8ae719",
+      "grid": [
+        3,
+        2
+      ]
+    },
+    {
+      "key": "idle",
+      "prompt": "idle-prompt.txt",
+      "output": "idle-original.png",
+      "outputSha256": "df7105e218b4e28cf7c63c0079551072acae87b2bfce2924ebdb9f069ba93e4b",
+      "grid": [
+        2,
+        2
+      ]
+    }
+  ]
+}

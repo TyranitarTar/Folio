@@ -1,0 +1,184 @@
+{
+  "jobs": [
+    {
+      "job": "directions",
+      "sourceSha256": "892f3f89288afe240657faca6fd42c660a4b7254c0b0a0a7a6673d70e6a21aae",
+      "cells": [
+        2,
+        2
+      ],
+      "frames": 4,
+      "wholeSheetTranslation": [
+        0,
+        1
+      ],
+      "alphaThreshold": 160,
+      "paletteQuantized": false,
+      "silhouetteFit": false
+    },
+    {
+      "job": "walk-nw",
+      "sourceSha256": "61ed5f1bb6c562713999814684a116ae34cfaec6cbe161fa490ccf22f1efdb8d",
+      "cells": [
+        3,
+        2
+      ],
+      "frames": 6,
+      "wholeSheetTranslation": [
+        0,
+        -1
+      ],
+      "alphaThreshold": 160,
+      "paletteQuantized": false,
+      "silhouetteFit": false
+    },
+    {
+      "job": "walk-n",
+      "sourceSha256": "7fdc4e855b74fd4e4b5ae94106b06b03db97e876db4fb3dd5d4ce2add61dfe23",
+      "cells": [
+        3,
+        2
+      ],
+      "frames": 6,
+      "wholeSheetTranslation": [
+        0,
+        0
+      ],
+      "alphaThreshold": 160,
+      "paletteQuantized": false,
+      "silhouetteFit": false
+    },
+    {
+      "job": "walk-w",
+      "sourceSha256": "4d8f64bc19b1ca48a45a7c9ef31c4ae1ba0534a8c37ee4a3c965f3bcaf4bc609",
+      "cells": [
+        3,
+        2
+      ],
+      "frames": 6,
+      "wholeSheetTranslation": [
+        0,
+        0
+      ],
+      "alphaThreshold": 160,
+      "paletteQuantized": false,
+      "silhouetteFit": false
+    },
+    {
+      "job": "walk-s",
+      "sourceSha256": "2b6799ab56ca73c32676259356a542ec58b8c80910470f2f375a4f64de01a298",
+      "cells": [
+        3,
+        2
+      ],
+      "frames": 6,
+      "wholeSheetTranslation": [
+        0,
+        -1
+      ],
+      "alphaThreshold": 160,
+      "paletteQuantized": false,
+      "silhouetteFit": false
+    },
+    {
+      "job": "rest",
+      "sourceSha256": "2b1549c1174d5bd4d0b648a30b1566f8999c9a152fb1918f37e7660e6fcc7bcb",
+      "cells": [
+        3,
+        2
+      ],
+      "frames": 6,
+      "wholeSheetTranslation": [
+        0,
+        2
+      ],
+      "alphaThreshold": 160,
+      "paletteQuantized": false,
+      "silhouetteFit": false
+    },
+    {
+      "job": "feeding",
+      "sourceSha256": "9ce803e6ba41c4051732cce127210ba14ec530be47e6e2a155dfaa422236b945",
+      "cells": [
+        3,
+        2
+      ],
+      "frames": 6,
+      "wholeSheetTranslation": [
+        0,
+        1
+      ],
+      "alphaThreshold": 160,
+      "paletteQuantized": false,
+      "silhouetteFit": false
+    },
+    {
+      "job": "play",
+      "sourceSha256": "6270512b13da45e66085adbc9253e201298e5bdd828c271d0035bdda31e007df",
+      "cells": [
+        3,
+        2
+      ],
+      "frames": 6,
+      "wholeSheetTranslation": [
+        0,
+        1
+      ],
+      "alphaThreshold": 160,
+      "paletteQuantized": false,
+      "silhouetteFit": false
+    },
+    {
+      "job": "scratch",
+      "sourceSha256": "d0e9a7c805def447f83e1bb979515d6230ff6f2a29b803efa1f322a7a7cea5ca",
+      "cells": [
+        2,
+        2
+      ],
+      "frames": 4,
+      "wholeSheetTranslation": [
+        0,
+        3
+      ],
+      "alphaThreshold": 160,
+      "paletteQuantized": false,
+      "silhouetteFit": false
+    },
+    {
+      "job": "jump",
+      "sourceSha256": "989b5bccf953cf9f239167f5680137de8e09f6044978b695af7821c647e141f0",
+      "cells": [
+        3,
+        2
+      ],
+      "frames": 6,
+      "wholeSheetTranslation": [
+        0,
+        1
+      ],
+      "alphaThreshold": 160,
+      "paletteQuantized": false,
+      "silhouetteFit": false
+    },
+    {
+      "job": "tunnel",
+      "sourceSha256": "d5bebdfc752bfc21b0651afcd6387eef86dae45b1fd60acd2ee42c9d31cba2c4",
+      "cells": [
+        2,
+        2
+      ],
+      "frames": 4,
+      "wholeSheetTranslation": [
+        0,
+        12
+      ],
+      "alphaThreshold": 160,
+      "paletteQuantized": false,
+      "silhouetteFit": false
+    }
+  ],
+  "userApprovedIdentity": "miso-master-v2",
+  "originalMasterUnchanged": true,
+  "agentReviewed": true,
+  "newMotionUserAccepted": false
+}

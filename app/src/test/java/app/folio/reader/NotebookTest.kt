@@ -82,8 +82,8 @@ class NotebookTest {
     @Test fun canonicalHistoryHasCurrentNotesAndNoDuplicateVersions() {
         val context=ApplicationProvider.getApplicationContext<Context>()
         val history=ReleaseCatalog.history(context)
-        assertEquals("0.18.1",history.first().version)
-        assertEquals("2026-11-16",history.first().date)
+        assertEquals("0.19.0",history.first().version)
+        assertEquals("2026-11-17",history.first().date)
         val notebooks=history.first{it.version=="0.17.2"}
         assertEquals("2026-11-14",notebooks.date)
         assertTrue(ReleaseCatalog.body(notebooks).contains("Copy all"))

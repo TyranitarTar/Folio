@@ -23,7 +23,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.json.JSONObject
 
-@Composable internal fun CafeScreen(foremost:Boolean=true) {
+@Composable internal fun CafeClassicScreen(foremost:Boolean=true) {
     val root=LocalView.current
     val window=remember(root) {
         generateSequence(root.context){(it as? android.content.ContextWrapper)?.baseContext}

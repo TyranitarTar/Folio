@@ -1,0 +1,38 @@
+[
+  {
+    "action": "walk",
+    "density": 96,
+    "frames": 6,
+    "wholeCells": true,
+    "perFrameSilhouetteFit": false,
+    "alphaThreshold": 160,
+    "paletteQuantized": false
+  },
+  {
+    "action": "idle",
+    "density": 96,
+    "frames": 4,
+    "wholeCells": true,
+    "perFrameSilhouetteFit": false,
+    "alphaThreshold": 160,
+    "paletteQuantized": false
+  },
+  {
+    "action": "walk",
+    "density": 128,
+    "frames": 6,
+    "wholeCells": true,
+    "perFrameSilhouetteFit": false,
+    "alphaThreshold": 160,
+    "paletteQuantized": false
+  },
+  {
+    "action": "idle",
+    "density": 128,
+    "frames": 4,
+    "wholeCells": true,
+    "perFrameSilhouetteFit": false,
+    "alphaThreshold": 160,
+    "paletteQuantized": false
+  }
+]

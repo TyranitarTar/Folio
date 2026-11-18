@@ -1,0 +1,834 @@
+{
+  "version": 1,
+  "cell": [
+    128,
+    128
+  ],
+  "root": [
+    64,
+    112
+  ],
+  "worldScale": 0.75,
+  "clips": {
+    "idle_sw": {
+      "files": [
+        "res://assets/miso-{density}.png",
+        "res://assets/miso-idle-{density}-1.png",
+        "res://assets/miso-{density}.png",
+        "res://assets/miso-idle-{density}-2.png"
+      ],
+      "durations": [
+        2.8,
+        0.15,
+        1.6,
+        0.7
+      ],
+      "loop": true,
+      "roots": [
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ]
+      ]
+    },
+    "walk_sw": {
+      "files": [
+        "res://assets/miso-walk-{density}-0.png",
+        "res://assets/miso-walk-{density}-1.png",
+        "res://assets/miso-walk-{density}-2.png",
+        "res://assets/miso-walk-{density}-3.png",
+        "res://assets/miso-walk-{density}-4.png",
+        "res://assets/miso-walk-{density}-5.png"
+      ],
+      "durations": [
+        0.133,
+        0.133,
+        0.133,
+        0.133,
+        0.133,
+        0.133
+      ],
+      "loop": true,
+      "roots": [
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ]
+      ]
+    },
+    "idle_nw": {
+      "files": [
+        "res://assets/directions-{density}-0.png"
+      ],
+      "durations": [
+        1
+      ],
+      "loop": true,
+      "roots": [
+        [
+          64,
+          112
+        ]
+      ]
+    },
+    "walk_nw": {
+      "files": [
+        "res://assets/walk-nw-{density}-0.png",
+        "res://assets/walk-nw-{density}-1.png",
+        "res://assets/walk-nw-{density}-2.png",
+        "res://assets/walk-nw-{density}-3.png",
+        "res://assets/walk-nw-{density}-4.png",
+        "res://assets/walk-nw-{density}-5.png"
+      ],
+      "durations": [
+        0.133,
+        0.133,
+        0.133,
+        0.133,
+        0.133,
+        0.133
+      ],
+      "loop": true,
+      "roots": [
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ]
+      ]
+    },
+    "idle_n": {
+      "files": [
+        "res://assets/directions-{density}-1.png"
+      ],
+      "durations": [
+        1
+      ],
+      "loop": true,
+      "roots": [
+        [
+          64,
+          112
+        ]
+      ]
+    },
+    "walk_n": {
+      "files": [
+        "res://assets/walk-n-{density}-0.png",
+        "res://assets/walk-n-{density}-1.png",
+        "res://assets/walk-n-{density}-2.png",
+        "res://assets/walk-n-{density}-3.png",
+        "res://assets/walk-n-{density}-4.png",
+        "res://assets/walk-n-{density}-5.png"
+      ],
+      "durations": [
+        0.133,
+        0.133,
+        0.133,
+        0.133,
+        0.133,
+        0.133
+      ],
+      "loop": true,
+      "roots": [
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ]
+      ]
+    },
+    "idle_w": {
+      "files": [
+        "res://assets/directions-{density}-2.png"
+      ],
+      "durations": [
+        1
+      ],
+      "loop": true,
+      "roots": [
+        [
+          64,
+          112
+        ]
+      ]
+    },
+    "walk_w": {
+      "files": [
+        "res://assets/walk-w-{density}-0.png",
+        "res://assets/walk-w-{density}-1.png",
+        "res://assets/walk-w-{density}-2.png",
+        "res://assets/walk-w-{density}-3.png",
+        "res://assets/walk-w-{density}-4.png",
+        "res://assets/walk-w-{density}-5.png"
+      ],
+      "durations": [
+        0.133,
+        0.133,
+        0.133,
+        0.133,
+        0.133,
+        0.133
+      ],
+      "loop": true,
+      "roots": [
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ]
+      ]
+    },
+    "idle_s": {
+      "files": [
+        "res://assets/directions-{density}-3.png"
+      ],
+      "durations": [
+        1
+      ],
+      "loop": true,
+      "roots": [
+        [
+          64,
+          112
+        ]
+      ]
+    },
+    "walk_s": {
+      "files": [
+        "res://assets/walk-s-{density}-0.png",
+        "res://assets/walk-s-{density}-1.png",
+        "res://assets/walk-s-{density}-2.png",
+        "res://assets/walk-s-{density}-3.png",
+        "res://assets/walk-s-{density}-4.png",
+        "res://assets/walk-s-{density}-5.png"
+      ],
+      "durations": [
+        0.133,
+        0.133,
+        0.133,
+        0.133,
+        0.133,
+        0.133
+      ],
+      "loop": true,
+      "roots": [
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ]
+      ]
+    },
+    "sit": {
+      "files": [
+        "res://assets/rest-{density}-0.png"
+      ],
+      "durations": [
+        1
+      ],
+      "loop": true,
+      "roots": [
+        [
+          64,
+          112
+        ]
+      ]
+    },
+    "groom": {
+      "files": [
+        "res://assets/rest-{density}-0.png",
+        "res://assets/rest-{density}-1.png",
+        "res://assets/rest-{density}-1.png",
+        "res://assets/rest-{density}-2.png",
+        "res://assets/rest-{density}-1.png",
+        "res://assets/rest-{density}-0.png"
+      ],
+      "durations": [
+        0.7,
+        0.3,
+        0.6,
+        0.5,
+        0.4,
+        0.5
+      ],
+      "loop": true,
+      "roots": [
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          111
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ]
+      ]
+    },
+    "curl_down": {
+      "files": [
+        "res://assets/rest-{density}-0.png",
+        "res://assets/rest-{density}-3.png",
+        "res://assets/rest-{density}-4.png"
+      ],
+      "durations": [
+        0.35,
+        0.5,
+        0.65
+      ],
+      "loop": false,
+      "roots": [
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          103
+        ],
+        [
+          64,
+          102
+        ]
+      ]
+    },
+    "curl_up": {
+      "files": [
+        "res://assets/rest-{density}-4.png",
+        "res://assets/rest-{density}-3.png",
+        "res://assets/rest-{density}-5.png"
+      ],
+      "durations": [
+        0.3,
+        0.4,
+        0.7
+      ],
+      "loop": false,
+      "roots": [
+        [
+          64,
+          102
+        ],
+        [
+          64,
+          103
+        ],
+        [
+          64,
+          111
+        ]
+      ]
+    },
+    "sleep": {
+      "files": [
+        "res://assets/rest-{density}-4.png"
+      ],
+      "durations": [
+        1
+      ],
+      "loop": true,
+      "roots": [
+        [
+          64,
+          102
+        ]
+      ]
+    },
+    "eat_sw": {
+      "files": [
+        "res://assets/feeding-{density}-0.png",
+        "res://assets/feeding-{density}-1.png"
+      ],
+      "durations": [
+        0.4,
+        0.35
+      ],
+      "loop": true,
+      "roots": [
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ]
+      ]
+    },
+    "drink_sw": {
+      "files": [
+        "res://assets/feeding-{density}-0.png",
+        "res://assets/feeding-{density}-2.png"
+      ],
+      "durations": [
+        0.25,
+        0.2
+      ],
+      "loop": true,
+      "roots": [
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ]
+      ]
+    },
+    "jump_sw": {
+      "files": [
+        "res://assets/jump-{density}-0.png",
+        "res://assets/jump-{density}-1.png",
+        "res://assets/jump-{density}-2.png"
+      ],
+      "durations": [
+        0.22,
+        0.18,
+        0.3
+      ],
+      "loop": false,
+      "roots": [
+        [
+          64,
+          113
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ]
+      ]
+    },
+    "eat_nw": {
+      "files": [
+        "res://assets/feeding-{density}-3.png",
+        "res://assets/feeding-{density}-4.png"
+      ],
+      "durations": [
+        0.4,
+        0.35
+      ],
+      "loop": true,
+      "roots": [
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ]
+      ]
+    },
+    "drink_nw": {
+      "files": [
+        "res://assets/feeding-{density}-3.png",
+        "res://assets/feeding-{density}-5.png"
+      ],
+      "durations": [
+        0.25,
+        0.2
+      ],
+      "loop": true,
+      "roots": [
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ]
+      ]
+    },
+    "jump_nw": {
+      "files": [
+        "res://assets/jump-{density}-3.png",
+        "res://assets/jump-{density}-4.png",
+        "res://assets/jump-{density}-5.png"
+      ],
+      "durations": [
+        0.22,
+        0.18,
+        0.3
+      ],
+      "loop": false,
+      "roots": [
+        [
+          64,
+          108
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ]
+      ]
+    },
+    "sniff": {
+      "files": [
+        "res://assets/play-{density}-0.png"
+      ],
+      "durations": [
+        1
+      ],
+      "loop": true,
+      "roots": [
+        [
+          64,
+          112
+        ]
+      ]
+    },
+    "pounce": {
+      "files": [
+        "res://assets/play-{density}-1.png",
+        "res://assets/play-{density}-2.png",
+        "res://assets/play-{density}-3.png",
+        "res://assets/play-{density}-0.png"
+      ],
+      "durations": [
+        0.45,
+        0.3,
+        0.25,
+        0.5
+      ],
+      "loop": false,
+      "roots": [
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ]
+      ]
+    },
+    "bat": {
+      "files": [
+        "res://assets/play-{density}-4.png",
+        "res://assets/play-{density}-5.png",
+        "res://assets/play-{density}-4.png",
+        "res://assets/play-{density}-0.png"
+      ],
+      "durations": [
+        0.28,
+        0.28,
+        0.35,
+        0.6
+      ],
+      "loop": true,
+      "roots": [
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ]
+      ]
+    },
+    "scratch": {
+      "files": [
+        "res://assets/scratch-{density}-0.png",
+        "res://assets/scratch-{density}-1.png",
+        "res://assets/scratch-{density}-2.png",
+        "res://assets/scratch-{density}-3.png",
+        "res://assets/scratch-{density}-2.png",
+        "res://assets/scratch-{density}-3.png"
+      ],
+      "durations": [
+        0.4,
+        0.5,
+        0.35,
+        0.35,
+        0.35,
+        0.35
+      ],
+      "loop": true,
+      "roots": [
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ],
+        [
+          64,
+          112
+        ]
+      ]
+    },
+    "crawl": {
+      "files": [
+        "res://assets/tunnel-{density}-0.png",
+        "res://assets/tunnel-{density}-1.png",
+        "res://assets/tunnel-{density}-2.png",
+        "res://assets/tunnel-{density}-1.png"
+      ],
+      "durations": [
+        0.2,
+        0.2,
+        0.2,
+        0.2
+      ],
+      "loop": true,
+      "roots": [
+        [
+          64,
+          115
+        ],
+        [
+          64,
+          115
+        ],
+        [
+          64,
+          107
+        ],
+        [
+          64,
+          115
+        ]
+      ]
+    },
+    "tunnel_enter": {
+      "files": [
+        "res://assets/tunnel-{density}-3.png",
+        "res://assets/tunnel-{density}-0.png"
+      ],
+      "durations": [
+        0.45,
+        0.45
+      ],
+      "loop": false,
+      "roots": [
+        [
+          64,
+          107
+        ],
+        [
+          64,
+          115
+        ]
+      ]
+    },
+    "tunnel_exit": {
+      "files": [
+        "res://assets/tunnel-{density}-2.png",
+        "res://assets/tunnel-{density}-3.png"
+      ],
+      "durations": [
+        0.45,
+        0.45
+      ],
+      "loop": false,
+      "roots": [
+        [
+          64,
+          107
+        ],
+        [
+          64,
+          107
+        ]
+      ]
+    }
+  },
+  "facingClips": {
+    "sw": [
+      "sw",
+      false
+    ],
+    "se": [
+      "sw",
+      true
+    ],
+    "nw": [
+      "nw",
+      false
+    ],
+    "ne": [
+      "nw",
+      true
+    ],
+    "s": [
+      "s",
+      false
+    ],
+    "n": [
+      "n",
+      false
+    ],
+    "w": [
+      "w",
+      false
+    ],
+    "e": [
+      "w",
+      true
+    ]
+  }
+}

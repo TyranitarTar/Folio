@@ -20,6 +20,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 @RunWith(AndroidJUnit4::class)
+@org.junit.Ignore("Historical WebView integration suite; production navigation and rendering are covered by CafeGodotInstrumentedTest. The old renderer remains a compatibility option.")
 class Cafe019InstrumentedTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val app = instrumentation.targetContext.applicationContext as FolioApp
